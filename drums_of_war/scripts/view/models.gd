@@ -47,6 +47,10 @@ const CRIMSON := Color("c81e3a")
 const BLUE := Color("2456c9")
 
 static var _scenes: Dictionary = {}       # name -> PackedScene or null
+# Stonework and timber that came out of the generator darker than the painted look wants:
+# their texture is multiplied by this (values above 1 brighten).
+const LIFT := {"bridge": Color(1.75, 1.7, 1.62), "battery": Color(1.3, 1.24, 1.14), "fence": Color(1.2, 1.15, 1.05)}
+
 static var _libraries: Dictionary = {}    # name -> AnimationLibrary or null
 static var _red_tex: Dictionary = {}      # name -> Texture2D or null
 static var _meshes: Dictionary = {}       # stand-in key -> ArrayMesh
@@ -79,16 +83,18 @@ static func make(name: String, team: int) -> Node3D:
 	inner.name = "Model"
 	inner.rotation.y = deg_to_rad(float(YAW.get(name, 0.0)))
 	holder.add_child(inner)
-	if team == 1:
-		var red := _red_texture(name)
-		if red != null:
-			for mi: MeshInstance3D in inner.find_children("*", "MeshInstance3D", true, false):
-				for surface in mi.mesh.get_surface_count():
-					var base := mi.mesh.surface_get_material(surface)
-					if base is BaseMaterial3D:
-						var copy: BaseMaterial3D = base.duplicate()
+	var red: Texture2D = _red_texture(name) if team == 1 else null
+	if red != null or LIFT.has(name):
+		for mi: MeshInstance3D in inner.find_children("*", "MeshInstance3D", true, false):
+			for surface in mi.mesh.get_surface_count():
+				var base := mi.mesh.surface_get_material(surface)
+				if base is BaseMaterial3D:
+					var copy: BaseMaterial3D = base.duplicate()
+					if red != null:
 						copy.albedo_texture = red
-						mi.set_surface_override_material(surface, copy)
+					if LIFT.has(name):
+						copy.albedo_color = LIFT[name]
+					mi.set_surface_override_material(surface, copy)
 	return holder
 
 

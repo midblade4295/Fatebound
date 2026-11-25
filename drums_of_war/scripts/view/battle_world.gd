@@ -51,6 +51,7 @@ var _hit_flash: StandardMaterial3D
 var _chunk_mesh: BoxMesh
 var _ring_tex: GradientTexture2D
 var _chimney_clock: float = 0.0
+var _sun: DirectionalLight3D
 
 
 # ==========================================================================================
@@ -181,19 +182,29 @@ func _build_environment() -> void:
 	add_child(we)
 
 	var sun := DirectionalLight3D.new()             # warm golden-hour key light
+	_sun = sun
 	sun.light_color = Color("ffd9a3")
 	sun.light_energy = 1.25
 	# Low in the east: long shadows fall across the field from the right-hand woods, and the
 	# light still catches the sides of the figures that face the camera.
-	sun.rotation_degrees = Vector3(-48.0, 58.0, 0.0)
+	sun.rotation_degrees = Vector3(-38.0, 74.0, 0.0)
 	sun.shadow_enabled = true
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	# Two splits: with the camera this far back a single map loses the shadows altogether.
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_fade_start = 1.0
 	sun.directional_shadow_max_distance = 95.0
 	sun.shadow_bias = 0.05
 	sun.shadow_normal_bias = 1.4
 	sun.shadow_blur = 2.2                # soft-edged shadows
-	sun.shadow_opacity = 0.72            # never pitch black: the sky fills them
+	sun.shadow_opacity = 0.66            # never pitch black: the sky fills them
 	add_child(sun)
+
+	var fill := DirectionalLight3D.new()            # soft warm fill from the camera's side, so the
+	fill.light_color = Color("ffe9c8")              # faces turned toward the player are never dull
+	fill.light_energy = 0.34
+	fill.rotation_degrees = Vector3(-42.0, 12.0, 0.0)
+	fill.shadow_enabled = false
+	add_child(fill)
 
 	var rim := DirectionalLight3D.new()             # crisp cool rim from behind the field
 	rim.light_color = Color("cfe6ff")
@@ -232,14 +243,19 @@ func fit_camera() -> void:
 			break
 		var scale_by := minf(field_rect_design.size.x / box.size.x, field_rect_design.size.y / box.size.y)
 		dist /= lerpf(1.0, scale_by, 0.85)
-		# Move the look point along the field until the box is centred vertically.
+		# Move the look point along the field until its near edge sits on the bottom of the
+		# rect: on a tall screen the spare room then goes to the woods beyond the far end.
 		var here := camera.unproject_position(Vector3(0, 0, look_z)).y
 		var there := camera.unproject_position(Vector3(0, 0, look_z + 1.0)).y
 		var per_unit := there - here
 		if absf(per_unit) > 0.01:
-			look_z += clampf((field_rect_design.get_center().y - box.get_center().y) / per_unit * -1.0, -4.0, 4.0) * 0.8
+			look_z += clampf((field_rect_design.end.y - box.end.y) / per_unit * -1.0, -4.0, 4.0) * 0.8
 	camera.look_at_from_position(Vector3(0, 0, look_z) + back * dist, Vector3(0, 0, look_z), Vector3.UP)
 	_cam_base = camera.transform
+	# A long field on a tall screen puts the camera far back; shadows must reach the far end.
+	camera.far = dist + 130.0
+	if _sun != null:
+		_sun.directional_shadow_max_distance = dist + Sim.FIELD_H
 
 
 func _build_arena() -> void:
@@ -260,7 +276,7 @@ func _build_arena() -> void:
 		add_child(node)
 		_structures[s.id] = node
 		_structure_dead[s.id] = false
-		_add_blob(node, 7.4 if s.kind == "hq" else 5.6, 0.5)
+		_add_blob(node, 7.0 if s.kind == "hq" else 5.0, 0.34)
 		if s.kind == "hq":
 			# Lamplight spilling from the farmhouse onto the grass in front of it.
 			var lamp := OmniLight3D.new()

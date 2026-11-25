@@ -12,13 +12,13 @@ const DECK := ["line_infantry", "skirmishers", "militia", "scouts", "heavy_caval
 
 # Layout. The design space is 540 wide; the game fills whatever screen it is given, so the
 # height (and on tablets the width) is whatever the display's shape makes it. _layout() works
-# out where the top bar and the card tray sit, clear of any notch or gesture bar.
-const CARD_W := 104.0
-const CARD_BAND := 24.0             # the coloured strip across a card's top, and the name strip
-const POWDER_H := 20.0
-const BAR_H := 50.0
-const CARD_X0 := 84.0
-const CARD_STEP := 112.0
+# out where the banner and the card tray float, clear of any notch or gesture bar. The
+# battlefield runs on behind both of them.
+const CARD_W := 91.0
+const POWDER_H := 24.0
+const CARD_X0 := 111.0
+const CARD_STEP := 99.5
+const TRAY_X := 28.0                # the tray floats: this far in from each side of the column
 const AUDIO_DIR := "res://assets/audio/"
 const CARD_ART_DIR := "res://assets/cards/"
 
@@ -69,10 +69,13 @@ var screen: Vector2 = Vector2(540.0, 960.0)   # the visible area, in design unit
 var top: float = 0.0                # height kept clear at the top (camera notch)
 var bottom: float = 0.0             # ... and at the bottom (gesture bar)
 var ox: float = 0.0                 # left edge of the centred 540-wide HUD column
-var hud_y: float = 816.0            # top of the card tray
+var hud_y: float = 776.0            # top of the card tray
+var tray: Rect2 = Rect2(28, 776, 484, 178)
+var banner: Rect2 = Rect2(50, 14, 440, 42)     # the plank across the top
+var plaque: Rect2 = Rect2(210, 8, 120, 56)     # the clock's plaque in its middle
 var _laid_out: bool = false
-var art_h: float = 64.0             # height of a card's portrait; taller screens get more
-var card_size: Vector2 = Vector2(104.0, 112.0)
+var art_h: float = 78.0             # height of a card's picture; taller screens get a little more
+var card_size: Vector2 = Vector2(91.0, 126.0)
 var _vignette: GradientTexture2D
 var _bar_lag: Dictionary = {}       # id -> the strength a bar still shows as "just lost"
 var _bar_flash: Dictionary = {}     # id -> seconds of white flash left on a bar
@@ -143,13 +146,18 @@ func _layout() -> void:
 	top = new_top
 	bottom = new_bottom
 	ox = (screen.x - 540.0) * 0.5
-	# The tray: cards with a portrait tall enough to show the whole figure where there is room,
-	# the Powder bar under them, and a margin so nothing sits in a rounded corner.
-	art_h = clampf(64.0 + (screen.y - 960.0) * 0.22, 64.0, 112.0)
-	card_size = Vector2(CARD_W, CARD_BAND + art_h + CARD_BAND)
-	hud_y = screen.y - (14.0 + card_size.y + 12.0 + POWDER_H + maxf(bottom, 14.0) + 8.0)
-	var field_top := top + BAR_H + 20.0
-	world.field_rect_design = Rect2(22.0, field_top, screen.x - 44.0, hud_y - field_top - 10.0)
+	# The tray: four cards, the Powder trough under them, floating a little clear of the sides
+	# and the bottom edge.
+	art_h = clampf(78.0 + (screen.y - 960.0) * 0.08, 78.0, 98.0)
+	card_size = Vector2(CARD_W, Kit.CARD_HEAD + art_h + Kit.CARD_NAME)
+	var tray_h := 13.0 + card_size.y + 8.0 + POWDER_H + 10.0
+	tray = Rect2(ox + TRAY_X, screen.y - maxf(bottom, 2.0) - 7.0 - tray_h, 540.0 - TRAY_X * 2.0, tray_h)
+	hud_y = tray.position.y
+	banner = Rect2(ox + 50.0, top + 14.0, 440.0, 42.0)
+	plaque = Rect2(ox + 210.0, top + 8.0, 120.0, 56.0)
+	# The field fits between the banner and the tray; its near edge tucks just under the tray.
+	var field_top := plaque.end.y + 12.0
+	world.field_rect_design = Rect2(22.0, field_top, screen.x - 44.0, hud_y + 8.0 - field_top)
 	world.fit_camera()
 	for i in hand_cards.size():
 		var home := _card_rect(i)
@@ -230,7 +238,7 @@ func _on_release(p: Vector2) -> void:
 	_press_slot = -1
 	if sim.phase == Sim.PHASE_OVER:
 		return
-	var on_field := p.y < hud_y and p.y >= top + BAR_H
+	var on_field := _on_field(p)
 	if _dragging:
 		# A card dragged onto the field is played where it is let go; anywhere else it goes back.
 		_dragging = false
@@ -259,9 +267,14 @@ func _try_deploy(slot: int, where: Vector2) -> bool:
 	return true
 
 
+## True where a tap or a dropped card lands on the battlefield rather than on the HUD.
+func _on_field(p: Vector2) -> bool:
+	return p.y < hud_y and not banner.grow(6.0).has_point(p) and not plaque.grow(4.0).has_point(p)
+
+
 ## Where the NEXT card is shown, in screen space; new cards are dealt from here.
 func _next_rect() -> Rect2:
-	return Rect2(ox + 17.0, hud_y + 34.0, 52.0, 52.0)
+	return Rect2(ox + 49.0, hud_y + 32.0, 52.0, 54.0)
 
 
 ## Keeps the four card nodes in step with the hand: deals a card in when a slot's card changes,
@@ -291,7 +304,7 @@ func _card_at(p: Vector2) -> int:
 
 
 func _card_rect(i: int) -> Rect2:
-	return Rect2(Vector2(ox + CARD_X0 + CARD_STEP * i, hud_y + 14.0), card_size)
+	return Rect2(Vector2(ox + CARD_X0 + CARD_STEP * i, hud_y + 13.0), card_size)
 
 
 func to_screen(p: Vector2, height: float = 0.0) -> Vector2:
@@ -472,24 +485,6 @@ func _outlined(pos: Vector2, text: String, size: int, colour: Color, width: floa
 	kit.outlined(self, pos, text, size, colour, width, outline)
 
 
-## A panel of dark planks: grain running across, a seam every plank's width.
-func _wood_panel(rect: Rect2, tint: Color = Color.WHITE) -> void:
-	kit.wood_panel(self, rect, tint)
-
-
-## A bevelled brass strip: dark edge, bright face, dark edge.
-func _brass_strip(rect: Rect2) -> void:
-	kit.brass_strip(self, rect)
-
-
-func _brass_frame(rect: Rect2, width: float = 3.0) -> void:
-	kit.brass_frame(self, rect, width)
-
-
-func _rivet(at: Vector2) -> void:
-	kit.rivet(self, at)
-
-
 ## A rounded box with an optional border and soft shadow; made once per look and reused.
 func _box(key: String, fill: Color, radius: float, border: float = 0.0, border_colour: Color = Color.BLACK,
 		shadow: float = 0.0, shadow_colour: Color = Color(0, 0, 0, 0.5), shadow_drop: float = 0.0) -> StyleBoxFlat:
@@ -517,7 +512,7 @@ func _draw_deploy_zone() -> void:
 			var quad := _field_quad(x0, x0 + Sim.FIELD_W * 0.5, 0.0, depth)
 			draw_colored_polygon(quad, tint)
 			draw_line(quad[2], quad[3], edge, 2.0)
-	if pointer.y < hud_y and pointer.y > top + BAR_H:
+	if _on_field(pointer):
 		var at := to_field(pointer)
 		var ok := sim.deploy_error(local_side, selected, at) == ""
 		var ring := COL_PAPER if ok else Color("ff5a4d")
@@ -538,14 +533,23 @@ func _strength_bar(id: int, at: Vector2, width: float, height: float, fraction: 
 	kit.strength_bar(self, at, width, height, fraction, lag, colour, _bar_flash.has(id))
 
 
+## A structure's strength, in a frame above it. The enemy's are always shown; your own appear
+## once they have been hit.
 func _draw_structure_bar(s: Sim.Structure) -> void:
 	if s.dead:
 		return
-	var p := to_screen(s.pos, 0.0) + Vector2(0, 14.0 if s.side == local_side else -64.0)
-	if s.kind == "redoubt":
-		p = to_screen(s.pos, 0.0) + Vector2(0, 26.0 if s.side == local_side else -46.0)
-	var w := 58.0 if s.kind == "hq" else 46.0
-	_strength_bar(s.id, p + Vector2(-w * 0.5, 0), w, 9.0, s.hp / s.max_hp, team_colour(s.side).lightened(0.12))
+	var mine := s.side == local_side
+	if mine and s.hp >= s.max_hp - 0.5:
+		return
+	var w := 60.0 if s.kind == "hq" else 52.0
+	var p := to_screen(s.pos, 4.9 if s.kind == "hq" else 2.5) + Vector2(-w * 0.5, -17.0)
+	var fraction := s.hp / s.max_hp
+	var lag: float = maxf(float(_bar_lag.get(s.id, fraction)), fraction)
+	lag = maxf(fraction, lag - get_process_delta_time() * 0.55)
+	_bar_lag[s.id] = lag
+	var deep := Color("2a66de") if mine else Color("d8243a")
+	var hot := Color("7fd6ff") if mine else Color("ffa23c")
+	kit.framed_bar(self, p, w, 10.0, fraction, lag, deep, hot, _bar_flash.has(s.id))
 
 
 func _draw_regiment_bars(r: Sim.Regiment) -> void:
@@ -576,118 +580,74 @@ func _draw_words() -> void:
 
 func _draw_top_bar() -> void:
 	var enemy := 1 - local_side
-	var bar := Rect2(0, 0, screen.x, top + BAR_H)
-	_wood_panel(bar)
-	draw_rect(Rect2(0, bar.end.y - 10.0, screen.x, 10.0), Color(0, 0, 0, 0.25))
-	_brass_strip(Rect2(0, bar.end.y - 4.0, screen.x, 4.0))
-	draw_rect(Rect2(0, bar.end.y, screen.x, 5.0), Color(0, 0, 0, 0.28))            # the bar's shadow on the field
-	draw_set_transform(Vector2(ox, top), 0.0, Vector2.ONE)
-	_rivet(Vector2(10, 12))
-	_rivet(Vector2(530, 12))
-	_text(Vector2(26, 33), "ENEMY", 16, Color("f08a78"), HORIZONTAL_ALIGNMENT_LEFT, 200.0, true)
-	_text(Vector2(514, 33), "YOU", 16, Color("86b4ff"), HORIZONTAL_ALIGNMENT_RIGHT, 200.0, true)
-	# Redoubts taken: an inset slot for each, lit in the taker's colour.
+	kit.banner(self, banner, plaque)
+	var base := banner.position.y + 27.0
+	_text(Vector2(banner.position.x + 32.0, base + 1.5), "ENEMY", 15, Color(0, 0, 0, 0.55), HORIZONTAL_ALIGNMENT_LEFT, 120.0, true)
+	_text(Vector2(banner.position.x + 32.0, base), "ENEMY", 15, Color("f29080"), HORIZONTAL_ALIGNMENT_LEFT, 120.0, true)
+	_text(Vector2(banner.end.x - 32.0, base + 1.5), "YOU", 15, Color(0, 0, 0, 0.55), HORIZONTAL_ALIGNMENT_RIGHT, 120.0, true)
+	_text(Vector2(banner.end.x - 32.0, base), "YOU", 15, Color("8ab8ff"), HORIZONTAL_ALIGNMENT_RIGHT, 120.0, true)
+	# Batteries taken: an inset slot for each, lit in the taker's colour.
 	for i in 2:
 		for mine in 2:
-			var slot := Rect2(98.0 + i * 22.0, 19.0, 17.0, 17.0) if mine == 0 else Rect2(403.0 + i * 22.0, 19.0, 17.0, 17.0)
+			var x := banner.position.x + 96.0 + i * 20.0 if mine == 0 else banner.end.x - 112.0 - (1 - i) * 20.0
+			var slot := Rect2(x, banner.position.y + 13.0, 16.0, 16.0)
 			var lost := i < (sim.redoubts_lost(enemy) if mine == 0 else sim.redoubts_lost(local_side))
 			draw_rect(slot.grow(1.5), COL_BRASS_DARK)
 			draw_rect(slot, Color("1a110a"))
+			draw_rect(Rect2(slot.position, Vector2(slot.size.x, 3.0)), Color(0, 0, 0, 0.5))
 			if lost:
 				draw_rect(slot.grow(-2.0), COL_BLUE.lightened(0.25) if mine == 0 else COL_RED.lightened(0.15))
 				draw_rect(Rect2(slot.position + Vector2(2, 2), Vector2(slot.size.x - 4.0, 3.0)), Color(1, 1, 1, 0.35))
-	# The clock sits on a plaque that hangs below the bar.
-	var plaque := PackedVector2Array([Vector2(194, -top), Vector2(346, -top), Vector2(346, BAR_H - 2.0), Vector2(330, BAR_H + 13.0),
-			Vector2(210, BAR_H + 13.0), Vector2(194, BAR_H - 2.0)])
-	draw_colored_polygon(plaque, COL_WOOD_DARK)
-	var edge := PackedVector2Array([plaque[1], plaque[2], plaque[3], plaque[4], plaque[5], plaque[0]])
-	draw_polyline(edge, COL_BRASS_DARK, 5.0)
-	draw_polyline(edge, COL_BRASS_MID, 3.0)
 	var left := int(ceil(sim.time_left()))
 	var clock := "%d:%02d" % [left / 60, left % 60]
 	var clock_col := COL_CREAM
 	if sim.phase == Sim.PHASE_OVERTIME or (left <= 10 and sim.phase == Sim.PHASE_REGULAR):
 		clock_col = Color("ff9a3c")
-	_text(Vector2(270, 41), clock, 28, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
-	_text(Vector2(270, 39), clock, 28, clock_col, HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
+	var mid := plaque.get_center()
+	_text(mid + Vector2(0, 13.0), clock, 31, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
+	_text(mid + Vector2(0, 11.0), clock, 31, clock_col, HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
 	if sim.phase == Sim.PHASE_OVERTIME:
-		_outlined(Vector2(270, BAR_H + 40.0), "OVERTIME", 16, Color("ff9a3c"))
+		_outlined(Vector2(mid.x, plaque.end.y + 26.0), "OVERTIME", 16, Color("ff9a3c"))
 	elif sim.double_powder() and sim.phase != Sim.PHASE_OVER:
-		_outlined(Vector2(270, BAR_H + 40.0), "DOUBLE POWDER", 16, COL_AMBER)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_outlined(Vector2(mid.x, plaque.end.y + 26.0), "DOUBLE POWDER", 16, COL_AMBER)
 	if notice_time > 0.0:
 		var a := clampf(notice_time, 0.0, 1.0)
-		var mid := Vector2(screen.x * 0.5, (top + BAR_H + hud_y) * 0.5)
-		draw_style_box(_box("notice", Color(0.1, 0.06, 0.03, 0.82), 8.0, 2.0, COL_BRASS_MID), Rect2(mid.x - 210.0, mid.y - 20.0, 420.0, 40.0))
-		_text(mid + Vector2(0, 6), notice, 15, Color(COL_CREAM, a), HORIZONTAL_ALIGNMENT_CENTER, 400.0, true)
+		var centre := Vector2(screen.x * 0.5, (plaque.end.y + hud_y) * 0.5)
+		draw_style_box(_box("notice", Color(0.1, 0.06, 0.03, 0.82), 8.0, 2.0, COL_BRASS_MID), Rect2(centre.x - 210.0, centre.y - 20.0, 420.0, 40.0))
+		_text(centre + Vector2(0, 6), notice, 15, Color(COL_CREAM, a), HORIZONTAL_ALIGNMENT_CENTER, 400.0, true)
 
 
 func _draw_hud() -> void:
-	var tray := Rect2(0, hud_y, screen.x, screen.y - hud_y)
-	draw_rect(Rect2(0, hud_y - 5.0, screen.x, 5.0), Color(0, 0, 0, 0.28))             # the tray's shadow on the field
-	_wood_panel(tray)
-	_brass_strip(Rect2(0, hud_y, screen.x, 4.0))
-	draw_set_transform(Vector2(ox, 0.0), 0.0, Vector2.ONE)       # the tray's contents sit in a centred column
-	_brass_frame(Rect2(7, hud_y + 9.0, 526, tray.size.y - 9.0 - maxf(bottom, 6.0) - 6.0), 2.0)
-	for corner: Vector2 in [Vector2(15, hud_y + 17.0), Vector2(525, hud_y + 17.0)]:
-		_rivet(corner)
+	kit.tray(self, tray)
 	var hand: Array = sim.hand(local_side)
 	var have: float = sim.powder[local_side]
-	var cards_y := hud_y + 14.0
+	var column := ox + 75.0                 # the centre line of NEXT and POWDER, left of the cards
 	# The next card, small, at the left.
 	var next_id := sim.next_card(local_side)
-	_text(Vector2(43, cards_y + 13), "NEXT", 11, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 58.0, true)
-	var next_rect := Rect2(17, cards_y + 20, 52, 52)
-	draw_style_box(_box("next_edge", COL_BRASS_DARK, 6.0, 0.0, Color.BLACK, 6.0, Color(0, 0, 0, 0.55), 3.0), next_rect.grow(3.0))
-	draw_style_box(_box("next_face", COL_BRASS_MID, 5.0), next_rect.grow(1.5))
+	_text(Vector2(column, hud_y + 24.0), "NEXT", 12, Color(0, 0, 0, 0.5), HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
+	_text(Vector2(column, hud_y + 23.0), "NEXT", 12, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
 	if next_id != "":
-		var next_art := _art(next_id)
-		if next_art != null:
-			var w := float(next_art.get_width())
-			draw_texture_rect_region(next_art, next_rect, Rect2(0, 0, w, w))
-		else:
-			draw_rect(next_rect, COL_WOOD_DARK)
-			_draw_card_words(next_rect.get_center() + Vector2(0, 4), String(cards[next_id]["name"]), 10, COL_CREAM, 50.0)
+		kit.mini_card(self, _next_rect(), _art(next_id), String(cards[next_id]["name"]))
 	# The four cards in hand are nodes of their own (card_view.gd) and draw themselves above this.
 	var cheapest := 99.0
 	for i in hand.size():
 		cheapest = minf(cheapest, float(cards[hand[i]]["cost"]))
-
-	# Powder: ten framed slots. Full charges are bevelled amber, and they glow while there is
-	# enough to play something. With a card chosen, the charges it would spend are outlined.
-	var seg := 44.0
-	var y := cards_y + card_size.y + 13.0
+	# Powder: the count at the left, and a trough of ten charges under the cards.
+	var trough := Rect2(ox + CARD_X0 - 4.0, hud_y + 13.0 + card_size.y + 8.0, CARD_STEP * 3.0 + CARD_W + 8.0, POWDER_H)
 	var ready := have + 0.0001 >= cheapest
-	var throb := 0.5 + 0.5 * sin(_clock * 4.0)
 	var spend := int(cards[hand[selected]]["cost"]) if selected >= 0 and selected < hand.size() else 0
-	for i in int(Sim.POWDER_MAX):
-		var cell := Rect2(CARD_X0 + i * seg, y, seg - 5.0, POWDER_H)
-		var fill := clampf(have - i, 0.0, 1.0)
-		if fill >= 1.0 and ready:
-			draw_style_box(_box("keg_glow", Color(1, 0.7, 0.1, 0.0), 5.0, 0.0, Color.BLACK, 7.0, Color(1.0, 0.68, 0.1, 0.55)), cell)
-			draw_rect(cell.grow(1.0 + throb), Color(1.0, 0.72, 0.15, 0.1 + 0.16 * throb))
-		draw_style_box(_box("keg_slot", Color("140c06"), 4.0, 2.0, COL_BRASS_DARK), cell.grow(1.5))
-		if fill > 0.0:
-			var bar := Rect2(cell.position + Vector2(2, 2), Vector2((cell.size.x - 4.0) * fill, cell.size.y - 4.0))
-			var dim := 1.0 if fill >= 1.0 else 0.55
-			draw_rect(bar, Color("f2a31a") * Color(dim, dim, dim))
-			draw_rect(Rect2(bar.position, Vector2(bar.size.x, bar.size.y * 0.45)), Color(1.0, 0.86, 0.42, dim))
-			draw_rect(Rect2(bar.position, Vector2(bar.size.x, 1.5)), Color(1.0, 0.97, 0.8, dim))
-			draw_rect(Rect2(bar.position.x, bar.end.y - 3.0, bar.size.x, 3.0), Color(0.72, 0.42, 0.04, dim))
-		if i < spend:
-			draw_rect(cell.grow(2.5), COL_CREAM, false, 2.0)
-	_text(Vector2(43, y + 18), "%d" % int(have), 24, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 58.0, true)
-	_text(Vector2(43, y + 16), "%d" % int(have), 24, COL_AMBER if ready else COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 58.0, true)
-	_text(Vector2(43, y - 8), "POWDER", 10, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 58.0, true)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	kit.powder_bar(self, trough, have, int(Sim.POWDER_MAX), ready, 0.5 + 0.5 * sin(_clock * 4.0), spend)
+	_text(Vector2(column, trough.position.y - 3.0), "POWDER", 11, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
+	_text(Vector2(column, trough.end.y + 0.5), "%d" % int(have), 24, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
+	_text(Vector2(column, trough.end.y - 1.5), "%d" % int(have), 24, COL_AMBER if ready else COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
 
 
-## A soft darkening toward the corners of the battlefield, drawn under the bars.
+## A soft darkening toward the corners of the screen, drawn under the HUD.
 func _draw_vignette() -> void:
 	if _vignette == null:
 		var g := Gradient.new()
 		g.offsets = PackedFloat32Array([0.0, 0.62, 1.0])
-		g.colors = PackedColorArray([Color(0.1, 0.05, 0.02, 0.0), Color(0.1, 0.05, 0.02, 0.0), Color(0.1, 0.05, 0.02, 0.42)])
+		g.colors = PackedColorArray([Color(0.1, 0.05, 0.02, 0.0), Color(0.1, 0.05, 0.02, 0.0), Color(0.1, 0.05, 0.02, 0.3)])
 		_vignette = GradientTexture2D.new()
 		_vignette.gradient = g
 		_vignette.fill = GradientTexture2D.FILL_RADIAL
@@ -695,7 +655,7 @@ func _draw_vignette() -> void:
 		_vignette.fill_to = Vector2(1.0, 1.0)
 		_vignette.width = 128
 		_vignette.height = 128
-	draw_texture_rect(_vignette, Rect2(0, top + BAR_H, screen.x, hud_y - top - BAR_H), false)
+	draw_texture_rect(_vignette, Rect2(Vector2.ZERO, screen), false)
 
 
 func _art(card_id: String) -> Texture2D:
@@ -703,10 +663,6 @@ func _art(card_id: String) -> Texture2D:
 		var path := CARD_ART_DIR + card_id + ".png"
 		_card_art[card_id] = load(path) if ResourceLoader.exists(path) else null
 	return _card_art[card_id]
-
-
-func _draw_card_words(centre: Vector2, name: String, size: int, colour: Color, width: float) -> void:
-	kit.words(self, centre, name, size, colour, width)
 
 
 ## The result plate. Drawn on the overlay node so that it sits above the cards.

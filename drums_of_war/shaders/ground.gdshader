@@ -1,7 +1,7 @@
-// The battlefield's ground: an olive meadow that is never one flat colour.
+// The battlefield's ground: a striped green lawn inside a darker meadow, never one flat colour.
 //
 // Colour comes from a single tiling noise texture sampled at three scales (macro patches,
-// mottling, fine speckle), plus soft mowing stripes on the field, worn earth on the road, at
+// mottling, fine speckle), plus clear mowing stripes on the field, worn earth on the road, at
 // the fords and around the works, sand and pebbles on the creek's banks, drifting cloud shadow
 // and dappled light at the wood's edge. Colours are written as seen on screen and converted to
 // linear at the end.
@@ -15,13 +15,13 @@ void fragment() {
 	float n2 = texture(noise, wp.xz * 0.21 + vec2(0.37, 0.11)).r;
 	float n3 = texture(noise, wp.xz * 0.9).r;
 	float in_field = smoothstep(0.0, 0.7, 9.0 - abs(wp.x)) * smoothstep(0.0, 0.7, 18.0 - abs(wp.z));
-	// The field: bright, soft mowing stripes, mottled so it is not a flat colour.
-	float stripe = smoothstep(0.42, 0.58, fract(wp.z * 0.25));
-	vec3 field = mix(vec3(0.47, 0.57, 0.25), vec3(0.56, 0.64, 0.3), stripe * 0.5 + (n2 - 0.5) * 0.7);
-	field *= 0.9 + 0.2 * n1;
-	field = mix(field, vec3(0.62, 0.6, 0.3), smoothstep(0.62, 0.9, n1) * 0.35);      // sun-dried patches
-	// The meadow around it: deeper greens, patchy, flecked with wildflowers.
-	vec3 meadow = mix(vec3(0.3, 0.4, 0.17), vec3(0.5, 0.52, 0.22), n1) * (0.85 + 0.3 * n2);
+	// The field: a mown lawn in clear alternating bands, mottled just enough not to be flat.
+	float stripe = smoothstep(0.44, 0.56, abs(fract(wp.z * 0.23 + 0.25) - 0.5) * 2.0);
+	vec3 field = mix(vec3(0.40, 0.58, 0.19), vec3(0.50, 0.67, 0.24), stripe);
+	field *= 0.94 + 0.12 * n2;
+	field = mix(field, vec3(0.55, 0.68, 0.26), smoothstep(0.6, 0.9, n1) * 0.25);     // sunnier patches
+	// The meadow around it: deeper greens, patchy.
+	vec3 meadow = mix(vec3(0.27, 0.42, 0.15), vec3(0.42, 0.53, 0.2), n1) * (0.88 + 0.24 * n2);
 	// Leaf litter under the trees: drifts of orange, red and gold.
 	float litter = smoothstep(0.52, 0.7, n3) * (1.0 - in_field);
 	vec3 leaf = mix(vec3(0.85, 0.36, 0.1), vec3(0.95, 0.72, 0.2), n2);
@@ -55,10 +55,12 @@ void fragment() {
 	col = mix(col, vec3(0.3, 0.33, 0.27) * (0.8 + 0.4 * n3), smoothstep(-0.55, -1.05, wp.y));
 	// Slow cloud shadow across everything, and dappled sun where the woods overhang the edges.
 	float cloud = texture(noise, wp.xz * 0.011 + TIME * vec2(0.008, 0.004)).r;
-	col *= mix(0.8, 1.07, smoothstep(0.34, 0.66, cloud));
+	col *= mix(0.9, 1.04, smoothstep(0.34, 0.66, cloud));
 	float dapple = texture(noise, wp.xz * 0.5 + TIME * vec2(0.012, 0.007)).r;
 	float shade_edge = clamp(smoothstep(6.6, 10.0, abs(wp.x)) + smoothstep(15.0, 19.0, abs(wp.z)), 0.0, 1.0);
 	col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
-	ALBEDO = pow(col, vec3(2.2));       // the colours above are written as seen on screen
+	// The colours above are written as seen on screen. Flat ground takes the full sun, the fill
+	// and the sky at once, so it is laid in a little under and the lighting brings it back up.
+	ALBEDO = pow(col, vec3(2.2)) * 0.66;
 	ROUGHNESS = 0.95;
 }

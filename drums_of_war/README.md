@@ -69,10 +69,16 @@ match goes to one minute of sudden-death overtime.
 - `scripts/sim/battle_sim.gd`: the rules. Pure data at a fixed 20 steps a second with its own
   seeded random source, so the same seed and the same deploys always give the same battle.
 - `scripts/sim/bot.gd`: the computer opponent. It plays through the same `deploy()` a player uses.
-- `scripts/view/battle_screen.gd`: runs the match, takes input, plays sound, and draws the HUD
-  over the 3D view: wood-and-brass bars, the clock plaque, framed cards with gold-coin costs,
-  the Powder slots, health and nerve bars, and the outlined combat callouts. All of it is drawn
-  in code; the wood grain is a generated noise texture.
+- `scripts/view/battle_screen.gd`: runs the match, takes input (tap a card then the field, or
+  drag a card onto the field), plays sound, and lays out the HUD over the 3D view: a floating
+  banner with the clock plaque, a floating card tray, framed strength bars over the structures
+  and the outlined combat callouts.
+- `scripts/view/ui_kit.gd`: the HUD's look in one place: palette, lettering, wood and brass,
+  the banner and tray, the Powder trough, strength bars and the parchment card face. All of it
+  is drawn in code; the wood grain is a generated noise texture.
+- `scripts/view/card_view.gd`: one card in the hand as a node that animates itself with tweens:
+  dealt in from the NEXT slot, a pulse when Powder first covers it, lift when chosen, and
+  follow, tilt, shrink and a falling shadow while it is dragged.
 - `scripts/view/battle_world.gd`: the 3D battlefield: structures, regiments in formation, smoke,
   flashes, lighting, and the camera that fits the field to whatever shape the screen is.
   It also makes blows land: camera shake, a brief hit-stop, muzzle light, shot streaks, shock
@@ -81,6 +87,9 @@ match goes to one minute of sudden-death overtime.
   water, grass tufts and reeds, wheat, woods in fall colours, leaf litter and falling leaves,
   pumpkins and hay bales, drifting cloud shadow, sunbeams and motes, stepping stones. Units wade the fords and climb the
   bridge because the view asks it how high the ground is.
+- `shaders/ground.gdshader`, `shaders/river.gdshader`: the striped lawn with its worn earth and
+  sandy banks, and the creek with scrolling ripples, painted swirl lines and foam along the
+  banks, over the fords and round the bridge.
 - `scripts/view/musket_drill.gd`: makes infantry hold their muskets. It moves the musket through
   drill positions (shoulder, port, aim, recoil, load, charge) and places both hands on it with
   two-bone inverse kinematics, after the body clip has played.
@@ -88,9 +97,10 @@ match goes to one minute of sudden-death overtime.
   `assets/models/<name>/<name>.glb` exists; otherwise a primitive stand-in is built, so any card
   can be played before its model is made.
 - `assets/models/<name>/`: the model, the reference image it was generated from (`ref.png`),
-  how it was made (`meta.json`), and for structures a crimson texture for the enemy's copy.
+  how it was made (`meta.json`), and for the farmhouse a crimson texture for the enemy's copy.
 - `assets/audio/`: sound effects and the battle tune; `SOURCES.md` lists how each was made.
-- `assets/cards/`: card portraits, made from the reference images by `tools/make_card_art.py`.
+- `assets/cards/`: card pictures, made by `tools/make_card_art.py` from the painted action scenes
+  in `assets/cards/src/`; `SOURCES.md` lists how each was made.
 - `tests/`, `tools/`: headless tests, the test runner, screenshot and model-sheet tools, and
   `tools/prepare_model.py`, which shrinks a generated model's textures.
 

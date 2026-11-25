@@ -159,8 +159,9 @@ func _build_water() -> void:
 	mat.set_shader_parameter("wave_a", _noise(0.035, 11, true))
 	mat.set_shader_parameter("wave_b", _noise(0.06, 23, true))
 	mat.set_shader_parameter("foam_noise", _noise(0.05, 31))
-	mat.set_shader_parameter("shallow_col", Color("86c9dc"))
-	mat.set_shader_parameter("deep_col", Color("3a7fb8"))
+	mat.set_shader_parameter("shallow_col", Color("74bfe8"))
+	mat.set_shader_parameter("deep_col", Color("3d8fd4"))
+	mat.set_shader_parameter("swirl_col", Color("c4e8fb"))
 	mat.set_shader_parameter("sky_col", Color("cfe9ff"))
 	mat.set_shader_parameter("surface", WATER_Y)
 	mat.set_shader_parameter("deep", DEEP)
@@ -273,12 +274,19 @@ func _clear_of_structures(x: float, z: float, margin: float) -> bool:
 func _build_grass() -> void:
 	var tufts: Array = []      # [position, size, colour]
 	# Short and sparse on the field, so the troops stay readable.
-	for i in 520:
+	for i in 230:
 		var x := _rng.range_f(-FIELD_HALF_W, FIELD_HALF_W)
 		var z := _rng.range_f(-FIELD_HALF_L, FIELD_HALF_L)
-		if absf(z) < 1.6 or not _clear_of_structures(x, z, 2.3) or (absf(x) < 1.0 and absf(z) < 12.0):
+		if absf(z) < 2.4 or not _clear_of_structures(x, z, 2.3) or (absf(x) < 1.0 and absf(z) < 12.0):
 			continue
-		tufts.append([Vector3(x, 0, z), _rng.range_f(0.35, 0.6), Color(0.56, 0.66, 0.3).lerp(Color(0.66, 0.72, 0.36), _rng.next_f())])
+		tufts.append([Vector3(x, 0, z), _rng.range_f(0.4, 0.62), Color(0.3, 0.5, 0.14).lerp(Color(0.38, 0.56, 0.18), _rng.next_f())])
+	# Thicker clumps where the lawn meets the creek's banks.
+	for i in 90:
+		var x := _rng.range_f(-FIELD_HALF_W, FIELD_HALF_W)
+		if absf(absf(x) - FORD_X) < 1.9 or absf(x) < 1.9:
+			continue
+		var z := _rng.range_f(1.7, 2.5) * (1.0 if _rng.next_f() < 0.5 else -1.0)
+		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(0.9, 1.5), Color(0.26, 0.46, 0.12).lerp(Color(0.4, 0.58, 0.18), _rng.next_f())])
 	# Tall and thick in the meadow all round it.
 	for i in 8500:
 		var x := _rng.range_f(-24.0, 24.0)
@@ -331,7 +339,7 @@ void vertex() {
 	VERTEX.z += gust * 0.06 * along * along;
 }
 void fragment() {
-	ALBEDO = pow(tint * mix(0.55, 1.1, along), vec3(2.2));
+	ALBEDO = pow(tint * mix(0.72, 1.12, along), vec3(2.2));
 	ROUGHNESS = 0.9;
 }
 """
@@ -627,7 +635,10 @@ func _build_leaves() -> void:
 		if on_field:
 			# Only near the edges, and thinning quickly toward the middle.
 			var from_edge := minf(FIELD_HALF_W - absf(x), FIELD_HALF_L - absf(z))
-			if from_edge > 2.6 or _rng.next_f() > 0.5:
+			if from_edge > 2.6:
+				if _rng.next_f() > 0.06:
+					continue                # a rare leaf blown out onto the lawn
+			elif _rng.next_f() > 0.4:
 				continue
 		if absf(z) < 1.45:
 			continue
@@ -702,7 +713,7 @@ void fragment() {
 	float along = smoothstep(0.0, 0.15, UV.y) * (1.0 - smoothstep(0.55, 1.0, UV.y));
 	float shimmer = texture(noise, vec2(UV.x * 0.6 + seed, UV.y * 0.25 + TIME * 0.01 + seed)).r;
 	ALBEDO = vec3(1.0, 0.82, 0.5);
-	ALPHA = across * across * along * (0.35 + 0.65 * shimmer) * 0.07;
+	ALPHA = across * across * along * (0.35 + 0.65 * shimmer) * 0.04;
 }
 """
 	beam.set_shader_parameter("noise", _noise(0.03, 51))

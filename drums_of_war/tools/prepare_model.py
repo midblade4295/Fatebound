@@ -5,11 +5,13 @@ Rewrites the textures embedded in a GLB at a smaller size and can also write the
 version of its base colour texture.
 
 Usage:
-  prepare_model.py IN.glb OUT.glb [--tex 1024] [--red OUT_red.png] [--strip-textures]
+  prepare_model.py IN.glb OUT.glb [--tex 1024] [--red OUT_red.png] [--canvas] [--strip-textures]
 
   --tex N            longest side of every embedded texture after the rewrite (default 1024)
   --red PATH         also write the base colour texture with the team blue turned crimson
                      (roofs, awnings, pennants); the game swaps it in for the enemy's structures
+  --canvas           turn the team blue in the base colour texture into cream canvas, in the
+                     GLB itself; for works that both sides build alike (the gun batteries)
   --strip-textures   shrink every texture to 4 px; for animation-only GLBs, which carry a full
                      copy of the mesh and textures that the game never draws
 
@@ -68,12 +70,26 @@ def to_crimson(img):
     return Image.fromarray(out, "HSV").convert("RGB"), float(blue.mean())
 
 
+def to_canvas(img):
+    """Turns saturated blue texels into pale cream canvas, keeping their light and shade."""
+    hsv = np.asarray(img.convert("RGB").convert("HSV"), dtype=np.float32)
+    hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    blue = (hue > 140) & (hue < 190) & (sat > 70) & (val > 35)
+    hue = np.where(blue, 28.0, hue)                  # about 40 degrees: warm cream
+    sat = np.where(blue, 88.0, sat)
+    # The blue cloth is dark; canvas is light. Stretch its shading into the upper range.
+    val = np.where(blue, np.clip(222.0 + (val - 120.0) * 0.55, 170, 252), val)
+    out = np.stack([hue, sat, val], axis=-1).astype(np.uint8)
+    return Image.fromarray(out, "HSV").convert("RGB"), float(blue.mean())
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("src")
     ap.add_argument("dst")
     ap.add_argument("--tex", type=int, default=1024)
     ap.add_argument("--red")
+    ap.add_argument("--canvas", action="store_true")
     ap.add_argument("--strip-textures", action="store_true")
     args = ap.parse_args()
 
@@ -104,6 +120,9 @@ def main():
             if max(img.size) > target:
                 scale = target / max(img.size)
                 img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.LANCZOS)
+            if args.canvas and image_index == base_image:
+                img, share = to_canvas(img)
+                print(f"canvas: {share * 100:.1f}% of texels recoloured")
             buf = io.BytesIO()
             has_alpha = img.mode in ("RGBA", "LA") and np.asarray(img.convert("RGBA"))[..., 3].min() < 255
             if has_alpha:
