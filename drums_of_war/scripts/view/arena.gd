@@ -246,8 +246,8 @@ func _blade_mesh() -> ArrayMesh:
 	# along the blade (0 at the root, 1 at the tip); the shader uses it for colour and sway.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in 9:
-		var a := TAU * i / 9.0 + (i % 2) * 0.4
+	for i in 7:
+		var a := TAU * i / 7.0 + (i % 2) * 0.4
 		var out := Vector3(cos(a), 0, sin(a))
 		var across := Vector3(-out.z, 0, out.x) * 0.024
 		var tall := 0.34 + 0.12 * ((i * 5) % 3)
@@ -298,8 +298,8 @@ func _build_grass() -> void:
 		var z := _rng.range_f(1.7, 2.5) * (1.0 if _rng.next_f() < 0.5 else -1.0)
 		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(0.9, 1.5), Color(0.26, 0.46, 0.12).lerp(Color(0.4, 0.58, 0.18), _rng.next_f())])
 	# Tall and thick in the meadow all round it.
-	for i in 8500:
-		var x := _rng.range_f(-24.0, 24.0)
+	for i in 5200:
+		var x := _rng.range_f(-21.0, 21.0)
 		var z := _rng.range_f(-29.0, 24.0)
 		if absf(x) < FIELD_HALF_W + 0.2 and absf(z) < FIELD_HALF_L + 0.2:
 			continue
@@ -320,19 +320,9 @@ func _build_grass() -> void:
 			var z: float = patch[1] + _rng.range_f(-patch[3], patch[3])
 			tufts.append([Vector3(x, height(x, z), z), _rng.range_f(2.0, 2.6), Color(0.98, 0.8, 0.28).lerp(Color(0.9, 0.68, 0.2), _rng.next_f())])
 
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_custom_data = true
-	mm.mesh = _blade_mesh()
-	mm.instance_count = tufts.size()
-	for i in tufts.size():
-		var size: float = tufts[i][1]
-		var b := Basis.from_euler(Vector3(0, _rng.range_f(0.0, TAU), 0)).scaled(Vector3(size, size, size))
-		mm.set_instance_transform(i, Transform3D(b, tufts[i][0]))
-		mm.set_instance_custom_data(i, tufts[i][2])
-	var grass := MultiMeshInstance3D.new()
-	grass.multimesh = mm
-	grass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# One mesh would be drawn whole even when most of it is off screen, so the tufts are sorted
+	# into a grid of patches and each patch is its own mesh: what the camera cannot see is
+	# skipped, which on a phone is most of the meadow.
 	var mat := ShaderMaterial.new()
 	mat.shader = Shader.new()
 	mat.shader.code = """
@@ -353,8 +343,31 @@ void fragment() {
 	ROUGHNESS = 0.9;
 }
 """
-	grass.material_override = mat
-	add_child(grass)
+	var blade := _blade_mesh()
+	var patches: Dictionary = {}
+	for tuft: Array in tufts:
+		var at: Vector3 = tuft[0]
+		var key := Vector2i(int(floor(at.x / 7.0)), int(floor(at.z / 9.0)))
+		if not patches.has(key):
+			patches[key] = []
+		patches[key].append(tuft)
+	for key: Vector2i in patches:
+		var members: Array = patches[key]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = blade
+		mm.instance_count = members.size()
+		for i in members.size():
+			var size: float = members[i][1]
+			var b := Basis.from_euler(Vector3(0, _rng.range_f(0.0, TAU), 0)).scaled(Vector3(size, size, size))
+			mm.set_instance_transform(i, Transform3D(b, members[i][0]))
+			mm.set_instance_custom_data(i, members[i][2])
+		var grass := MultiMeshInstance3D.new()
+		grass.multimesh = mm
+		grass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		grass.material_override = mat
+		add_child(grass)
 
 	# Wildflowers: small bright heads standing in the meadow grass.
 	var head := SphereMesh.new()
@@ -427,7 +440,7 @@ var _foliage_mats: Dictionary = {}
 
 
 ## A tree or bush from a generated model, with leaves that stir and its own shade of green.
-func _plant(model: String, pos: Vector3, tall: float) -> bool:
+func _plant(model: String, pos: Vector3, tall: float, shadow: bool = true, detail: float = 0.6) -> bool:
 	var node := Models.make(model, 0)
 	if node == null:
 		return false
@@ -459,6 +472,9 @@ func _plant(model: String, pos: Vector3, tall: float) -> bool:
 			mat.set_shader_parameter("y_size", box.size.y)
 			_foliage_mats[model] = mat
 		mi.material_override = _foliage_mats[model]
+		if not shadow:
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.lod_bias = detail              # trees behind the front rank are half hidden: fewer triangles
 		mi.set_instance_shader_parameter("leaf_col", tint)
 		mi.set_instance_shader_parameter("sway", _rng.range_f(0.0, TAU))
 	add_child(node)
@@ -508,13 +524,15 @@ func _build_woods() -> void:
 				if absf(pz) < 2.4:
 					continue
 				# Keep the nearest rank low so it frames the field without hiding it.
-				spots.append([px, pz, _rng.range_f(3.6, 4.6) + rank * 0.9])
+				# The sun is in the east: only the nearer ranks on that side throw shadow onto
+				# anything in view, so only they are drawn into the shadow map.
+				spots.append([px, pz, _rng.range_f(3.6, 4.6) + rank * 0.9, side > 0.0 and rank < 2, rank])
 			z += _rng.range_f(2.3, 3.1)
 	# A wall of trees behind the far headquarters; nothing tall at the near end.
 	var x := -9.5
 	while x < 9.6:
 		for rank in 3:
-			spots.append([x + _rng.range_f(-0.7, 0.7), -21.6 - rank * 2.4 + _rng.range_f(-0.5, 0.5), _rng.range_f(4.2, 5.4) + rank * 0.6])
+			spots.append([x + _rng.range_f(-0.7, 0.7), -21.6 - rank * 2.4 + _rng.range_f(-0.5, 0.5), _rng.range_f(4.2, 5.4) + rank * 0.6, rank == 0, rank])
 		x += _rng.range_f(2.2, 3.0)
 	_tree_shade(spots)
 	for s: Array in spots:
@@ -523,7 +541,7 @@ func _build_woods() -> void:
 		if not kinds.is_empty():
 			var model: String = kinds[_rng.range_i(0, kinds.size() - 1)]
 			var tall: float = s[2] * (1.25 if model == "tree_pine" else 1.0)
-			planted = _plant(model, pos, tall)
+			planted = _plant(model, pos, tall, s[3], 0.8 if int(s[4]) == 0 else 0.5)
 		if not planted:
 			_stand_in_tree(pos, s[2])
 	# Bushes and undergrowth between the trunks and along the fences, logs here and there.
@@ -534,12 +552,12 @@ func _build_woods() -> void:
 		if absf(bz) < 2.0:
 			continue
 		if has_bush:
-			_plant("bush", Vector3(bx, height(bx, bz) - 0.03, bz), _rng.range_f(0.8, 1.4))
+			_plant("bush", Vector3(bx, height(bx, bz) - 0.03, bz), _rng.range_f(0.8, 1.4), false)
 	for i in 12:
 		var bx2 := _rng.range_f(-9.0, 9.0)
 		var bz2 := _rng.range_f(19.4, 22.5)
 		if has_bush:
-			_plant("bush", Vector3(bx2, height(bx2, bz2) - 0.03, bz2), _rng.range_f(0.8, 1.3))
+			_plant("bush", Vector3(bx2, height(bx2, bz2) - 0.03, bz2), _rng.range_f(0.8, 1.3), false)
 	_scatter_model("log", [Vector3(10.4, 0, -9.5), Vector3(-10.5, 0, 12.5), Vector3(-10.3, 0, -15.0), Vector3(10.6, 0, 17.5)], 1.6, 2.2)
 	_scatter_model("rocks", [Vector3(-10.2, 0, -6.5), Vector3(10.1, 0, 9.2), Vector3(-9.9, 0, 19.3), Vector3(9.8, 0, -19.5)], 1.2, 1.8)
 

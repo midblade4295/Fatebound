@@ -83,6 +83,8 @@ match goes to one minute of sudden-death overtime.
   flashes, lighting, and the camera that fits the field to whatever shape the screen is.
   It also makes blows land: camera shake, a brief hit-stop, muzzle light, shot streaks, shock
   rings, flung earth and splinters, struck figures flashing white and being shoved or thrown.
+  At the start it loads and draws one of everything the decks can field behind a curtain,
+  and it keeps figures built ahead of time, so a deploy does not stall the frame.
 - `scripts/view/arena.gd`: the scenery, set in autumn: ground sculpted with a real creek channel,
   water, grass tufts and reeds, wheat, woods in fall colours, leaf litter and falling leaves,
   pumpkins and hay bales, drifting cloud shadow, sunbeams and motes, stepping stones. Units wade the fords and climb the

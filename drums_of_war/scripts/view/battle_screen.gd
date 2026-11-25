@@ -80,6 +80,14 @@ var _vignette: GradientTexture2D
 var _bar_lag: Dictionary = {}       # id -> the strength a bar still shows as "just lost"
 var _bar_flash: Dictionary = {}     # id -> seconds of white flash left on a bar
 var _melee_clock: float = 0.0
+var _curtain: float = 1.0           # 1 while the first match loads behind a wood curtain, fading to 0
+var _warmed: bool = false
+var _fps_frames: int = 0
+var _fps_since: int = 0             # real milliseconds
+var _fps_last: int = 0
+var _fps_worst: float = 0.0
+var _fps_text: String = ""
+var show_fps: bool = true
 
 
 func _ready() -> void:
@@ -123,6 +131,15 @@ func start_match(seed_value: int) -> void:
 	selected = -1
 	acc = 0.0
 	notice = ""
+	if not _warmed:
+		# First match only: load and draw one of everything behind the curtain (see _process).
+		_warmed = true
+		_curtain = 1.0
+		var in_play := {}
+		for id: String in DECK:
+			in_play[id] = cards[id]
+			_art(id)
+		world.warm_up(in_play)
 	if _music != null and _music.stream != null and not _music.playing:
 		_music.play()
 
@@ -155,6 +172,10 @@ func _layout() -> void:
 	hud_y = tray.position.y
 	banner = Rect2(ox + 50.0, top + 14.0, 440.0, 42.0)
 	plaque = Rect2(ox + 210.0, top + 8.0, 120.0, 56.0)
+	# A phone screen has more pixels than this scene needs: draw the 3D view at no more than
+	# about 960 across and let the screen scale it up. The HUD stays at full sharpness.
+	var wide := float(mini(DisplayServer.window_get_size().x, DisplayServer.window_get_size().y))
+	get_viewport().scaling_3d_scale = clampf(960.0 / maxf(wide, 1.0), 0.67, 1.0)
 	# The field fits between the banner and the tray; its near edge tucks just under the tray.
 	var field_top := plaque.end.y + 12.0
 	world.field_rect_design = Rect2(22.0, field_top, screen.x - 44.0, hud_y + 8.0 - field_top)
@@ -168,6 +189,13 @@ func _layout() -> void:
 func _process(delta: float) -> void:
 	_layout()
 	_clock += delta
+	_count_frames()
+	if world.warming():
+		_overlay.visible = true
+		_overlay.queue_redraw()
+		queue_redraw()
+		return                         # the battle starts once everything it needs is loaded
+	_curtain = maxf(0.0, _curtain - delta * 2.5)
 	acc += delta
 	var steps := 0
 	while acc >= Sim.DT and steps < 6:
@@ -186,7 +214,7 @@ func _process(delta: float) -> void:
 	if notice_time > 0.0:
 		notice_time -= delta
 	_sync_hand(delta)
-	_overlay.visible = sim.phase == Sim.PHASE_OVER
+	_overlay.visible = sim.phase == Sim.PHASE_OVER or _curtain > 0.0
 	_overlay.queue_redraw()
 	_melee_clock -= delta
 	if _melee_clock <= 0.0 and sim.phase != Sim.PHASE_OVER:
@@ -254,6 +282,21 @@ func _on_release(p: Vector2) -> void:
 		return
 	if selected >= 0 and on_field and _try_deploy(selected, to_field(p)):
 		selected = -1
+
+
+## Frames a second, and the longest single frame in the last second (a hitch shows there even
+## when the average looks fine). Measured in real time, so hit-stop does not distort it.
+func _count_frames() -> void:
+	var now := Time.get_ticks_msec()
+	if _fps_last > 0:
+		_fps_worst = maxf(_fps_worst, float(now - _fps_last))
+	_fps_last = now
+	_fps_frames += 1
+	if now - _fps_since >= 1000:
+		_fps_text = "%d FPS   worst %d ms" % [int(round(_fps_frames * 1000.0 / maxf(1.0, float(now - _fps_since)))), int(_fps_worst)]
+		_fps_frames = 0
+		_fps_since = now
+		_fps_worst = 0.0
 
 
 ## Plays a hand slot at a field position if the rules allow, and says why not if they do not.
@@ -331,6 +374,12 @@ func _setup_audio() -> void:
 	_music = AudioStreamPlayer.new()
 	_music.volume_db = -14.0
 	add_child(_music)
+	# Read every sound now: the first volley of a battle is a bad moment to open a file.
+	var dir := DirAccess.open(AUDIO_DIR)
+	if dir != null:
+		for file: String in dir.get_files():
+			if file.ends_with(".ogg") or file.ends_with(".ogg.import"):
+				_stream(file.get_basename().get_basename() if file.ends_with(".import") else file.get_basename())
 	var music := _stream("music_battle")
 	if music != null:
 		if music is AudioStreamOggVorbis:
@@ -473,6 +522,10 @@ func _draw() -> void:
 	_draw_words()
 	_draw_top_bar()
 	_draw_hud()
+	if show_fps and _fps_text != "":
+		var at := Vector2(ox + 30.0, plaque.end.y + 18.0)
+		draw_string_outline(kit.font_bold, at, _fps_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.8))
+		draw_string(kit.font_bold, at, _fps_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("d8ff8a"))
 
 
 func _text(pos: Vector2, text: String, size: int, colour: Color, align: int = HORIZONTAL_ALIGNMENT_CENTER, width: float = 200.0, bold: bool = false) -> void:
@@ -665,9 +718,15 @@ func _art(card_id: String) -> Texture2D:
 	return _card_art[card_id]
 
 
-## The result plate. Drawn on the overlay node so that it sits above the cards.
+## The result plate, and the curtain at the start. Drawn on the overlay node so that both sit
+## above the cards.
 func _draw_result() -> void:
 	var c: CanvasItem = _overlay
+	if _curtain > 0.0:
+		c.draw_rect(Rect2(Vector2.ZERO, screen), Color(0.13, 0.08, 0.04, _curtain))
+		kit.outlined(c, Vector2(screen.x * 0.5, screen.y * 0.45), "DRUMS OF WAR", 34, Color(Kit.CREAM, _curtain), 500.0, 8)
+		if sim.phase != Sim.PHASE_OVER:
+			return
 	c.draw_rect(Rect2(Vector2.ZERO, screen), Color(0.05, 0.03, 0.02, 0.6))
 	var cx := screen.x * 0.5
 	var cy := screen.y * 0.42

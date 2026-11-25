@@ -52,6 +52,9 @@ var _chunk_mesh: BoxMesh
 var _ring_tex: GradientTexture2D
 var _chimney_clock: float = 0.0
 var _sun: DirectionalLight3D
+var _warm: Node3D                  # one of everything, drawn out of sight for a moment at the start
+var _warm_frames: int = 0
+var _stock_plan: Array = []        # [card_id, arm, team, men]: figures to keep built ahead of time
 
 
 # ==========================================================================================
@@ -492,6 +495,70 @@ void fragment() {
 # Per-frame sync
 # ==========================================================================================
 
+## Loads every model, clip and effect the deck can call for, and draws one of each for a few
+## frames tucked inside the bridge's stonework, so the graphics driver builds what it needs
+## before the battle instead of in the middle of it. The battle screen holds a curtain over
+## the view meanwhile. cards: card id -> definition, for the cards in both decks.
+func warm_up(cards: Dictionary) -> void:
+	_stock_plan.clear()
+	if _warm != null and is_instance_valid(_warm):
+		_warm.queue_free()
+	_warm = Node3D.new()
+	_warm.position = Vector3(0.0, 0.25, 0.0)
+	_warm.scale = Vector3.ONE * 0.04
+	add_child(_warm)
+	for id: String in cards:
+		var def: Dictionary = cards[id]
+		if def.get("type", "unit") == "order":
+			continue
+		var arm := String(def.get("arm", "infantry"))
+		Models.preload_card(id, arm)
+		for team in 2:
+			_stock_plan.append([id, arm, team, int(def.get("men", 4))])
+			var figure := Models.make_soldier(id, arm, team, self)
+			_warm.add_child(figure)
+			for mi: MeshInstance3D in figure.find_children("*", "MeshInstance3D", true, false):
+				mi.material_overlay = hit_flash_material()       # the struck-white look is a pipeline of its own
+		if arm == "artillery":
+			var gun := Models.make("cannon", 0)
+			if gun != null:
+				_warm.add_child(gun)
+	var ring := MeshInstance3D.new()
+	ring.mesh = PlaneMesh.new()
+	ring.material_override = ring_material()
+	ring.set_instance_shader_parameter("colour", COL_BLUE)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_warm.add_child(ring)
+	# One of each effect, so their materials are built too. They fade out behind the curtain.
+	var mid := Vector2(Sim.FIELD_W * 0.5, Sim.FIELD_H * 0.5)
+	flash(mid, 0.2, 0.05)
+	tracer(mid, mid + Vector2(0.1, 0.0), false, 0.02, 0.1)
+	ring_burst(mid, 0.05, Color(1, 1, 1, 0.02), 0.1)
+	debris(mid, 1, Color("5a4630"), Vector3.ZERO, -0.3)
+	puff(mid, -0.2, 0.05, 0.1)
+	_light_flash(to_world(mid, 0.2), 0.01, 0.5, 0.1)
+	_warm_frames = 6
+
+
+## True while warm_up() still has things on show or figures left to build for the first deploys.
+func warming() -> bool:
+	return _warm_frames > 0
+
+
+## Keeps figures built ahead of time for every card in play, a few a frame, so that a deploy
+## only has to put them on the field.
+func _keep_stock(budget: int) -> void:
+	for plan: Array in _stock_plan:
+		while budget > 0 and Models.stock_soldier(plan[0], plan[1], plan[2], self, plan[3]):
+			budget -= 1
+		if budget <= 0:
+			return
+
+
+func _exit_tree() -> void:
+	Models.clear_stock()
+
+
 func reset(new_sim: Sim) -> void:
 	sim = new_sim
 	for id in _regiments.keys():
@@ -524,6 +591,14 @@ func _process(delta: float) -> void:
 	if sim == null:
 		return
 	_time += delta
+	if _warm_frames > 0:
+		_warm_frames -= 1
+		_keep_stock(8)
+		if _warm_frames == 0 and _warm != null:
+			_warm.queue_free()
+			_warm = null
+	else:
+		_keep_stock(1)
 	var seen := {}
 	for r: Sim.Regiment in sim.regiments:
 		seen[r.id] = true
@@ -995,7 +1070,10 @@ class RegimentView extends RefCounted:
 			soldiers.append(s)
 		uses_model = soldiers.size() > 0 and soldiers[0].has_meta("player")
 		for s: Node3D in soldiers:
-			s.set_meta("meshes", s.find_children("*", "MeshInstance3D", true, false))
+			var meshes: Array = s.find_children("*", "MeshInstance3D", true, false)
+			s.set_meta("meshes", meshes)
+			for mi: MeshInstance3D in meshes:
+				mi.lod_bias = 0.6             # a man a few dozen pixels tall does not need every triangle
 
 	## The regiment has left the rules: its remaining men fall, then the node goes.
 	func release() -> void:

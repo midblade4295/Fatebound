@@ -267,8 +267,56 @@ static func play(soldier: Node3D, clip: String, restart: bool) -> void:
 	player.play(full, 0.16, pace)
 
 
-## One man (or one mounted man) for a card: the generated model if there is one, else a stand-in.
+static var _pool: Dictionary = {}         # "card|team" -> Array of figures built ahead of time
+
+
+## Loads a model and everything its figures need (mesh, textures, clips, the musket) now, so
+## that nothing is read from storage in the middle of a battle.
+static func preload_card(card_id: String, arm: String) -> void:
+	for model_name: String in SOLDIER_MODELS.get(card_id, []):
+		if _scene(model_name) != null:
+			_library(model_name)
+	if arm == "infantry":
+		_scene("musket")
+	if arm == "artillery":
+		_scene("cannon")
+
+
+## Builds one figure ahead of time and keeps it, outside the scene, until make_soldier() asks
+## for it. Returns false once "want" are already waiting.
+static func stock_soldier(card_id: String, arm: String, team: int, world: Node3D, want: int) -> bool:
+	var key := "%s|%d" % [card_id, team]
+	if not _pool.has(key):
+		_pool[key] = []
+	var waiting: Array = _pool[key]
+	if waiting.size() >= want:
+		return false
+	waiting.append(_build_soldier(card_id, arm, team, world))
+	return true
+
+
+## Frees every figure built ahead of time (they are not in the scene, so nothing else will).
+static func clear_stock() -> void:
+	for key: String in _pool:
+		for figure: Node3D in _pool[key]:
+			if is_instance_valid(figure):
+				figure.free()
+	_pool.clear()
+
+
+## One man (or one mounted man) for a card: one built ahead of time if there is one waiting,
+## otherwise made on the spot.
 static func make_soldier(card_id: String, arm: String, team: int, world: Node3D) -> Node3D:
+	var waiting: Array = _pool.get("%s|%d" % [card_id, team], [])
+	while not waiting.is_empty():
+		var figure: Node3D = waiting.pop_back()
+		if is_instance_valid(figure):
+			return figure
+	return _build_soldier(card_id, arm, team, world)
+
+
+## The generated model if there is one, else a stand-in.
+static func _build_soldier(card_id: String, arm: String, team: int, world: Node3D) -> Node3D:
 	var names: Array = SOLDIER_MODELS.get(card_id, [])
 	var height: float = HEIGHTS.get(card_id, HEIGHTS.get(arm, 0.98))
 	if names.size() == 2:
