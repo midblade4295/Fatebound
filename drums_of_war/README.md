@@ -115,6 +115,9 @@ match goes to one minute of sudden-death overtime.
 - `scripts/view/models.gd`: hands out figures and props. A generated model is used when
   `assets/models/<name>/<name>.glb` exists; otherwise a primitive stand-in is built, so any card
   can be played before its model is made.
+  Every model has a triangle budget (`BUDGET`) sized for how large it appears on the field, and
+  is cut down to it once from the detail levels the importer builds: the engine's own
+  distance-based choice kept far too many pixel-sized triangles on a dense phone screen.
 - `assets/models/<name>/`: the model, the reference image it was generated from (`ref.png`),
   how it was made (`meta.json`), and for the farmhouse a crimson texture for the enemy's copy.
 - `assets/audio/`: sound effects and the battle tune; `SOURCES.md` lists how each was made.

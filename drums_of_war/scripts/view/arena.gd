@@ -281,9 +281,10 @@ func set_lamp(index: int, x: float, z: float, strength: float) -> void:
 func _leaf_mesh(standing: bool, size: float) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var ring: Array = [Vector2(0, -0.5), Vector2(0.27, -0.12), Vector2(0.22, 0.25), Vector2(0, 0.5), Vector2(-0.22, 0.25), Vector2(-0.27, -0.12)]
-	for i in ring.size():
-		for v: Vector2 in [Vector2.ZERO, ring[i], ring[(i + 1) % ring.size()]]:
+	# A pointed diamond: two triangles.
+	var ring: Array = [Vector2(0, -0.5), Vector2(0.27, 0.0), Vector2(0, 0.5), Vector2(-0.27, 0.0)]
+	for pair: Array in [[0, 1, 2], [0, 2, 3]]:
+		for v: Vector2 in [ring[pair[0]], ring[pair[1]], ring[pair[2]]]:
 			st.set_normal(Vector3.BACK if standing else Vector3.UP)
 			st.add_vertex(Vector3(v.x, v.y, 0.0) * size if standing else Vector3(v.x, 0.0, v.y) * size)
 	return st.commit()
@@ -431,21 +432,21 @@ func _scatter_model(model: String, where: Array, min_size: float, max_size: floa
 # --- Grass ---------------------------------------------------------------------------------
 
 func _blade_mesh() -> ArrayMesh:
-	# One tuft: seven tapering blades fanned out from a point. Vertex colour red is the height
-	# along the blade (0 at the root, 1 at the tip); the shader uses it for colour and sway.
+	# One tuft: five tapering blades fanned out from a point, two triangles each. Vertex colour
+	# red is the height along the blade (0 at the root, 1 at the tip); the shader uses it for
+	# colour and sway. Thousands of these are on screen, so every triangle here counts.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in 7:
-		var a := TAU * i / 7.0 + (i % 2) * 0.4
+	for i in 5:
+		var a := TAU * i / 5.0 + (i % 2) * 0.4
 		var out := Vector3(cos(a), 0, sin(a))
-		var across := Vector3(-out.z, 0, out.x) * 0.024
+		var across := Vector3(-out.z, 0, out.x) * 0.03
 		var tall := 0.34 + 0.12 * ((i * 5) % 3)
 		var root := out * 0.05
-		var mid := out * 0.12 + Vector3(0, tall * 0.55, 0)
+		var mid := out * 0.13 + Vector3(0, tall * 0.55, 0)
 		var tip := out * 0.24 + Vector3(0, tall, 0)
-		for tri: Array in [[root - across, 0.0, root + across, 0.0, mid + across * 0.7, 0.55],
-				[root - across, 0.0, mid + across * 0.7, 0.55, mid - across * 0.7, 0.55],
-				[mid - across * 0.7, 0.55, mid + across * 0.7, 0.55, tip, 1.0]]:
+		for tri: Array in [[root - across, 0.0, root + across, 0.0, mid, 0.55],
+				[mid - across * 0.75, 0.5, mid + across * 0.75, 0.5, tip, 1.0]]:
 			for v in 3:
 				st.set_color(Color(tri[v * 2 + 1], 0, 0))
 				st.set_normal(Vector3.UP)
@@ -606,7 +607,9 @@ void fragment() {
 
 const FOLIAGE_SHADER := """
 shader_type spatial;
-render_mode diffuse_lambert, specular_disabled, shadows_disabled;
+// Both sides of every leaf surface are drawn: where a simplified canopy has a hairline crack,
+// the far side of the canopy shows through it instead of a black gap.
+render_mode diffuse_lambert, specular_disabled, shadows_disabled, cull_disabled;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
 uniform float y_min;
 uniform float y_size;
@@ -625,6 +628,12 @@ void fragment() {
 	// texture's light and shade. Bark, stone and wood are left as they are.
 	float leafy = smoothstep(0.03, 0.14, tex.g - max(tex.r * 0.75, tex.b));
 	float lum = dot(tex, vec3(0.35, 0.55, 0.1));
+	// A simplified canopy has a few triangles whose texture coordinates fall in the unused,
+	// black part of the model's texture sheet. Paint those as leaf too, in mid shade, or they
+	// show as black flecks.
+	float unpainted = 1.0 - smoothstep(0.02, 0.07, max(tex.r, max(tex.g, tex.b)));
+	leafy = max(leafy, unpainted);
+	lum = mix(lum, 0.32, unpainted);
 	ALBEDO = mix(tex, leaf_col * (0.3 + lum * 1.7), leafy);
 	ROUGHNESS = 0.9;
 }
@@ -636,7 +645,8 @@ var _foliage_mats: Dictionary = {}
 
 ## A tree or bush from a generated model, with leaves that stir and its own shade of green.
 func _plant(model: String, pos: Vector3, tall: float, shadow: bool = true, detail: float = 0.6) -> bool:
-	var node := Models.make(model, 0)
+	# Trees behind the front rank are half hidden: they get half the triangles.
+	var node := Models.make(model, 0, int(Models.BUDGET.get(model, 700)) / 2 if detail < 0.5 else -1)
 	if node == null:
 		return false
 	Models.fit_height(node, tall)

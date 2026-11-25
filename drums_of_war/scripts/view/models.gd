@@ -51,6 +51,22 @@ static var _scenes: Dictionary = {}       # name -> PackedScene or null
 # their texture is multiplied by this (values above 1 brighten).
 const LIFT := {"bridge": Color(1.22, 1.2, 1.16), "fence": Color(1.1, 1.07, 1.02)}
 
+# The most triangles each model is drawn with. The generated models carry thousands of
+# triangles, but on the battlefield a soldier is about a hundred pixels tall and a tree two
+# hundred across: drawn in full, most triangles would be smaller than a few pixels, which is
+# the costliest thing a graphics chip can be asked to draw and shows nothing. Each model is
+# cut down once, when first made, to the coarsest of its own detail levels that fits (the
+# importer builds those levels; see trimmed()). The engine's own distance-based choice is not
+# used: on a dense phone screen it kept far too much.
+const BUDGET := {
+	"u_line": 800, "c_line": 800, "u_skirm": 800, "c_skirm": 800, "u_militia": 800, "c_militia": 800,
+	"u_cav": 1200, "c_cav": 1200, "cannon": 1050, "musket": 100,
+	"farmhouse": 14000, "battery": 3100, "bridge": 2100,
+	"tree": 1350, "tree_oak": 1900, "tree_pine": 1350, "tree_birch": 1350,
+	"bush": 320, "fence": 400, "rocks": 320, "log": 270,
+}
+static var _cut_meshes: Dictionary = {}   # "mesh id|budget" -> ArrayMesh
+
 static var _libraries: Dictionary = {}    # name -> AnimationLibrary or null
 static var _red_tex: Dictionary = {}      # name -> Texture2D or null
 static var _meshes: Dictionary = {}       # stand-in key -> ArrayMesh
@@ -74,7 +90,7 @@ static func _scene(name: String) -> PackedScene:
 
 ## An instance of a generated model inside a holder node, or null if there is no such model.
 ## Scale and place it with fit_height() or fit_footprint().
-static func make(name: String, team: int) -> Node3D:
+static func make(name: String, team: int, budget: int = -1) -> Node3D:
 	var scene := _scene(name)
 	if scene == null:
 		return null
@@ -83,6 +99,8 @@ static func make(name: String, team: int) -> Node3D:
 	inner.name = "Model"
 	inner.rotation.y = deg_to_rad(float(YAW.get(name, 0.0)))
 	holder.add_child(inner)
+	if budget > 0 or BUDGET.has(name):
+		trim(inner, budget if budget > 0 else int(BUDGET[name]))
 	var red: Texture2D = _red_texture(name) if team == 1 else null
 	if red != null or LIFT.has(name):
 		for mi: MeshInstance3D in inner.find_children("*", "MeshInstance3D", true, false):
@@ -96,6 +114,53 @@ static func make(name: String, team: int) -> Node3D:
 						copy.albedo_color = LIFT[name]
 					mi.set_surface_override_material(surface, copy)
 	return holder
+
+
+## Swaps every mesh under a node for a version of itself with at most "budget" triangles.
+static func trim(node: Node, budget: int) -> void:
+	for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh != null:
+			mi.mesh = trimmed(mi.mesh, budget)
+
+
+## A mesh with the same vertices as "mesh" but only the triangles of its coarsest detail level
+## that still has no more than "budget" of them (or its coarsest level, if none is that small).
+## Made once per mesh and budget, then shared. The result has a single, fixed level of detail.
+static func trimmed(mesh: Mesh, budget: int) -> Mesh:
+	var key := "%d|%d" % [mesh.get_rid().get_id(), budget]
+	if _cut_meshes.has(key):
+		return _cut_meshes[key]
+	var out := ArrayMesh.new()
+	var changed := false
+	for s in mesh.get_surface_count():
+		var arrays: Array = mesh.surface_get_arrays(s)
+		var data: Dictionary = RenderingServer.mesh_get_surface(mesh.get_rid(), s)
+		var wide: bool = int(data.get("vertex_count", 0)) > 65535
+		var full: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+		if full.size() / 3 > budget:
+			# Levels run from fine to coarse: take the first that fits, else the coarsest.
+			var pick: PackedByteArray = PackedByteArray()
+			for level: Dictionary in data.get("lods", []):
+				pick = level["index_data"]
+				if pick.size() / (4 if wide else 2) / 3 <= budget:
+					break
+			if not pick.is_empty():
+				var indices := PackedInt32Array()
+				if wide:
+					indices = pick.to_int32_array()
+				else:
+					indices.resize(pick.size() / 2)
+					for i in indices.size():
+						indices[i] = pick.decode_u16(i * 2)
+				arrays[Mesh.ARRAY_INDEX] = indices
+				changed = true
+		var flags := 0
+		if mesh.surface_get_format(s) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS:
+			flags |= Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, flags)
+		out.surface_set_material(s, mesh.surface_get_material(s))
+	_cut_meshes[key] = out if changed else mesh
+	return _cut_meshes[key]
 
 
 static func _red_texture(name: String) -> Texture2D:
