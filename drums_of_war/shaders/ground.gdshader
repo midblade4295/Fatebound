@@ -6,8 +6,12 @@
 // and dappled light at the wood's edge. Colours are written as seen on screen and converted to
 // linear at the end.
 shader_type spatial;
+render_mode diffuse_lambert, specular_disabled;      // rough ground: none of the highlight maths is worth its cost
 uniform sampler2D noise : filter_linear_mipmap, repeat_enable;
 uniform vec2 worn[6];
+uniform sampler2D shade_tex : filter_linear_mipmap, repeat_disable, hint_default_white;   // the woods' baked shadow
+uniform vec4 shade_u = vec4(0.0);
+uniform vec4 shade_v = vec4(0.0);
 uniform bool plain = false;         // slow devices: skip the pebbles, cloud shadow and dappled light
 varying vec3 wp;
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
@@ -67,6 +71,9 @@ void fragment() {
 		float shade_edge = clamp(smoothstep(6.6, 10.0, abs(wp.x)) + smoothstep(15.0, 19.0, abs(wp.z)), 0.0, 1.0);
 		col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
 	}
+	// The woods' shadow, drawn once at the start (arena.gd begin_shade_bake): cool and soft.
+	float lit = texture(shade_tex, vec2(dot(vec4(wp, 1.0), shade_u), dot(vec4(wp, 1.0), shade_v))).r;
+	col *= mix(vec3(0.56, 0.62, 0.74), vec3(1.0), lit);
 	// The colours above are written as seen on screen. Flat ground takes the full sun, the fill
 	// and the sky at once, so it is laid in a little under and the lighting brings it back up.
 	ALBEDO = pow(col, vec3(2.2)) * 0.66;

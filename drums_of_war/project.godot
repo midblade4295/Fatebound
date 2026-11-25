@@ -17,6 +17,7 @@ window/size/viewport_height=960
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
+window/frame_pacing/android/swappy_mode=0
 
 [rendering]
 

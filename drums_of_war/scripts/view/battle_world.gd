@@ -111,6 +111,7 @@ func _ready() -> void:
 	_build_contact_shadows()
 	get_viewport().size_changed.connect(fit_camera)
 	fit_camera()
+	arena.begin_shade_bake(-_sun.global_basis.z)
 
 
 func _mat(colour: Color, roughness: float = 0.85, unshaded: bool = false) -> StandardMaterial3D:
@@ -227,6 +228,7 @@ func _build_environment() -> void:
 	camera.near = 1.0
 	camera.far = 200.0
 	add_child(camera)
+	camera.cull_mask = 0xFFFFF & ~Arena.SHADE_LAYER       # the shade bake's stand-ins are not for this camera
 	camera.make_current()
 
 
@@ -543,7 +545,7 @@ func warm_up(cards: Dictionary) -> void:
 	debris(mid, 1, Color("5a4630"), Vector3.ZERO, -0.3)
 	puff(mid, -0.2, 0.05, 0.1)
 	_light_flash(to_world(mid, 0.2), 0.01, 0.5, 0.1)
-	_warm_frames = 6
+	_warm_frames = 8
 
 
 ## What each quality level (see quality.gd) switches off in the 3D scene.
@@ -553,13 +555,12 @@ func set_quality(level: int) -> void:
 	if _rim != null:
 		_rim.visible = level < 2
 	if _fill != null:
-		_fill.visible = level < 5
+		_fill.visible = level < 4
 	if arena != null:
-		arena.set_tree_shadows(level < 3)
-		arena.set_plain_ground(level >= 4)
-		arena.set_extras(level < 5)
+		arena.set_plain_ground(level >= 3)
+		arena.set_extras(level < 4)
 	if _sun != null:
-		_sun.shadow_enabled = level < 4
+		_sun.shadow_enabled = level < 3
 
 
 ## True while warm_up() still has things on show or figures left to build for the first deploys.
@@ -1095,7 +1096,7 @@ class RegimentView extends RefCounted:
 			var meshes: Array = s.find_children("*", "MeshInstance3D", true, false)
 			s.set_meta("meshes", meshes)
 			for mi: MeshInstance3D in meshes:
-				mi.lod_bias = 0.6             # a man a few dozen pixels tall does not need every triangle
+				mi.lod_bias = 0.5             # a man a few dozen pixels tall does not need every triangle
 
 	## The regiment has left the rules: its remaining men fall, then the node goes.
 	func release() -> void:

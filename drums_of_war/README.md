@@ -85,9 +85,13 @@ match goes to one minute of sudden-death overtime.
   rings, flung earth and splinters, struck figures flashing white and being shoved or thrown.
   At the start it loads and draws one of everything the decks can field behind a curtain,
   and it keeps figures built ahead of time, so a deploy does not stall the frame.
+  The woods' shadow on the ground is drawn once at the start into a texture (the sun and the
+  trees never move) rather than into the live shadow map every frame, and grass is only
+  planted where the top-down camera can see the ground.
 - `scripts/view/quality.gd`: watches the frame rate and, if it stays under the target, steps
   the finish down a level at a time (bloom and antialiasing, then shadow softness and model
-  detail, then shadows) until it holds. The picture is never scaled down. The level is shown
+  detail, then live shadows) until it holds. It is a safety net and slow to act: the game is
+  built to run at level 0. The picture is never scaled down. The level is shown
   beside the FPS readout; tapping the readout starts again from the top.
 - `scripts/view/arena.gd`: the scenery, set in autumn: ground sculpted with a real creek channel,
   water, grass tufts and reeds, wheat, woods in fall colours, leaf litter and falling leaves,

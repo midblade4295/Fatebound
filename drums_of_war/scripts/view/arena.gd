@@ -27,7 +27,12 @@ const LEAVES := [Color("c8291a"), Color("e2531a"), Color("f08a1c"), Color("f6c22
 
 var _structure_spots: Array = []  # Vector2 (x, z) of each structure, for worn earth and clearings
 var _rng: GsRng
-var _shadow_trees: Array = []     # the tree meshes that cast real shadows
+var _shade_casters: Array = []    # every still mesh that shades the ground: trees, bushes, fences, logs
+var _bake_view: SubViewport
+var _bake_proxies: Array = []
+var _bake_rows: Array = []        # world position -> baked-shade texture coordinates
+var _bake_draws: int = 0
+var _live_casters: Array = []     # trees that go back to casting live shadows if the bake cannot be made
 var _ground_mat: ShaderMaterial
 var _extras: Array = []           # falling leaves and motes: pretty, and the first to go on a slow device
 
@@ -80,10 +85,113 @@ func build(structure_spots: Array) -> void:
 	_build_light_effects()
 
 
-## Whether the trees are drawn into the sun's shadow map (their soft pools on the ground stay).
-func set_tree_shadows(on: bool) -> void:
-	for mi: MeshInstance3D in _shadow_trees:
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if on else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+const SHADE_LAYER := 1 << 9       # render layer seen only by the shade bake's camera
+
+## The woods never move and neither does the sun, so their shadow on the ground is drawn once
+## instead of every frame. begin_shade_bake() poses a black copy of every tree, bush and fence
+## in front of a camera that looks along the sunlight; a few frames later finish_shade_bake()
+## keeps that picture as a texture, which the ground shader darkens itself with, and throws
+## the copies away. The sun's live shadow map is then left with only what moves or matters up
+## close: the troops, the buildings and the bridge.
+func begin_shade_bake(sun_dir: Vector3) -> void:
+	if DisplayServer.get_name() == "headless" or _bake_view != null:
+		return
+	var black := StandardMaterial3D.new()
+	black.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	black.albedo_color = Color.BLACK
+	for mi: MeshInstance3D in _shade_casters:
+		if not is_instance_valid(mi) or mi.mesh == null:
+			continue
+		var proxy := MeshInstance3D.new()
+		proxy.mesh = mi.mesh
+		proxy.material_override = black
+		proxy.layers = SHADE_LAYER
+		proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(proxy)
+		proxy.global_transform = mi.global_transform
+		_bake_proxies.append(proxy)
+	_bake_view = SubViewport.new()
+	_bake_view.size = Vector2i(1024, 1024)
+	_bake_view.msaa_3d = Viewport.MSAA_4X
+	_bake_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(_bake_view)
+	var cam := Camera3D.new()
+	_bake_view.add_child(cam)
+	var centre := Vector3(0.0, 0.0, -2.0)
+	var dir := sun_dir.normalized()
+	cam.look_at_from_position(centre - dir * 90.0, centre, Vector3.UP)
+	# Wide enough to take in the whole wood and everything it can shade.
+	var right := cam.global_basis.x
+	var up := cam.global_basis.y
+	var reach := 1.0
+	for x: float in [-27.0, 27.0]:
+		for y: float in [-1.5, 9.0]:
+			for z: float in [-32.0, 27.0]:
+				var rel := Vector3(x, y, z) - cam.global_position
+				reach = maxf(reach, maxf(absf(rel.dot(right)), absf(rel.dot(up))))
+	var span := reach * 2.0 + 2.0
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = span
+	cam.near = 1.0
+	cam.far = 220.0
+	cam.cull_mask = SHADE_LAYER
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color.WHITE
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
+	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	cam.environment = env
+	cam.current = true
+	# Texture coordinates of a world point: across is the camera's right, down is minus its up.
+	var eye := cam.global_position
+	_bake_rows = [Vector4(right.x, right.y, right.z, -eye.dot(right)) / span + Vector4(0, 0, 0, 0.5),
+			Vector4(-up.x, -up.y, -up.z, eye.dot(up)) / span + Vector4(0, 0, 0, 0.5)]
+	# Read the picture back only once frames have really been drawn (a window that is not yet
+	# on screen draws nothing, and the texture would still be blank).
+	_bake_draws = 0
+	RenderingServer.frame_post_draw.connect(_on_bake_frame_drawn)
+
+
+func _on_bake_frame_drawn() -> void:
+	_bake_draws += 1
+	if _bake_draws >= 3:
+		RenderingServer.frame_post_draw.disconnect(_on_bake_frame_drawn)
+		finish_shade_bake()
+
+
+func finish_shade_bake() -> void:
+	if _bake_view == null:
+		return
+	var img: Image = _bake_view.get_texture().get_image()
+	for proxy: Node in _bake_proxies:
+		proxy.queue_free()
+	_bake_proxies.clear()
+	_bake_view.queue_free()
+	_bake_view = null
+	# A good bake is mostly open sky (white) with the woods in black. Anything else (no picture,
+	# or a blank one) is not used, and the nearer trees cast live shadows instead.
+	var good := img != null and not img.is_empty() and _ground_mat != null
+	if good:
+		var probe: Image = img.duplicate()
+		probe.resize(8, 8, Image.INTERPOLATE_BILINEAR)
+		var sum := 0.0
+		for y in 8:
+			for x in 8:
+				sum += probe.get_pixel(x, y).r
+		good = sum / 64.0 > 0.45 and sum / 64.0 < 0.98
+	if not good:
+		for mi: MeshInstance3D in _live_casters:
+			if is_instance_valid(mi):
+				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		return
+	if OS.has_environment("BAKE_DUMP"):
+		img.save_png(OS.get_environment("BAKE_DUMP"))
+	img.convert(Image.FORMAT_L8)
+	img.resize(512, 512, Image.INTERPOLATE_CUBIC)       # the shrink also softens the shadows' edges
+	img.generate_mipmaps()
+	_ground_mat.set_shader_parameter("shade_tex", ImageTexture.create_from_image(img))
+	_ground_mat.set_shader_parameter("shade_u", _bake_rows[0])
+	_ground_mat.set_shader_parameter("shade_v", _bake_rows[1])
 
 
 ## The ground without its moving cloud shadow, dappled light and pebbles: three fewer texture
@@ -259,6 +367,10 @@ func _scatter_model(model: String, where: Array, min_size: float, max_size: floa
 		node.position = Vector3(p.x, height(p.x, p.z) - 0.05, p.z)
 		node.rotation.y = _rng.range_f(0.0, TAU)
 		add_child(node)
+		for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mi.lod_bias = 0.6
+			_shade_casters.append(mi)
 
 
 # --- Grass ---------------------------------------------------------------------------------
@@ -320,12 +432,15 @@ func _build_grass() -> void:
 		var z := _rng.range_f(1.7, 2.5) * (1.0 if _rng.next_f() < 0.5 else -1.0)
 		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(0.9, 1.5), Color(0.26, 0.46, 0.12).lerp(Color(0.4, 0.58, 0.18), _rng.next_f())])
 	# Tall and thick in the meadow all round it.
-	for i in 5200:
+	for i in 6400:
 		var x := _rng.range_f(-21.0, 21.0)
 		var z := _rng.range_f(-29.0, 24.0)
 		if absf(x) < FIELD_HALF_W + 0.2 and absf(z) < FIELD_HALF_L + 0.2:
 			continue
 		if absf(z) < 1.5:
+			continue
+		# Seen from above, the ground under the woods is hidden by the canopy: no grass there.
+		if absf(x) > 12.2 or z < -22.5:
 			continue
 		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(1.1, 2.1), Color(0.42, 0.54, 0.21).lerp(Color(0.74, 0.68, 0.3), _rng.next_f() * _rng.next_f())])
 	# Reeds along both banks, away from the crossings.
@@ -349,7 +464,7 @@ func _build_grass() -> void:
 	mat.shader = Shader.new()
 	mat.shader.code = """
 shader_type spatial;
-render_mode cull_disabled;
+render_mode cull_disabled, diffuse_lambert, specular_disabled;
 varying float along;
 varying vec3 tint;
 void vertex() {
@@ -434,6 +549,7 @@ void fragment() {
 
 const FOLIAGE_SHADER := """
 shader_type spatial;
+render_mode diffuse_lambert, specular_disabled;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
 uniform float y_min;
 uniform float y_size;
@@ -494,10 +610,12 @@ func _plant(model: String, pos: Vector3, tall: float, shadow: bool = true, detai
 			mat.set_shader_parameter("y_size", box.size.y)
 			_foliage_mats[model] = mat
 		mi.material_override = _foliage_mats[model]
-		if not shadow:
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		else:
-			_shadow_trees.append(mi)
+		# The woods' shadow on the ground is baked (see begin_shade_bake), so no tree is drawn
+		# into the live shadow map.
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_shade_casters.append(mi)
+		if shadow:
+			_live_casters.append(mi)
 		mi.lod_bias = detail              # trees behind the front rank are half hidden: fewer triangles
 		mi.set_instance_shader_parameter("leaf_col", tint)
 		mi.set_instance_shader_parameter("sway", _rng.range_f(0.0, TAU))
@@ -558,20 +676,19 @@ func _build_woods() -> void:
 		for rank in 3:
 			spots.append([x + _rng.range_f(-0.7, 0.7), -21.6 - rank * 2.4 + _rng.range_f(-0.5, 0.5), _rng.range_f(4.2, 5.4) + rank * 0.6, rank == 0, rank])
 		x += _rng.range_f(2.2, 3.0)
-	_tree_shade(spots)
 	for s: Array in spots:
 		var pos := Vector3(s[0], height(s[0], s[1]) - 0.05, s[1])
 		var planted := false
 		if not kinds.is_empty():
 			var model: String = kinds[_rng.range_i(0, kinds.size() - 1)]
 			var tall: float = s[2] * (1.25 if model == "tree_pine" else 1.0)
-			planted = _plant(model, pos, tall, s[3], 0.8 if int(s[4]) == 0 else 0.5)
+			planted = _plant(model, pos, tall, s[3], 0.65 if int(s[4]) == 0 else 0.4)
 		if not planted:
 			_stand_in_tree(pos, s[2])
 	# Bushes and undergrowth between the trunks and along the fences, logs here and there.
 	var has_bush := Models.has_model("bush")
-	for i in 70:
-		var bx := _rng.range_f(9.9, 20.0) * (1.0 if _rng.next_f() < 0.5 else -1.0)
+	for i in 44:
+		var bx := _rng.range_f(9.9, 16.0) * (1.0 if _rng.next_f() < 0.5 else -1.0)
 		var bz := _rng.range_f(-27.0, 23.0)
 		if absf(bz) < 2.0:
 			continue
@@ -586,41 +703,6 @@ func _build_woods() -> void:
 	_scatter_model("rocks", [Vector3(-10.2, 0, -6.5), Vector3(10.1, 0, 9.2), Vector3(-9.9, 0, 19.3), Vector3(9.8, 0, -19.5)], 1.2, 1.8)
 
 
-## A soft dark pool on the ground under each tree, drawn in one pass, so the woods sit on the
-## meadow instead of floating over it.
-func _tree_shade(spots: Array) -> void:
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(1.0, 1.0)
-	mm.mesh = plane
-	# Only the two ranks nearest the field: further back the ground is hidden under canopy,
-	# and every pool is a see-through sheet the screen has to blend.
-	spots = spots.filter(func(s: Array) -> bool: return int(s[4]) < 2)
-	mm.instance_count = spots.size()
-	for i in spots.size():
-		var size: float = float(spots[i][2]) * 1.15
-		var x: float = spots[i][0]
-		var z: float = spots[i][1]
-		mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(size, 1.0, size)), Vector3(x, height(x, z) + 0.04, z)))
-	var shade := MultiMeshInstance3D.new()
-	shade.multimesh = mm
-	shade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mat := ShaderMaterial.new()
-	mat.shader = Shader.new()
-	mat.shader.code = """
-shader_type spatial;
-render_mode unshaded, blend_mix, depth_draw_never, shadows_disabled, cull_disabled;
-void fragment() {
-	float d = length(UV - 0.5) * 2.0;
-	ALBEDO = vec3(0.04, 0.035, 0.07);
-	ALPHA = (1.0 - smoothstep(0.15, 1.0, d)) * 0.5;
-}
-"""
-	shade.material_override = mat
-	add_child(shade)
-
-
 func _build_fences() -> void:
 	for z: float in [-15.6, -12.0, -8.4, -4.8, 4.8, 8.4, 12.0, 15.6]:
 		for side: float in [-1.0, 1.0]:
@@ -630,6 +712,10 @@ func _build_fences() -> void:
 			Models.fit_footprint(fence, 0.4, 3.5)
 			fence.position = Vector3(side * 9.55, 0.0, z)
 			add_child(fence)
+			for mi: MeshInstance3D in fence.find_children("*", "MeshInstance3D", true, false):
+				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				mi.lod_bias = 0.6
+				_shade_casters.append(mi)
 
 
 # --- Harvest ---------------------------------------------------------------------------------

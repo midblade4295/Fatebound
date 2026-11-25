@@ -8,16 +8,18 @@ extends RefCounted
 ##
 ## The picture is always drawn at the screen's full resolution: no level scales it down.
 ##
-## Level 0  everything on
+## Level 0  everything on: this is what the game is built to run at
 ##       1  no bloom, no multisample antialiasing
 ##       2  hard-edged shadows, no rim light, coarser distant models
-##       3  trees no longer cast real shadows (their soft pools on the ground remain)
-##       4  no real shadows at all (blob shadows remain), plainer ground
-##       5  no falling leaves or motes, no fill light, coarser models again
+##       3  no live shadows (the woods' baked shade and the blob shadows remain), plainer ground
+##       4  no falling leaves or motes, no fill light, coarser models again
+##
+## It is a safety net for weak devices, so it is slow to act: the rate has to stay well under
+## the target for several seconds before anything is given up.
 
 const PATH := "user://quality.cfg"
-const MAX_LEVEL := 5
-const LOD_PIXELS := [2.5, 2.5, 4.0, 4.0, 5.0, 8.0]
+const MAX_LEVEL := 4
+const LOD_PIXELS := [2.5, 2.5, 4.0, 5.0, 8.0]
 
 var level: int = 0
 var target: float = 60.0
@@ -33,14 +35,14 @@ func _init() -> void:
 	if enabled:
 		var file := ConfigFile.new()
 		if file.load(PATH) == OK:
-			level = clampi(int(file.get_value("quality", "level", 0)), 0, MAX_LEVEL)
+			level = clampi(int(file.get_value("quality", "level_v2", 0)), 0, MAX_LEVEL)
 
 
 func _save() -> void:
 	if not enabled:
 		return
 	var file := ConfigFile.new()
-	file.set_value("quality", "level", level)
+	file.set_value("quality", "level_v2", level)
 	file.save(PATH)
 
 
@@ -61,11 +63,11 @@ func report(fps: float, world: Node, viewport: Viewport) -> void:
 	if _settle > 0:
 		_settle -= 1
 		return
-	if fps >= target * 0.86:
+	if fps >= target * 0.78:
 		_bad = 0
 		return
 	_bad += 1
-	if _bad >= 2 and level < MAX_LEVEL:
+	if _bad >= 4 and level < MAX_LEVEL:
 		level += 1
 		_bad = 0
 		_settle = 2
