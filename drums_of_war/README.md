@@ -70,7 +70,9 @@ match goes to one minute of sudden-death overtime.
   seeded random source, so the same seed and the same deploys always give the same battle.
 - `scripts/sim/bot.gd`: the computer opponent. It plays through the same `deploy()` a player uses.
 - `scripts/view/battle_screen.gd`: runs the match, takes input, plays sound, and draws the HUD
-  (cards, Powder, clock, health and nerve bars) over the 3D view.
+  over the 3D view: wood-and-brass bars, the clock plaque, framed cards with gold-coin costs,
+  the Powder slots, health and nerve bars, and the outlined combat callouts. All of it is drawn
+  in code; the wood grain is a generated noise texture.
 - `scripts/view/battle_world.gd`: the 3D battlefield: structures, regiments in formation, smoke,
   flashes, lighting, and the camera that fits the field to whatever shape the screen is.
 - `scripts/view/arena.gd`: the scenery, set in autumn: ground sculpted with a real creek channel,
@@ -113,7 +115,7 @@ The other ten cards of the 18-card launch deck, smoke as a rule (it is a visual 
 deck building, a menu, and online play. Known rough edges in this stage: the sounds were chosen
 by measurement and have not been listened to; the body clips under the musket drill are still
 the first set (a wide-stance idle, a plain walk); every tree is the one tree model in different
-sizes and greens (reference images for an oak, pine, birch, bush and log are in `assets/models/`
+sizes and fall colours (reference images for an oak, pine, birch, bush and log are in `assets/models/`
 but their models have not been made); the HUD is still plain. The Android APK builds
 and is signed, but has not been run on a physical phone, and nothing here has been profiled on
 one. Balance is the stage 1 first pass, tuned on bot-versus-bot matches.

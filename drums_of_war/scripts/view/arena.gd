@@ -151,10 +151,11 @@ void fragment() {
 	float in_field = smoothstep(0.0, 0.7, 9.0 - abs(wp.x)) * smoothstep(0.0, 0.7, 16.0 - abs(wp.z));
 	// The field: bright, soft mowing stripes, mottled so it is not a flat colour.
 	float stripe = smoothstep(0.42, 0.58, fract(wp.z * 0.25));
-	vec3 field = mix(vec3(0.33, 0.66, 0.19), vec3(0.42, 0.75, 0.24), stripe * 0.55 + (n2 - 0.5) * 0.7);
+	vec3 field = mix(vec3(0.47, 0.57, 0.25), vec3(0.56, 0.64, 0.3), stripe * 0.5 + (n2 - 0.5) * 0.7);
 	field *= 0.9 + 0.2 * n1;
+	field = mix(field, vec3(0.62, 0.6, 0.3), smoothstep(0.62, 0.9, n1) * 0.35);      // sun-dried patches
 	// The meadow around it: deeper greens, patchy, flecked with wildflowers.
-	vec3 meadow = mix(vec3(0.24, 0.42, 0.13), vec3(0.5, 0.56, 0.18), n1) * (0.85 + 0.3 * n2);
+	vec3 meadow = mix(vec3(0.3, 0.4, 0.17), vec3(0.5, 0.52, 0.22), n1) * (0.85 + 0.3 * n2);
 	// Leaf litter under the trees: drifts of orange, red and gold.
 	float litter = smoothstep(0.52, 0.7, n3) * (1.0 - in_field);
 	vec3 leaf = mix(vec3(0.85, 0.36, 0.1), vec3(0.95, 0.72, 0.2), n2);
@@ -167,11 +168,24 @@ void fragment() {
 	for (int i = 0; i < 6; i++) {
 		path = max(path, (1.0 - smoothstep(1.5, 2.9, distance(wp.xz, worn[i]))) * 0.8);
 	}
-	path = clamp(path * (0.35 + 1.1 * n2), 0.0, 1.0);
-	col = mix(col, vec3(0.55, 0.42, 0.26) * (0.85 + 0.3 * n3), path);
+	// Break the wear up with noise so its edges are ragged, then lay dry earth with darker,
+	// damper mud where the traffic is heaviest.
+	path = clamp(path * (0.3 + 1.25 * n2), 0.0, 1.0);
+	path = smoothstep(0.18, 0.62, path);
+	vec3 earth = mix(vec3(0.7, 0.6, 0.42), vec3(0.6, 0.5, 0.34), n3);
+	earth = mix(earth, vec3(0.44, 0.35, 0.24), smoothstep(0.75, 1.0, path) * smoothstep(0.45, 0.7, n1) * 0.7);
+	col = mix(col, earth, path * 0.92);
 	// Banks of sand and gravel, then the darker bed under the water.
-	float bank = smoothstep(-0.02, -0.22, wp.y);
-	col = mix(col, vec3(0.78, 0.7, 0.5) * (0.82 + 0.36 * n3), bank);
+	// The bank: grass thins to sand before the ground even drops, then sand and pebbles down
+	// to the waterline, so the meadow and the creek blend instead of meeting at a line.
+	float n4 = texture(noise, wp.xz * 2.3).r;
+	float near_water = 1.0 - smoothstep(1.25, 2.1 + (n2 - 0.5) * 0.7, abs(wp.z));
+	col = mix(col, vec3(0.74, 0.67, 0.47), near_water * 0.55);
+	float bank = smoothstep(-0.01, -0.2, wp.y);
+	vec3 sand = vec3(0.8, 0.73, 0.53) * (0.85 + 0.3 * n3);
+	sand = mix(sand, vec3(0.6, 0.6, 0.58), smoothstep(0.6, 0.66, n4));       // pebbles
+	sand = mix(sand, vec3(0.93, 0.9, 0.82), smoothstep(0.74, 0.78, n4));     // pale stones
+	col = mix(col, sand, bank);
 	col = mix(col, vec3(0.3, 0.33, 0.27) * (0.8 + 0.4 * n3), smoothstep(-0.55, -1.05, wp.y));
 	// Slow cloud shadow across everything, and dappled sun where the woods overhang the edges.
 	float cloud = texture(noise, wp.xz * 0.011 + TIME * vec2(0.008, 0.004)).r;
@@ -240,16 +254,16 @@ void fragment() {
 	float foam = clamp(edge * 0.9 + riffle * 0.8, 0.0, 1.0);
 	ALBEDO = mix(col, vec3(1.0), foam);
 	ALPHA = clamp(mix(0.42, 0.94, d01) + foam * 0.5, 0.0, 1.0) * smoothstep(0.0, 0.035, depth);
-	ROUGHNESS = mix(0.05, 0.45, foam);
-	SPECULAR = 0.85;
+	ROUGHNESS = mix(0.04, 0.45, foam);
+	SPECULAR = 0.9;
 	METALLIC = 0.15;
 }
 """
 	mat.set_shader_parameter("wave_a", _noise(0.035, 11, true))
 	mat.set_shader_parameter("wave_b", _noise(0.06, 23, true))
 	mat.set_shader_parameter("foam_noise", _noise(0.05, 31))
-	mat.set_shader_parameter("shallow_col", Color("58c6c0"))
-	mat.set_shader_parameter("deep_col", Color("1d5f8f"))
+	mat.set_shader_parameter("shallow_col", Color("86c9dc"))
+	mat.set_shader_parameter("deep_col", Color("3a7fb8"))
 	mat.set_shader_parameter("sky_col", Color("cfe9ff"))
 	mat.set_shader_parameter("surface", WATER_Y)
 	mat.set_shader_parameter("deep", DEEP)
@@ -360,12 +374,12 @@ func _clear_of_structures(x: float, z: float, margin: float) -> bool:
 func _build_grass() -> void:
 	var tufts: Array = []      # [position, size, colour]
 	# Short and sparse on the field, so the troops stay readable.
-	for i in 1100:
+	for i in 520:
 		var x := _rng.range_f(-FIELD_HALF_W, FIELD_HALF_W)
 		var z := _rng.range_f(-FIELD_HALF_L, FIELD_HALF_L)
 		if absf(z) < 1.6 or not _clear_of_structures(x, z, 2.3) or (absf(x) < 1.0 and absf(z) < 12.0):
 			continue
-		tufts.append([Vector3(x, 0, z), _rng.range_f(0.35, 0.6), Color(0.4, 0.74, 0.22).lerp(Color(0.5, 0.8, 0.26), _rng.next_f())])
+		tufts.append([Vector3(x, 0, z), _rng.range_f(0.35, 0.6), Color(0.56, 0.66, 0.3).lerp(Color(0.66, 0.72, 0.36), _rng.next_f())])
 	# Tall and thick in the meadow all round it.
 	for i in 8500:
 		var x := _rng.range_f(-24.0, 24.0)
@@ -374,9 +388,9 @@ func _build_grass() -> void:
 			continue
 		if absf(z) < 1.5:
 			continue
-		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(1.1, 2.1), Color(0.3, 0.52, 0.15).lerp(Color(0.72, 0.68, 0.24), _rng.next_f() * _rng.next_f())])
+		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(1.1, 2.1), Color(0.42, 0.54, 0.21).lerp(Color(0.74, 0.68, 0.3), _rng.next_f() * _rng.next_f())])
 	# Reeds along both banks, away from the crossings.
-	for i in 520:
+	for i in 300:
 		var x := _rng.range_f(-24.0, 24.0)
 		if absf(absf(x) - FORD_X) < 2.0 or absf(x) < 1.9:
 			continue
@@ -574,6 +588,7 @@ func _build_woods() -> void:
 		for rank in 3:
 			spots.append([x + _rng.range_f(-0.7, 0.7), -19.6 - rank * 2.4 + _rng.range_f(-0.5, 0.5), _rng.range_f(4.2, 5.4) + rank * 0.6])
 		x += _rng.range_f(2.2, 3.0)
+	_tree_shade(spots)
 	for s: Array in spots:
 		var pos := Vector3(s[0], height(s[0], s[1]) - 0.05, s[1])
 		var planted := false
@@ -599,6 +614,38 @@ func _build_woods() -> void:
 			_plant("bush", Vector3(bx2, height(bx2, bz2) - 0.03, bz2), _rng.range_f(0.8, 1.3))
 	_scatter_model("log", [Vector3(10.4, 0, -9.5), Vector3(-10.5, 0, 12.5), Vector3(-10.3, 0, -14.0), Vector3(10.6, 0, 16.0)], 1.6, 2.2)
 	_scatter_model("rocks", [Vector3(-10.2, 0, -6.5), Vector3(10.1, 0, 9.2), Vector3(-9.9, 0, 17.4), Vector3(9.8, 0, -17.6)], 1.2, 1.8)
+
+
+## A soft dark pool on the ground under each tree, drawn in one pass, so the woods sit on the
+## meadow instead of floating over it.
+func _tree_shade(spots: Array) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(1.0, 1.0)
+	mm.mesh = plane
+	mm.instance_count = spots.size()
+	for i in spots.size():
+		var size: float = float(spots[i][2]) * 1.15
+		var x: float = spots[i][0]
+		var z: float = spots[i][1]
+		mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(size, 1.0, size)), Vector3(x, height(x, z) + 0.04, z)))
+	var shade := MultiMeshInstance3D.new()
+	shade.multimesh = mm
+	shade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat := ShaderMaterial.new()
+	mat.shader = Shader.new()
+	mat.shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, shadows_disabled, cull_disabled;
+void fragment() {
+	float d = length(UV - 0.5) * 2.0;
+	ALBEDO = vec3(0.04, 0.035, 0.07);
+	ALPHA = (1.0 - smoothstep(0.15, 1.0, d)) * 0.5;
+}
+"""
+	shade.material_override = mat
+	add_child(shade)
 
 
 func _build_fences() -> void:
@@ -752,7 +799,7 @@ void fragment() {
 	float along = smoothstep(0.0, 0.15, UV.y) * (1.0 - smoothstep(0.55, 1.0, UV.y));
 	float shimmer = texture(noise, vec2(UV.x * 0.6 + seed, UV.y * 0.25 + TIME * 0.01 + seed)).r;
 	ALBEDO = vec3(1.0, 0.82, 0.5);
-	ALPHA = across * across * along * (0.35 + 0.65 * shimmer) * 0.085;
+	ALPHA = across * across * along * (0.35 + 0.65 * shimmer) * 0.07;
 }
 """
 	beam.set_shader_parameter("noise", _noise(0.03, 51))

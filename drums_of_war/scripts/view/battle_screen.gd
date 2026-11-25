@@ -14,7 +14,7 @@ const DECK := ["line_infantry", "skirmishers", "militia", "scouts", "heavy_caval
 const CARD_W := 104.0
 const CARD_BAND := 24.0             # the coloured strip across a card's top, and the name strip
 const POWDER_H := 20.0
-const BAR_H := 44.0
+const BAR_H := 50.0
 const CARD_X0 := 84.0
 const CARD_STEP := 112.0
 const AUDIO_DIR := "res://assets/audio/"
@@ -26,6 +26,11 @@ const COL_INK := Color("15233a")
 const COL_PAPER := Color("f6f2e6")
 const COL_BRASS := Color("f2b632")
 const COL_AMBER := Color("ffb000")
+const COL_CREAM := Color("f6ead0")
+const COL_WOOD_DARK := Color("2a1a0f")
+const COL_BRASS_DARK := Color("7a5a1e")
+const COL_BRASS_MID := Color("c9a03c")
+const COL_BRASS_LIGHT := Color("f5d98a")
 
 var cards: Dictionary
 var sim: Sim
@@ -45,6 +50,9 @@ var notice_time: float = 0.0
 
 var words: Array = []               # floating words over the field: {pos, age, life, text, colour}
 var font: Font
+var font_bold: FontVariation
+var _wood: NoiseTexture2D
+var _boxes: Dictionary = {}
 var _players: Array = []
 var _next_player: int = 0
 var _streams: Dictionary = {}
@@ -66,6 +74,11 @@ var _vignette: GradientTexture2D
 
 func _ready() -> void:
 	font = ThemeDB.fallback_font
+	font_bold = FontVariation.new()
+	font_bold.base_font = font
+	font_bold.variation_embolden = 0.85
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED      # the wood grain tiles
+	_wood = _make_wood()
 	cards = Sim.load_cards()
 	if match_seed == 0:
 		match_seed = int(Time.get_unix_time_from_system()) % 1000000 + 1
@@ -116,7 +129,7 @@ func _layout() -> void:
 	art_h = clampf(64.0 + (screen.y - 960.0) * 0.22, 64.0, 112.0)
 	card_size = Vector2(CARD_W, CARD_BAND + art_h + CARD_BAND)
 	hud_y = screen.y - (14.0 + card_size.y + 12.0 + POWDER_H + maxf(bottom, 14.0) + 8.0)
-	var field_top := top + BAR_H + 14.0
+	var field_top := top + BAR_H + 20.0
 	world.field_rect_design = Rect2(22.0, field_top, screen.x - 44.0, hud_y - field_top - 10.0)
 	world.fit_camera()
 
@@ -331,19 +344,108 @@ func _draw() -> void:
 		_draw_result()
 
 
-func _text(pos: Vector2, text: String, size: int, colour: Color, align: int = HORIZONTAL_ALIGNMENT_CENTER, width: float = 200.0) -> void:
+func _text(pos: Vector2, text: String, size: int, colour: Color, align: int = HORIZONTAL_ALIGNMENT_CENTER, width: float = 200.0, bold: bool = false) -> void:
 	var origin := pos
 	if align == HORIZONTAL_ALIGNMENT_CENTER:
 		origin.x -= width * 0.5
 	elif align == HORIZONTAL_ALIGNMENT_RIGHT:
 		origin.x -= width
-	draw_string(font, origin, text, align, width, size, colour)
+	draw_string(font_bold if bold else font, origin, text, align, width, size, colour)
 
 
-func _outlined(pos: Vector2, text: String, size: int, colour: Color, width: float = 200.0) -> void:
-	for off: Vector2 in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(1, 2)]:
-		_text(pos + off, text, size, Color(COL_INK, colour.a))
-	_text(pos, text, size, colour, HORIZONTAL_ALIGNMENT_CENTER, width)
+## Bold lettering with a thick dark outline and a drop shadow, legible over grass, smoke and
+## troops alike.
+func _outlined(pos: Vector2, text: String, size: int, colour: Color, width: float = 320.0, outline: int = 7) -> void:
+	var origin := pos - Vector2(width * 0.5, 0.0)
+	var dark := Color(0.09, 0.06, 0.05, colour.a)
+	draw_string_outline(font_bold, origin + Vector2(0, 3), text, HORIZONTAL_ALIGNMENT_CENTER, width, size, outline, Color(0, 0, 0, 0.45 * colour.a))
+	draw_string_outline(font_bold, origin, text, HORIZONTAL_ALIGNMENT_CENTER, width, size, outline, dark)
+	draw_string(font_bold, origin, text, HORIZONTAL_ALIGNMENT_CENTER, width, size, colour)
+
+
+# --- Wood and brass --------------------------------------------------------------------------
+
+## A strip of wood grain, made once: noise much longer one way than the other, in browns.
+func _make_wood() -> NoiseTexture2D:
+	var n := FastNoiseLite.new()
+	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	n.frequency = 0.035
+	n.fractal_octaves = 4
+	n.seed = 1861
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.4, 0.62, 0.8, 1.0])
+	ramp.colors = PackedColorArray([Color("38230f"), Color("4a2f17"), Color("5a3a1d"), Color("4f3319"), Color("6a4624")])
+	var t := NoiseTexture2D.new()
+	t.width = 48
+	t.height = 256
+	t.seamless = true
+	t.noise = n
+	t.color_ramp = ramp
+	return t
+
+
+## A panel of dark planks: grain running across, a seam every plank's width.
+func _wood_panel(rect: Rect2, tint: Color = Color.WHITE) -> void:
+	draw_rect(rect, Color("4a2f17") * tint)
+	if _wood != null:
+		draw_texture_rect_region(_wood, rect, Rect2(0, 0, rect.size.x / 9.0, rect.size.y / 1.1), tint)
+	var plank := 46.0
+	var y := rect.position.y + plank
+	while y < rect.end.y - 4.0:
+		draw_rect(Rect2(rect.position.x, y, rect.size.x, 2.0), Color(0.08, 0.05, 0.03, 0.55))
+		draw_rect(Rect2(rect.position.x, y + 2.0, rect.size.x, 1.0), Color(1, 0.9, 0.7, 0.07))
+		y += plank
+
+
+## A bevelled brass strip: dark edge, bright face, dark edge.
+func _brass_strip(rect: Rect2) -> void:
+	draw_rect(rect, COL_BRASS_DARK)
+	draw_rect(Rect2(rect.position + Vector2(0, 1), Vector2(rect.size.x, maxf(1.0, rect.size.y - 2.0))), COL_BRASS_MID)
+	draw_rect(Rect2(rect.position + Vector2(0, 1), Vector2(rect.size.x, 1.0)), COL_BRASS_LIGHT)
+
+
+func _brass_frame(rect: Rect2, width: float = 3.0) -> void:
+	draw_rect(rect, COL_BRASS_DARK, false, width + 2.0)
+	draw_rect(rect, COL_BRASS_MID, false, width)
+	draw_rect(rect.grow(width * 0.5 - 0.5), COL_BRASS_LIGHT, false, 1.0)
+
+
+func _rivet(at: Vector2) -> void:
+	draw_circle(at + Vector2(0, 1.5), 5.0, Color(0, 0, 0, 0.45))
+	draw_circle(at, 5.0, COL_BRASS_DARK)
+	draw_circle(at, 3.8, COL_BRASS_MID)
+	draw_circle(at + Vector2(-1.2, -1.2), 1.5, COL_BRASS_LIGHT)
+
+
+## A rounded box with an optional border and soft shadow; made once per look and reused.
+func _box(key: String, fill: Color, radius: float, border: float = 0.0, border_colour: Color = Color.BLACK,
+		shadow: float = 0.0, shadow_colour: Color = Color(0, 0, 0, 0.5), shadow_drop: float = 0.0) -> StyleBoxFlat:
+	if not _boxes.has(key):
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = fill
+		sb.set_corner_radius_all(int(radius))
+		sb.set_border_width_all(int(border))
+		sb.border_color = border_colour
+		sb.shadow_size = int(shadow)
+		sb.shadow_color = shadow_colour
+		sb.shadow_offset = Vector2(0, shadow_drop)
+		sb.anti_aliasing = true
+		_boxes[key] = sb
+	return _boxes[key]
+
+
+## The Powder cost as an embossed gold coin.
+func _coin(at: Vector2, cost: int, can_pay: bool) -> void:
+	var dull := 1.0 if can_pay else 0.62
+	draw_circle(at + Vector2(0, 2.5), 15.5, Color(0, 0, 0, 0.5))
+	draw_circle(at, 15.5, Color("7a5510") * Color(dull, dull, dull))
+	draw_circle(at, 14.0, Color("f7d868") * Color(dull, dull, dull))
+	draw_circle(at, 11.5, Color("e0a626") * Color(dull, dull, dull))
+	draw_arc(at, 12.6, PI * 1.05, PI * 1.6, 12, Color(1.0, 0.97, 0.75, 0.9 * dull), 1.6)
+	draw_arc(at, 12.6, PI * 0.05, PI * 0.6, 12, Color(0.45, 0.3, 0.05, 0.7), 1.6)
+	var text := str(cost)
+	_text(at + Vector2(0, 7.5), text, 19, Color(1.0, 0.93, 0.6, dull), HORIZONTAL_ALIGNMENT_CENTER, 30.0, true)
+	_text(at + Vector2(0, 6.5), text, 19, Color("4a3206"), HORIZONTAL_ALIGNMENT_CENTER, 30.0, true)
 
 
 func _field_quad(x0: float, x1: float, depth0: float, depth1: float) -> PackedVector2Array:
@@ -412,51 +514,83 @@ func _draw_regiment_bars(r: Sim.Regiment) -> void:
 func _draw_words() -> void:
 	for e: Dictionary in words:
 		var t := float(e["age"]) / float(e["life"])
-		var p := to_screen(e["pos"], 1.6) + Vector2(0, -8.0 - 26.0 * t)
-		_outlined(p, e["text"], 17, Color(e["colour"], 1.0 - t * t))
+		# Pops in large, settles, then lifts away as it fades.
+		var pop := 1.0 + 0.45 * maxf(0.0, 1.0 - t * 7.0)
+		var p := to_screen(e["pos"], 1.6) + Vector2(0, -10.0 - 30.0 * t * t)
+		_outlined(p, e["text"], int(23.0 * pop), Color(e["colour"], 1.0 - pow(t, 4.0)))
 
 
 func _draw_top_bar() -> void:
 	var enemy := 1 - local_side
-	draw_rect(Rect2(0, 0, screen.x, top + BAR_H), Color(COL_INK, 0.92))
+	var bar := Rect2(0, 0, screen.x, top + BAR_H)
+	_wood_panel(bar)
+	draw_rect(Rect2(0, bar.end.y - 10.0, screen.x, 10.0), Color(0, 0, 0, 0.25))
+	_brass_strip(Rect2(0, bar.end.y - 4.0, screen.x, 4.0))
+	draw_rect(Rect2(0, bar.end.y, screen.x, 5.0), Color(0, 0, 0, 0.28))            # the bar's shadow on the field
 	draw_set_transform(Vector2(ox, top), 0.0, Vector2.ONE)
-	_text(Vector2(16, 29), "ENEMY", 16, COL_RED.lightened(0.35), HORIZONTAL_ALIGNMENT_LEFT)
-	_text(Vector2(524, 29), "YOU", 16, COL_BLUE.lightened(0.45), HORIZONTAL_ALIGNMENT_RIGHT)
+	_rivet(Vector2(10, 12))
+	_rivet(Vector2(530, 12))
+	_text(Vector2(26, 33), "ENEMY", 16, Color("f08a78"), HORIZONTAL_ALIGNMENT_LEFT, 200.0, true)
+	_text(Vector2(514, 33), "YOU", 16, Color("86b4ff"), HORIZONTAL_ALIGNMENT_RIGHT, 200.0, true)
+	# Redoubts taken: an inset slot for each, lit in the taker's colour.
 	for i in 2:
-		var lost_enemy := i < sim.redoubts_lost(enemy)
-		var lost_mine := i < sim.redoubts_lost(local_side)
-		draw_rect(Rect2(86 + i * 20, 15, 14, 14), COL_BLUE.lightened(0.3) if lost_enemy else Color(1, 1, 1, 0.18))
-		draw_rect(Rect2(406 + i * 20, 15, 14, 14), COL_RED.lightened(0.2) if lost_mine else Color(1, 1, 1, 0.18))
+		for mine in 2:
+			var slot := Rect2(98.0 + i * 22.0, 19.0, 17.0, 17.0) if mine == 0 else Rect2(403.0 + i * 22.0, 19.0, 17.0, 17.0)
+			var lost := i < (sim.redoubts_lost(enemy) if mine == 0 else sim.redoubts_lost(local_side))
+			draw_rect(slot.grow(1.5), COL_BRASS_DARK)
+			draw_rect(slot, Color("1a110a"))
+			if lost:
+				draw_rect(slot.grow(-2.0), COL_BLUE.lightened(0.25) if mine == 0 else COL_RED.lightened(0.15))
+				draw_rect(Rect2(slot.position + Vector2(2, 2), Vector2(slot.size.x - 4.0, 3.0)), Color(1, 1, 1, 0.35))
+	# The clock sits on a plaque that hangs below the bar.
+	var plaque := PackedVector2Array([Vector2(194, -top), Vector2(346, -top), Vector2(346, BAR_H - 2.0), Vector2(330, BAR_H + 13.0),
+			Vector2(210, BAR_H + 13.0), Vector2(194, BAR_H - 2.0)])
+	draw_colored_polygon(plaque, COL_WOOD_DARK)
+	var edge := PackedVector2Array([plaque[1], plaque[2], plaque[3], plaque[4], plaque[5], plaque[0]])
+	draw_polyline(edge, COL_BRASS_DARK, 5.0)
+	draw_polyline(edge, COL_BRASS_MID, 3.0)
 	var left := int(ceil(sim.time_left()))
 	var clock := "%d:%02d" % [left / 60, left % 60]
-	var clock_col := COL_PAPER
+	var clock_col := COL_CREAM
+	if sim.phase == Sim.PHASE_OVERTIME or (left <= 10 and sim.phase == Sim.PHASE_REGULAR):
+		clock_col = Color("ff9a3c")
+	_text(Vector2(270, 41), clock, 28, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
+	_text(Vector2(270, 39), clock, 28, clock_col, HORIZONTAL_ALIGNMENT_CENTER, 200.0, true)
 	if sim.phase == Sim.PHASE_OVERTIME:
-		clock_col = Color("ff8a1f")
-	_text(Vector2(270, 32), clock, 24, clock_col)
-	if sim.phase == Sim.PHASE_OVERTIME:
-		_outlined(Vector2(270, 64), "OVERTIME", 14, Color("ff8a1f"))
+		_outlined(Vector2(270, BAR_H + 40.0), "OVERTIME", 16, Color("ff9a3c"))
 	elif sim.double_powder() and sim.phase != Sim.PHASE_OVER:
-		_outlined(Vector2(270, 64), "DOUBLE POWDER", 14, COL_AMBER)
+		_outlined(Vector2(270, BAR_H + 40.0), "DOUBLE POWDER", 16, COL_AMBER)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if notice_time > 0.0:
 		var a := clampf(notice_time, 0.0, 1.0)
 		var mid := Vector2(screen.x * 0.5, (top + BAR_H + hud_y) * 0.5)
-		draw_rect(Rect2(mid.x - 200.0, mid.y - 17.0, 400, 34), Color(0, 0, 0, 0.6 * a))
-		_text(mid + Vector2(0, 6), notice, 15, Color(COL_PAPER, a), HORIZONTAL_ALIGNMENT_CENTER, 400.0)
+		draw_style_box(_box("notice", Color(0.1, 0.06, 0.03, 0.82), 8.0, 2.0, COL_BRASS_MID), Rect2(mid.x - 210.0, mid.y - 20.0, 420.0, 40.0))
+		_text(mid + Vector2(0, 6), notice, 15, Color(COL_CREAM, a), HORIZONTAL_ALIGNMENT_CENTER, 400.0, true)
 
 
 ## One card face: coloured strip with its kind, the portrait, the name, and the Powder cost.
 func _draw_card(rect: Rect2, card_id: String, can_pay: bool, chosen: bool) -> void:
 	var def: Dictionary = cards[card_id]
 	var is_order: bool = def["type"] == "order"
+	# Frame: drop shadow, then brass in three steps for a bevel. A playable card has a faint
+	# amber halo; the chosen one a strong one.
 	if chosen:
-		draw_rect(rect.grow(5.0), COL_AMBER)
-	draw_rect(rect, COL_PAPER)
-	var band := Color("7a4bb5") if is_order else COL_BLUE
-	draw_rect(Rect2(rect.position, Vector2(rect.size.x, CARD_BAND)), band)
+		draw_style_box(_box("card_glow", Color(1, 0.75, 0.1, 0.0), 10.0, 0.0, Color.BLACK, 14.0, Color(1.0, 0.72, 0.1, 0.95)), rect.grow(3.0))
+	elif can_pay:
+		draw_style_box(_box("card_ready", Color(1, 0.75, 0.1, 0.0), 10.0, 0.0, Color.BLACK, 7.0, Color(1.0, 0.72, 0.1, 0.4)), rect.grow(3.0))
+	draw_style_box(_box("card_edge", COL_BRASS_DARK, 9.0, 0.0, Color.BLACK, 9.0, Color(0, 0, 0, 0.6), 5.0), rect.grow(4.0))
+	draw_style_box(_box("card_face", COL_BRASS_LIGHT, 8.0), rect.grow(2.5))
+	draw_style_box(_box("card_inner", COL_BRASS_MID, 6.0, 1.0, COL_BRASS_DARK), rect.grow(1.0))
+	var inner := rect.grow(-2.0)
+	var band := Color("6a3fa8") if is_order else Color("2456c9")
+	var band_rect := Rect2(inner.position, Vector2(inner.size.x, CARD_BAND - 2.0))
+	draw_rect(band_rect, band)
+	draw_rect(Rect2(band_rect.position, Vector2(band_rect.size.x, band_rect.size.y * 0.45)), Color(1, 1, 1, 0.14))
+	draw_rect(Rect2(band_rect.position.x, band_rect.end.y - 2.0, band_rect.size.x, 2.0), Color(0, 0, 0, 0.3))
 	var kind := "ORDER" if is_order else String(def["arm"]).to_upper()
-	_text(rect.position + Vector2(rect.size.x * 0.5 + 9.0, 17), kind, 11, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 22.0)
-	var art_rect := Rect2(rect.position + Vector2(0, CARD_BAND), Vector2(rect.size.x, rect.size.y - CARD_BAND * 2.0))
+	_text(band_rect.position + Vector2(band_rect.size.x * 0.5 + 10.0, 16), kind, 11, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, band_rect.size.x - 24.0, true)
+	var name_rect := Rect2(Vector2(inner.position.x, inner.end.y - CARD_BAND + 2.0), Vector2(inner.size.x, CARD_BAND - 2.0))
+	var art_rect := Rect2(Vector2(inner.position.x, band_rect.end.y), Vector2(inner.size.x, name_rect.position.y - band_rect.end.y))
 	var art := _art(card_id)
 	if art != null:
 		# The portrait is drawn from the top of the picture down, as much as the card has room for.
@@ -466,54 +600,76 @@ func _draw_card(rect: Rect2, card_id: String, can_pay: bool, chosen: bool) -> vo
 	else:
 		draw_rect(art_rect, band.lightened(0.55))
 		_draw_card_words(art_rect.get_center() + Vector2(0, 6), String(def["name"]), 15, COL_INK, rect.size.x - 8.0)
-	var name_rect := Rect2(Vector2(rect.position.x, rect.end.y - CARD_BAND), Vector2(rect.size.x, CARD_BAND))
-	draw_rect(name_rect, COL_INK.lightened(0.1))
-	_text(name_rect.position + Vector2(rect.size.x * 0.5, 17), String(def["name"]), 12, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 4.0)
-	draw_rect(rect, COL_INK, false, 2.0)
+	draw_rect(Rect2(art_rect.position, Vector2(art_rect.size.x, 5.0)), Color(0, 0, 0, 0.18))      # the frame's shadow on the picture
+	draw_rect(name_rect, COL_WOOD_DARK)
+	draw_rect(Rect2(name_rect.position, Vector2(name_rect.size.x, 1.5)), COL_BRASS_MID)
+	_text(name_rect.position + Vector2(name_rect.size.x * 0.5, 16), String(def["name"]), 13, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, name_rect.size.x - 4.0, true)
 	if not can_pay:
-		draw_rect(rect, Color(0.08, 0.1, 0.16, 0.55))
-	draw_circle(rect.position + Vector2(12, 12), 14.0, COL_AMBER if can_pay else COL_AMBER.darkened(0.4))
-	draw_arc(rect.position + Vector2(12, 12), 14.0, 0.0, TAU, 24, COL_INK, 2.0)
-	_text(rect.position + Vector2(12, 18), str(int(def["cost"])), 18, COL_INK, HORIZONTAL_ALIGNMENT_CENTER, 26.0)
+		draw_rect(inner, Color(0.06, 0.05, 0.08, 0.4))
+	_coin(rect.position + Vector2(9, 9), int(def["cost"]), can_pay)
 
 
 func _draw_hud() -> void:
-	draw_rect(Rect2(0, hud_y, screen.x, screen.y - hud_y), COL_INK)
-	draw_rect(Rect2(0, hud_y, screen.x, 3), COL_BRASS.darkened(0.2))
+	var tray := Rect2(0, hud_y, screen.x, screen.y - hud_y)
+	draw_rect(Rect2(0, hud_y - 5.0, screen.x, 5.0), Color(0, 0, 0, 0.28))             # the tray's shadow on the field
+	_wood_panel(tray)
+	_brass_strip(Rect2(0, hud_y, screen.x, 4.0))
 	draw_set_transform(Vector2(ox, 0.0), 0.0, Vector2.ONE)       # the tray's contents sit in a centred column
+	_brass_frame(Rect2(7, hud_y + 9.0, 526, tray.size.y - 9.0 - maxf(bottom, 6.0) - 6.0), 2.0)
+	for corner: Vector2 in [Vector2(15, hud_y + 17.0), Vector2(525, hud_y + 17.0)]:
+		_rivet(corner)
 	var hand: Array = sim.hand(local_side)
 	var have: float = sim.powder[local_side]
 	var cards_y := hud_y + 14.0
 	# The next card, small, at the left.
 	var next_id := sim.next_card(local_side)
-	_text(Vector2(43, cards_y + 9), "NEXT", 11, Color(1, 1, 1, 0.65), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
-	var next_rect := Rect2(14, cards_y + 16, 58, 58)
-	draw_rect(next_rect, Color(1, 1, 1, 0.12))
+	_text(Vector2(43, cards_y + 13), "NEXT", 11, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 58.0, true)
+	var next_rect := Rect2(17, cards_y + 20, 52, 52)
+	draw_style_box(_box("next_edge", COL_BRASS_DARK, 6.0, 0.0, Color.BLACK, 6.0, Color(0, 0, 0, 0.55), 3.0), next_rect.grow(3.0))
+	draw_style_box(_box("next_face", COL_BRASS_MID, 5.0), next_rect.grow(1.5))
 	if next_id != "":
 		var next_art := _art(next_id)
 		if next_art != null:
 			var w := float(next_art.get_width())
-			draw_texture_rect_region(next_art, next_rect, Rect2(0, 0, w, w), Color(1, 1, 1, 0.9))
+			draw_texture_rect_region(next_art, next_rect, Rect2(0, 0, w, w))
 		else:
-			_draw_card_words(next_rect.get_center() + Vector2(0, 4), String(cards[next_id]["name"]), 10, Color(1, 1, 1, 0.8), 56.0)
-		draw_rect(next_rect, COL_INK.lightened(0.3), false, 2.0)
+			draw_rect(next_rect, COL_WOOD_DARK)
+			_draw_card_words(next_rect.get_center() + Vector2(0, 4), String(cards[next_id]["name"]), 10, COL_CREAM, 50.0)
+	var cheapest := 99.0
 	for i in hand.size():
+		cheapest = minf(cheapest, float(cards[hand[i]]["cost"]))
 		var rect := _card_rect(i)
 		rect.position.x -= ox
 		if i == selected:
 			rect.position.y -= 12.0
 		_draw_card(rect, hand[i], have + 0.0001 >= float(cards[hand[i]]["cost"]), i == selected)
-	# Powder: the count at the left, ten charges along the bottom.
+
+	# Powder: ten framed slots. Full charges are bevelled amber, and they glow while there is
+	# enough to play something. With a card chosen, the charges it would spend are outlined.
 	var seg := 44.0
-	var y := cards_y + card_size.y + 12.0
+	var y := cards_y + card_size.y + 13.0
+	var ready := have + 0.0001 >= cheapest
+	var throb := 0.5 + 0.5 * sin(_clock * 4.0)
+	var spend := int(cards[hand[selected]]["cost"]) if selected >= 0 and selected < hand.size() else 0
 	for i in int(Sim.POWDER_MAX):
-		var cell := Rect2(CARD_X0 + i * seg, y, seg - 4.0, POWDER_H)
-		draw_rect(cell, Color(1, 1, 1, 0.12))
+		var cell := Rect2(CARD_X0 + i * seg, y, seg - 5.0, POWDER_H)
 		var fill := clampf(have - i, 0.0, 1.0)
+		if fill >= 1.0 and ready:
+			draw_style_box(_box("keg_glow", Color(1, 0.7, 0.1, 0.0), 5.0, 0.0, Color.BLACK, 7.0, Color(1.0, 0.68, 0.1, 0.55)), cell)
+			draw_rect(cell.grow(1.0 + throb), Color(1.0, 0.72, 0.15, 0.1 + 0.16 * throb))
+		draw_style_box(_box("keg_slot", Color("140c06"), 4.0, 2.0, COL_BRASS_DARK), cell.grow(1.5))
 		if fill > 0.0:
-			draw_rect(Rect2(cell.position, Vector2(cell.size.x * fill, cell.size.y)), COL_AMBER if fill >= 1.0 else COL_AMBER.darkened(0.35))
-	_text(Vector2(43, y + 17), "%d" % int(have), 22, COL_AMBER, HORIZONTAL_ALIGNMENT_CENTER, 58.0)
-	_text(Vector2(43, y - 6), "POWDER", 10, Color(1, 1, 1, 0.65), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
+			var bar := Rect2(cell.position + Vector2(2, 2), Vector2((cell.size.x - 4.0) * fill, cell.size.y - 4.0))
+			var dim := 1.0 if fill >= 1.0 else 0.55
+			draw_rect(bar, Color("f2a31a") * Color(dim, dim, dim))
+			draw_rect(Rect2(bar.position, Vector2(bar.size.x, bar.size.y * 0.45)), Color(1.0, 0.86, 0.42, dim))
+			draw_rect(Rect2(bar.position, Vector2(bar.size.x, 1.5)), Color(1.0, 0.97, 0.8, dim))
+			draw_rect(Rect2(bar.position.x, bar.end.y - 3.0, bar.size.x, 3.0), Color(0.72, 0.42, 0.04, dim))
+		if i < spend:
+			draw_rect(cell.grow(2.5), COL_CREAM, false, 2.0)
+	_text(Vector2(43, y + 18), "%d" % int(have), 24, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 58.0, true)
+	_text(Vector2(43, y + 16), "%d" % int(have), 24, COL_AMBER if ready else COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 58.0, true)
+	_text(Vector2(43, y - 8), "POWDER", 10, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 58.0, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -549,22 +705,26 @@ func _draw_card_words(centre: Vector2, name: String, size: int, colour: Color, w
 
 
 func _draw_result() -> void:
-	draw_rect(Rect2(Vector2.ZERO, screen), Color(0, 0, 0, 0.55))
+	draw_rect(Rect2(Vector2.ZERO, screen), Color(0.05, 0.03, 0.02, 0.6))
 	var cx := screen.x * 0.5
-	var cy := screen.y * 0.44
+	var cy := screen.y * 0.42
 	var text := "DRAW"
-	var col := COL_PAPER
+	var col := COL_CREAM
 	if sim.winner == local_side:
 		text = "VICTORY"
-		col = COL_AMBER
+		col = Color("ffd24a")
 	elif sim.winner == 1 - local_side:
 		text = "DEFEAT"
-		col = Color("ff6a5a")
-	_text(Vector2(cx, cy), text, 64, col, HORIZONTAL_ALIGNMENT_CENTER, 520.0)
+		col = Color("ff7a66")
+	var plate := Rect2(cx - 220.0, cy - 78.0, 440.0, 190.0)
+	draw_style_box(_box("result_edge", COL_BRASS_DARK, 14.0, 0.0, Color.BLACK, 16.0, Color(0, 0, 0, 0.7), 6.0), plate.grow(5.0))
+	draw_style_box(_box("result_face", COL_BRASS_MID, 12.0), plate.grow(2.0))
+	draw_style_box(_box("result_wood", COL_WOOD_DARK, 10.0), plate)
+	_outlined(Vector2(cx, cy), text, 62, col, 440.0, 9)
 	var how := "Time ran out"
 	if sim.hq(0).dead or sim.hq(1).dead:
 		how = "The Colours were captured"
 	elif sim.time > Sim.MATCH_TIME + 0.5 and sim.time < Sim.MATCH_TIME + Sim.OVERTIME:
 		how = "Decided in overtime"
-	_text(Vector2(cx, cy + 42.0), how, 18, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, 520.0)
-	_text(Vector2(cx, cy + 100.0), "Tap to play again", 18, Color(1, 1, 1, 0.8), HORIZONTAL_ALIGNMENT_CENTER, 520.0)
+	_text(Vector2(cx, cy + 40.0), how, 18, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 420.0, true)
+	_text(Vector2(cx, cy + 86.0), "Tap to play again", 17, Color(COL_CREAM, 0.6 + 0.4 * sin(_clock * 3.0)), HORIZONTAL_ALIGNMENT_CENTER, 420.0, true)

@@ -92,6 +92,7 @@ func _ready() -> void:
 	_build_environment()
 	_build_arena()
 	_build_puffs()
+	_build_contact_shadows()
 	get_viewport().size_changed.connect(fit_camera)
 	fit_camera()
 
@@ -143,35 +144,41 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("8ecbff")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("9fbcff")       # cool sky-blue fill in the shadows
-	env.ambient_light_energy = 0.5
+	env.ambient_light_color = Color("a8bdf0")       # cool sky-blue fill in the shadows
+	env.ambient_light_energy = 0.52
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.14
-	env.adjustment_contrast = 1.06
+	env.adjustment_saturation = 1.0      # the palette itself is already rich; grading keeps it calm
+	env.adjustment_contrast = 1.09
+	env.adjustment_brightness = 1.02
 	# Bloom: muzzle flashes, glints on the water and the motes in the sunbeams all flare a little.
 	env.glow_enabled = true
-	env.glow_intensity = 0.55
-	env.glow_bloom = 0.06
-	env.glow_hdr_threshold = 0.92
+	env.glow_intensity = 0.5
+	env.glow_bloom = 0.04
+	env.glow_hdr_threshold = 0.95
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 
 	var sun := DirectionalLight3D.new()             # warm golden-hour key light
-	sun.light_color = Color("ffd092")
-	sun.light_energy = 1.2
-	sun.rotation_degrees = Vector3(-33.0, 38.0, 0.0)      # from behind the camera's right shoulder, so the faces you see are lit
+	sun.light_color = Color("ffd9a3")
+	sun.light_energy = 1.25
+	# Low in the east: long shadows fall across the field from the right-hand woods, and the
+	# light still catches the sides of the figures that face the camera.
+	sun.rotation_degrees = Vector3(-37.0, 58.0, 0.0)
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	sun.directional_shadow_max_distance = 70.0
-	sun.shadow_bias = 0.06
+	sun.directional_shadow_max_distance = 95.0
+	sun.shadow_bias = 0.05
+	sun.shadow_normal_bias = 1.4
+	sun.shadow_blur = 2.2                # soft-edged shadows
+	sun.shadow_opacity = 0.72            # never pitch black: the sky fills them
 	add_child(sun)
 
 	var rim := DirectionalLight3D.new()             # crisp cool rim from behind the field
 	rim.light_color = Color("cfe6ff")
-	rim.light_energy = 0.35
+	rim.light_energy = 0.42
 	rim.rotation_degrees = Vector3(-30.0, 168.0, 0.0)     # from beyond the far end, back toward the camera
 	rim.shadow_enabled = false
 	add_child(rim)
@@ -233,6 +240,7 @@ func _build_arena() -> void:
 		add_child(node)
 		_structures[s.id] = node
 		_structure_dead[s.id] = false
+		_add_blob(node, 7.4 if s.kind == "hq" else 5.6, 0.5)
 		if s.kind == "hq":
 			# Lamplight spilling from the farmhouse onto the grass in front of it.
 			var lamp := OmniLight3D.new()
@@ -244,6 +252,30 @@ func _build_arena() -> void:
 			lamp.position = Vector3(0.0, 1.6, 2.6)
 			node.add_child(lamp)
 			_lamps[s.id] = lamp
+
+
+var _ring_material: ShaderMaterial = null
+
+
+## The marker under a regiment: a crisp ring in the team colour over a faint fill.
+func ring_material() -> ShaderMaterial:
+	if _ring_material == null:
+		_ring_material = ShaderMaterial.new()
+		_ring_material.shader = Shader.new()
+		_ring_material.shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, shadows_disabled, cull_disabled;
+instance uniform vec3 colour : source_color = vec3(1.0);
+instance uniform float pulse = 0.0;
+void fragment() {
+	float d = length(UV - 0.5) * 2.0;
+	float line = smoothstep(0.82, 0.87, d) * (1.0 - smoothstep(0.95, 1.0, d));
+	float fill = 1.0 - smoothstep(0.84, 0.88, d);
+	ALBEDO = mix(colour, vec3(1.0), pulse * 0.55);
+	ALPHA = clamp(line * 0.95 + fill * (0.17 + 0.3 * pulse), 0.0, 1.0);
+}
+"""
+	return _ring_material
 
 
 func team_colour(side: int) -> Color:
@@ -296,6 +328,80 @@ func _build_structure(s: Sim.Structure) -> Node3D:
 	return root
 
 
+const BLOB_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, shadows_disabled, cull_disabled;
+uniform float strength = 0.5;
+void fragment() {
+	float d = length(UV - 0.5) * 2.0;
+	ALBEDO = vec3(0.04, 0.035, 0.07);
+	ALPHA = (1.0 - smoothstep(0.2, 1.0, d)) * strength;
+}
+"""
+
+var _blob_shader: Shader = null
+var _contact: MultiMeshInstance3D
+
+
+func _blob_material(strength: float) -> ShaderMaterial:
+	if _blob_shader == null:
+		_blob_shader = Shader.new()
+		_blob_shader.code = BLOB_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = _blob_shader
+	m.set_shader_parameter("strength", strength)
+	return m
+
+
+## A soft dark patch on the ground under something, standing in for ambient occlusion (the
+## mobile renderer has no screen-space AO). It is what makes a figure look planted.
+func _add_blob(parent: Node3D, size: float, strength: float) -> void:
+	var mi := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(size, size)
+	mi.mesh = plane
+	mi.position.y = 0.035
+	mi.material_override = _blob_material(strength)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+
+
+## One patch under every soldier and gun, all drawn in a single pass and moved each frame.
+func _build_contact_shadows() -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(1.0, 1.0)
+	mm.mesh = plane
+	mm.instance_count = 220
+	mm.visible_instance_count = 0
+	_contact = MultiMeshInstance3D.new()
+	_contact.multimesh = mm
+	_contact.material_override = _blob_material(0.55)
+	_contact.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_contact)
+
+
+func _update_contact_shadows() -> void:
+	var mm := _contact.multimesh
+	var n := 0
+	for id in _regiments:
+		var rv: RegimentView = _regiments[id]
+		var size := 2.3 if rv.arm == "cavalry" else 1.25
+		var y: float = rv.root.position.y + 0.045
+		for s: Node3D in rv.soldiers:
+			if n >= mm.instance_count:
+				break
+			var at := s.global_position
+			mm.set_instance_transform(n, Transform3D(Basis().scaled(Vector3(size, 1.0, size)), Vector3(at.x, y, at.z)))
+			n += 1
+		if rv.gun != null and n < mm.instance_count:
+			var g := rv.gun.global_position
+			mm.set_instance_transform(n, Transform3D(Basis().scaled(Vector3(2.6, 1.0, 2.6)), Vector3(g.x, y, g.z)))
+			n += 1
+	mm.visible_instance_count = n
+
+
 func _build_puffs() -> void:
 	_puff_mesh = MultiMeshInstance3D.new()
 	var mm := MultiMesh.new()
@@ -310,13 +416,23 @@ func _build_puffs() -> void:
 	mm.instance_count = MAX_PUFFS
 	mm.visible_instance_count = 0
 	_puff_mesh.multimesh = mm
-	var m := StandardMaterial3D.new()
-	m.vertex_color_use_as_albedo = true
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.roughness = 1.0
-	m.emission_enabled = true
-	m.emission = Color("fff3e0")
-	m.emission_energy_multiplier = 0.35
+	# Each puff is a ball that fades out toward its edge and is lit from above: bright on top,
+	# a cool grey underneath. Overlapping balls then read as one soft billow, not as discs.
+	var m := ShaderMaterial.new()
+	m.shader = Shader.new()
+	m.shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, shadows_disabled;
+varying float fade;
+void vertex() { fade = COLOR.a; }
+void fragment() {
+	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
+	vec3 up = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
+	float lit = clamp(up.y * 0.55 + 0.5 + up.x * 0.2, 0.0, 1.0);
+	ALBEDO = mix(vec3(0.5, 0.5, 0.6), vec3(1.0, 0.97, 0.9), lit);
+	ALPHA = fade * smoothstep(0.02, 0.62, facing);
+}
+"""
 	_puff_mesh.material_override = m
 	_puff_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_puff_mesh)
@@ -377,6 +493,7 @@ func _process(delta: float) -> void:
 				_puffs.append({"pos": w, "vel": Vector3(0.45, 0.7, 0.0), "age": 0.0, "life": 3.2, "size": 0.55})
 	for id in _lamps:
 		_lamps[id].visible = not _structure_dead.get(id, false)
+	_update_contact_shadows()
 	_update_leaving(delta)
 	_update_puffs(delta)
 	_update_flashes(delta)
@@ -518,6 +635,11 @@ func on_event(e: Dictionary) -> void:
 			puff(pos, 0.5, 0.6, 1.4)
 		"over":
 			cheering_side = int(e["winner"])
+		"rally":
+			for id in _regiments:
+				var rallied: RegimentView = _regiments[id]
+				if rallied.last_pos.distance_to(pos) < 0.2:
+					rallied.pulse = 1.0
 
 
 # ==========================================================================================
@@ -542,6 +664,7 @@ class RegimentView extends RefCounted:
 	var uses_model: bool = false
 	var phase: float = 0.0
 	var fire_hold: float = 0.0
+	var pulse: float = 0.0            # the ring flares when the regiment arrives or rallies
 	var moving_for: float = 0.0
 
 	func _init(w: Node3D, r: Sim.Regiment) -> void:
@@ -556,16 +679,17 @@ class RegimentView extends RefCounted:
 		shown_dir = w.dir_to_world(r.facing)
 		phase = r.id * 1.37
 		ring = MeshInstance3D.new()
-		var disc := CylinderMesh.new()
-		disc.top_radius = 1.7 if arm != "cavalry" else 2.0
-		disc.bottom_radius = disc.top_radius
-		disc.height = 0.02
-		disc.radial_segments = 28
+		var disc := PlaneMesh.new()
+		var radius := 1.75 if arm != "cavalry" else 2.1
+		disc.size = Vector2(radius * 2.0, radius * 2.0)
 		ring.mesh = disc
-		ring.position.y = 0.06
-		ring.material_override = w._mat(Color(w.team_colour(r.side), 0.38), 1.0, true)
+		ring.position.y = 0.07
+		ring.material_override = w.ring_material()
+		ring.set_instance_shader_parameter("colour", w.team_colour(r.side))
+		ring.set_instance_shader_parameter("pulse", 1.0)
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(ring)
+		pulse = 1.0
 		if arm == "artillery":
 			gun = Models.make("cannon", team)
 			if gun != null:
@@ -647,6 +771,8 @@ class RegimentView extends RefCounted:
 		if shown_dir.length() > 0.01:
 			root.rotation.y = atan2(-shown_dir.x, -shown_dir.z)
 		ring.visible = r.state != Sim.ST_ROUT
+		pulse = maxf(0.0, pulse - delta * 1.4)
+		ring.set_instance_shader_parameter("pulse", pulse)
 		kick = maxf(0.0, kick - delta * 4.0)
 		fire_hold = maxf(0.0, fire_hold - delta)
 		# The rules tick 20 times a second, so "moved this frame" flickers; smooth it.
