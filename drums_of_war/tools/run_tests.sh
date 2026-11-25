@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs every Grapeshot test headless and checks each one's pass marker.
-# Usage:  GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64 grapeshot/tools/run_tests.sh
+# Runs every Drums of War test headless and checks each one's pass marker.
+# Usage:  GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64 drums_of_war/tools/run_tests.sh
 # Exit code 0 only if every test printed its marker with no script errors.
 set -uo pipefail
 
@@ -16,7 +16,7 @@ fi
 fail=0
 run() {   # run <name> <marker> <timeout> [extra godot args...]
   local name="$1" marker="$2" tmo="$3"; shift 3
-  local log="${TMPDIR:-/tmp}/grapeshot_test_${name}.log"
+  local log="${TMPDIR:-/tmp}/drums_test_${name}.log"
   local t0=$SECONDS
   timeout "$tmo" "$GODOT" --headless "$@" --path . -s "tests/${name}.gd" >"$log" 2>&1
   local errs; errs=$(grep -c 'SCRIPT ERROR\|Parse Error' "$log")
@@ -29,8 +29,8 @@ run() {   # run <name> <marker> <timeout> [extra godot args...]
   fi
 }
 
-run parse_all       GRAPESHOT_PARSE_PASS 60
-run rules_test      GRAPESHOT_RULES_PASS 120
-run bot_match_test  GRAPESHOT_BOTS_PASS  300
-run app_smoke_test  GRAPESHOT_APP_PASS   180 --fixed-fps 30
+run parse_all       DRUMS_PARSE_PASS 60
+run rules_test      DRUMS_RULES_PASS 120
+run bot_match_test  DRUMS_BOTS_PASS  300
+run app_smoke_test  DRUMS_APP_PASS   180 --fixed-fps 30
 exit $fail

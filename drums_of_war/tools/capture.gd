@@ -2,7 +2,7 @@ extends SceneTree
 ## Plays a bot-versus-bot match on the real battle screen and saves screenshots.
 ## Needs a display (not --headless), for example:
 ##   xvfb-run -a $GODOT --rendering-method mobile --fixed-fps 30 --resolution 540x960 \
-##       --path grapeshot -s tools/capture.gd
+##       --path drums_of_war -s tools/capture.gd
 ## Environment: CAPTURE_DIR (default res://captures), CAPTURE_SEED (default 7),
 ## CAPTURE_TIMES (match seconds, default "14,32,55").
 
@@ -51,6 +51,6 @@ func _process(_delta: float) -> bool:
 
 func _save(tag: String) -> void:
 	var img := root.get_texture().get_image()
-	var path := "%s/grapeshot_%s.png" % [out_dir, tag]
+	var path := "%s/drums_%s.png" % [out_dir, tag]
 	img.save_png(path)
 	print("saved ", path, " ", img.get_size())

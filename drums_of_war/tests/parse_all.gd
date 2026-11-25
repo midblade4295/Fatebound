@@ -1,6 +1,6 @@
 extends SceneTree
 ## Loads every script and scene in the project so a syntax error anywhere fails loudly.
-## Prints GRAPESHOT_PARSE_PASS.
+## Prints DRUMS_PARSE_PASS.
 
 
 func _init() -> void:
@@ -16,7 +16,7 @@ func _init() -> void:
 				bad += 1
 	print("%d files loaded, %d failed" % [count, bad])
 	if bad == 0:
-		print("GRAPESHOT_PARSE_PASS")
+		print("DRUMS_PARSE_PASS")
 	quit(0 if bad == 0 else 1)
 
 

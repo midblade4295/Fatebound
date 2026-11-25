@@ -1,11 +1,11 @@
 ; Engine configuration file.
-; Grapeshot (working title): grey-box prototype. Separate from the Fatebound Siege project in ../godot.
+; Drums of War: grey-box prototype. Separate from the Fatebound Siege project in ../godot.
 
 config_version=5
 
 [application]
 
-config/name="Grapeshot Prototype"
+config/name="Drums of War Prototype"
 config/description="Grey-box prototype of a black-powder card battler."
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")

@@ -1,6 +1,6 @@
 extends SceneTree
 ## Plays full bot-versus-bot matches across many seeds. The two sides use identical decks and
-## rules, so over enough seeds neither should win every time. Prints GRAPESHOT_BOTS_PASS.
+## rules, so over enough seeds neither should win every time. Prints DRUMS_BOTS_PASS.
 
 const Sim = preload("res://scripts/sim/battle_sim.gd")
 const Bot = preload("res://scripts/sim/bot.gd")
@@ -72,5 +72,5 @@ func _init() -> void:
 		print("  one side never won")
 		ok = false
 	if ok:
-		print("GRAPESHOT_BOTS_PASS")
+		print("DRUMS_BOTS_PASS")
 	quit(0 if ok else 1)

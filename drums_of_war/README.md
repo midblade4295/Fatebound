@@ -1,4 +1,4 @@
-# Grapeshot (working title): grey-box prototype
+# Drums of War: grey-box prototype
 
 A three-minute, portrait card battler set in the black-powder era: Union blue against
 Confederate crimson. This folder is a **new, separate Godot 4.7 project**. It shares the
@@ -14,20 +14,20 @@ for soldiers. Its only job is to answer whether volleys, routs and squares are f
 ```bash
 GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64
 
-$GODOT --path grapeshot                      # play (desktop window, mouse = touch)
-GODOT=$GODOT grapeshot/tools/run_tests.sh    # all tests, headless, about 10 s
+$GODOT --path drums_of_war                      # play (desktop window, mouse = touch)
+GODOT=$GODOT drums_of_war/tools/run_tests.sh    # all tests, headless, about 10 s
 
 # Screenshots of a bot-versus-bot match on the real screen (needs a display):
 xvfb-run -a $GODOT --rendering-method mobile --fixed-fps 30 --resolution 540x960 \
-    --path grapeshot -s tools/capture.gd
+    --path drums_of_war -s tools/capture.gd
 ```
 
-Android prototype APK (package `com.fatebound.grapeshot.proto`, arm64, signed with a debug key
+Android prototype APK (package `com.fatebound.drumsofwar.proto`, arm64, signed with a debug key
 you supply; never the Fatebound preview key or the Play upload key):
 
 ```bash
 GODOT=$GODOT ANDROID_HOME=/path/to/android-sdk KEYSTORE=/path/to/debug.keystore \
-    grapeshot/tools/build_preview.sh
+    drums_of_war/tools/build_preview.sh
 ```
 
 Tests: `parse_all` (every script and scene loads), `rules_test` (73 checks of the rules below),

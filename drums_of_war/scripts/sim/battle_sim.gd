@@ -1,5 +1,5 @@
 extends RefCounted
-## Grapeshot battle rules.
+## Drums of War battle rules.
 ##
 ## Pure data: no nodes, no engine clock, no engine RNG. Call tick() to advance by DT seconds.
 ## The same seed and the same deploy commands always give the same battle, which is what the

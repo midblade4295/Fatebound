@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Builds the Grapeshot prototype APK (package com.fatebound.grapeshot.proto, preset
+# Builds the Drums of War prototype APK (package com.fatebound.drumsofwar.proto, preset
 # "Android Preview") and signs it with a DEBUG key you pass in. This is a throwaway prototype
 # identity: never sign it with the Fatebound preview key or the Play upload key.
 #
 # Usage:
 #   GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64 ANDROID_HOME=/path/to/android-sdk \
-#   KEYSTORE=/path/to/debug.keystore grapeshot/tools/build_preview.sh [output.apk]
+#   KEYSTORE=/path/to/debug.keystore drums_of_war/tools/build_preview.sh [output.apk]
 #
 # Needs: Godot 4.7.2 with its Android export templates in
 # ~/.local/share/godot/export_templates/4.7.2.stable, a JDK, and Android build-tools
@@ -23,7 +23,7 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$HERE"
 
 ver=$(sed -n 's/^version\/name="\(.*\)"$/\1/p' export_presets.cfg | tail -1)
-OUT="${1:-$HERE/build/Grapeshot-Prototype-${ver}.apk}"
+OUT="${1:-$HERE/build/DrumsOfWar-Prototype-${ver}.apk}"
 
 [ -f "$KEYSTORE" ] || { echo "Keystore not found: $KEYSTORE" >&2; exit 2; }
 "$GODOT" --version >/dev/null 2>&1 || { echo "Set GODOT=/path/to/Godot_v4.7.2-stable_linux.x86_64" >&2; exit 2; }

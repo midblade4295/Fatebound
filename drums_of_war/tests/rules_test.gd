@@ -1,5 +1,5 @@
 extends SceneTree
-## Headless checks of the battle rules. Prints GRAPESHOT_RULES_PASS when every check holds.
+## Headless checks of the battle rules. Prints DRUMS_RULES_PASS when every check holds.
 
 const Sim = preload("res://scripts/sim/battle_sim.gd")
 const Bot = preload("res://scripts/sim/bot.gd")
@@ -63,7 +63,7 @@ func _init() -> void:
 	test_determinism()
 	print("%d checks, %d failures" % [checks, failures])
 	if failures == 0:
-		print("GRAPESHOT_RULES_PASS")
+		print("DRUMS_RULES_PASS")
 	quit(0 if failures == 0 else 1)
 
 

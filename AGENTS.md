@@ -11,10 +11,10 @@ Commit each working step and log it in SIEGE_PROGRESS.md. No force-push, main me
 reset, Play release, production signing, Legionary/Caddy changes. The Play upload key is
 committed in this public repo (see SIEGE_HANDOFF.md section 7): report it, don't act alone.
 
-## Separate project: Grapeshot prototype (`grapeshot/`)
+## Separate project: Drums of War prototype (`drums_of_war/`)
 
 A new game, not part of Siege: a black-powder card battler grey-box in its own Godot 4.7 project.
-Read `grapeshot/README.md`. Test: `grapeshot/tools/run_tests.sh`. It shares no code, assets,
+Read `drums_of_war/README.md`. Test: `drums_of_war/tools/run_tests.sh`. It shares no code, assets,
 package id or signing keys with `godot/`; Siege rules above (versionCode, preview key, presets)
 do not apply to it, and work on it must not change anything under `godot/`.
 

@@ -1,7 +1,7 @@
 extends SceneTree
 ## Drives the real battle screen: selects a card with a click, deploys it with a second click,
 ## checks a bad placement is refused, then lets a full match play out on autoplay.
-## Run with --fixed-fps 30. Prints GRAPESHOT_APP_PASS.
+## Run with --fixed-fps 30. Prints DRUMS_APP_PASS.
 
 const Sim = preload("res://scripts/sim/battle_sim.gd")
 
@@ -89,7 +89,7 @@ func _process(_delta: float) -> bool:
 		check(screen.sim.phase != Sim.PHASE_OVER and screen.sim.time < 1.0, "tapping the result starts a new match")
 		print("frames: %d, failures: %d" % [frame, failures])
 		if failures == 0:
-			print("GRAPESHOT_APP_PASS")
+			print("DRUMS_APP_PASS")
 		quit(0 if failures == 0 else 1)
 		return true
 	if frame > 4000:
