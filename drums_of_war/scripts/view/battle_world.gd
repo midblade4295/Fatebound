@@ -19,7 +19,7 @@ const COL_WOOD := Color("9a6a3c")
 const COL_BRASS := Color("f2b632")
 const COL_SMOKE := Color("fff8ec")
 
-const SOLDIER_SPACING := 0.62
+const SOLDIER_SPACING := 0.95
 const MAX_PUFFS := 220
 
 var sim: Sim
@@ -131,7 +131,7 @@ func _build_environment() -> void:
 	env.background_color = Color("8ecbff")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("a9d3ff")       # cool sky-blue fill in the shadows
-	env.ambient_light_energy = 0.42
+	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.12
@@ -142,8 +142,8 @@ func _build_environment() -> void:
 
 	var sun := DirectionalLight3D.new()             # warm golden-hour key light
 	sun.light_color = Color("ffdca6")
-	sun.light_energy = 0.95
-	sun.rotation_degrees = Vector3(-42.0, 128.0, 0.0)
+	sun.light_energy = 1.05
+	sun.rotation_degrees = Vector3(-44.0, 32.0, 0.0)      # from behind the camera's right shoulder, so the faces you see are lit
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	sun.directional_shadow_max_distance = 70.0
@@ -152,8 +152,8 @@ func _build_environment() -> void:
 
 	var rim := DirectionalLight3D.new()             # crisp cool rim from behind the field
 	rim.light_color = Color("cfe6ff")
-	rim.light_energy = 0.28
-	rim.rotation_degrees = Vector3(-28.0, -20.0, 0.0)
+	rim.light_energy = 0.35
+	rim.rotation_degrees = Vector3(-30.0, 168.0, 0.0)     # from beyond the far end, back toward the camera
 	rim.shadow_enabled = false
 	add_child(rim)
 
@@ -169,14 +169,14 @@ func _build_environment() -> void:
 func fit_camera() -> void:
 	if camera == null or not is_inside_tree():
 		return
-	var pitch := deg_to_rad(54.0)
+	var pitch := deg_to_rad(50.0)
 	var back := Vector3(0.0, sin(pitch), cos(pitch))
 	var dist := 60.0
 	var look_z := 0.0
 	var hw := Sim.FIELD_W * 0.5
 	var hh := Sim.FIELD_H * 0.5
 	var pts := [Vector3(-hw, 0, hh), Vector3(hw, 0, hh), Vector3(-hw, 0, -hh), Vector3(hw, 0, -hh),
-			Vector3(0, 3.6, -hh + 2.5)]
+			Vector3(0, 5.2, -hh + 2.5)]
 	for step in 14:
 		camera.look_at_from_position(Vector3(0, 0, look_z) + back * dist, Vector3(0, 0, look_z), Vector3.UP)
 		var box := Rect2()
@@ -313,8 +313,8 @@ void fragment() {
 	for s: Sim.Structure in sim.structures:
 		var node := _build_structure(s)
 		node.position = to_world(s.pos)
-		if (s.side == local_side) == false:
-			node.rotation.y = PI
+		if s.side != local_side and s.kind != "hq":
+			node.rotation.y = PI            # enemy guns point at you; both farmhouses show their porch
 		arena.add_child(node)
 		_structures[s.id] = node
 		_structure_dead[s.id] = false
@@ -655,7 +655,7 @@ class RegimentView extends RefCounted:
 		phase = r.id * 1.37
 		ring = MeshInstance3D.new()
 		var disc := CylinderMesh.new()
-		disc.top_radius = 1.15 if arm != "cavalry" else 1.45
+		disc.top_radius = 1.7 if arm != "cavalry" else 2.0
 		disc.bottom_radius = disc.top_radius
 		disc.height = 0.02
 		disc.radial_segments = 28
@@ -667,7 +667,7 @@ class RegimentView extends RefCounted:
 		if arm == "artillery":
 			gun = Models.make("cannon", team)
 			if gun != null:
-				Models.fit_height(gun, 1.25)
+				Models.fit_height(gun, 1.8)
 			else:
 				gun = Models.stand_in_cannon(w)
 			root.add_child(gun)
@@ -698,21 +698,21 @@ class RegimentView extends RefCounted:
 		var sp: float = world.SOLDIER_SPACING
 		if arm == "cavalry":
 			for i in n:
-				out.append(Vector3((i - (n - 1) * 0.5) * 1.05, 0, 0))
+				out.append(Vector3((i - (n - 1) * 0.5) * 1.5, 0, 0))
 		elif arm == "artillery":
 			for i in n:
-				out.append(Vector3((i - (n - 1) * 0.5) * 0.66, 0, 1.0))
+				out.append(Vector3((i - (n - 1) * 0.5) * 1.0, 0, 1.5))
 		elif r.formation == "rout":
 			for i in n:
-				out.append(Vector3(sin(i * 12.99 + r.id) * 0.8, 0, cos(i * 78.23 + r.id * 2.0) * 0.8))
+				out.append(Vector3(sin(i * 12.99 + r.id) * 1.0, 0, cos(i * 78.23 + r.id * 2.0) * 1.0))
 		elif r.formation == "square":
 			for i in n:
 				var v := Vector2.from_angle(TAU * i / n + PI * 0.25)
-				v = v / maxf(absf(v.x), absf(v.y)) * 0.66
+				v = v / maxf(absf(v.x), absf(v.y)) * 1.0
 				out.append(Vector3(v.x, 0, v.y))
 		elif bool(r.def.get("loose", false)):
 			for i in n:
-				out.append(Vector3((i - (n - 1) * 0.5) * 0.95, 0, (i % 2) * 0.55))
+				out.append(Vector3((i - (n - 1) * 0.5) * 1.35, 0, (i % 2) * 0.8))
 		elif r.formation == "column":
 			for i in n:
 				out.append(Vector3((i % 2 - 0.5) * sp, 0, (i / 2) * sp - (n / 4.0) * sp))

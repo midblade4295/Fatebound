@@ -1,0 +1,56 @@
+{
+ "asset": "cannon",
+ "file": "cannon.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21130-1394-738e-87a8-361c12d3776f"
+  }
+ },
+ "requested_triangles": 4000,
+ "actual_triangles": 4075,
+ "vertices": 3426,
+ "file_bytes": 4192260,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.4788,
+  -0.2605,
+  -0.3093
+ ],
+ "bbox_max": [
+  0.4778,
+  0.2605,
+  0.3093
+ ],
+ "bbox_size": [
+  0.9565,
+  0.521,
+  0.6187
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Barrel lies along X with the MUZZLE pointing -X; trail points +X; axle along Z. A +90 degree rotation about Y turns the muzzle to +Z.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "props sheet XdTaM1JANnRp52qCdA5z",
+  "chosen_generation_id": "mslwDfE5O0aOlxO3X8sW",
+  "prompt": "Use the attached image only as the art-style reference (stylized 3D CGI, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky thick-edged shapes). Create a NEW reference image for 3D modelling of ONE single object: a fat, short brass field cannon on a chunky wooden carriage with two big spoked wooden wheels with iron rims and a short wooden trail resting behind. Three-quarter front view from slightly above, both wheels visible. No crew, no cannonballs, no grass, no base. Whole object in frame, centred, margin all around. Plain pure white background, flat even studio lighting, no ground, no cast shadow, no other objects, no text."
+ },
+ "meshy_credits": 15
+}

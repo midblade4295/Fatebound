@@ -1,0 +1,56 @@
+{
+ "asset": "u_cav",
+ "file": "u_cav.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21130-0858-7109-9fea-ee3011bd7813"
+  }
+ },
+ "requested_triangles": 9000,
+ "actual_triangles": 9432,
+ "vertices": 7580,
+ "file_bytes": 4052536,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.2341,
+  -0.4753,
+  -0.3884
+ ],
+ "bbox_max": [
+  0.2322,
+  0.4758,
+  0.385
+ ],
+ "bbox_size": [
+  0.4663,
+  0.9512,
+  0.7734
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Horse and rider face +Z (horse length along Z). Sabre raised in the rider's right hand.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "union lineup GdHUKewDtNpkiPuWOU3E",
+  "chosen_generation_id": "yKs9aJXfTg3h2pVGk1IF",
+  "prompt": "Use the attached image only as the art-style reference (stylized 3D CGI, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky shapes). Create a NEW reference image for 3D modelling of ONE single subject: a Union cavalry trooper of the 1860s mounted on a stocky brown horse with large goofy eyes. Three-quarter front view. The horse stands square and still on all four legs, all four legs clearly separated and fully visible, hooves level. The rider sits upright in the saddle holding a thick, chunky curved sabre raised in his right hand, left hand on the reins. Rider is stout with a broad chest, big head, bushy moustache and a grin; royal blue wool jacket with brass buttons, sky-blue trousers, black boots, navy kepi, leather cross-belt. Simple brown leather saddle and bridle. Whole subject in frame, centred, margin all around. Plain pure white background, flat even studio lighting, no ground, no cast shadow, no other objects, no text, no flag. Family-friendly, not a real person."
+ },
+ "meshy_credits": 15
+}

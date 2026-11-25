@@ -347,7 +347,7 @@ func _draw_structure_bar(s: Sim.Structure) -> void:
 
 
 func _draw_regiment_bars(r: Sim.Regiment) -> void:
-	var tall := 2.6 if r.arm == "cavalry" else 1.85
+	var tall := 3.5 if r.arm == "cavalry" else 2.6
 	var p := to_screen(r.pos, tall)
 	var w := 30.0
 	var top := p + Vector2(-w * 0.5, -6.0)

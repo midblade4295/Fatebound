@@ -1,0 +1,56 @@
+{
+ "asset": "tree",
+ "file": "tree.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21131-7de5-7097-86cc-9e4fc339603b"
+  }
+ },
+ "requested_triangles": 2500,
+ "actual_triangles": 2638,
+ "vertices": 1922,
+ "file_bytes": 3268908,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.45,
+  -0.4758,
+  -0.3831
+ ],
+ "bbox_max": [
+  0.4485,
+  0.4763,
+  0.3831
+ ],
+ "bbox_size": [
+  0.8984,
+  0.9521,
+  0.7661
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. No meaningful front.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "props sheet XdTaM1JANnRp52qCdA5z",
+  "chosen_generation_id": "UILNloEu3tj9CaIUPrXY",
+  "prompt": "Use the attached image only as the art-style reference (stylized 3D CGI, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky shapes). Create a NEW reference image for 3D modelling of ONE single object: a round, bushy, stylized deciduous tree with a short thick brown trunk and a big rounded canopy made of a few large soft clumpy lobes of bright green foliage, solid and toy-like, no individual thin leaves, no thin branches. Front view. No grass, no ground, no base, no roots spreading. Whole tree in frame, centred, margin all around. Plain pure white background, flat even studio lighting, no cast shadow, no other objects, no text."
+ },
+ "meshy_credits": 15
+}

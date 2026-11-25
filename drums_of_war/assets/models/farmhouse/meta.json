@@ -1,0 +1,93 @@
+{
+ "asset": "farmhouse",
+ "file": "farmhouse.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "standard",
+  "ai_model": "meshy-7.1",
+  "should_remesh": true,
+  "topology": "triangle",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "task_ids": {
+   "image_to_3d": "01a21132-772c-763a-bcd8-7b8b8e896ae0"
+  },
+  "note": "Second attempt. The first (smart-topology meshy-t2.5, task 01a21130-be9d-76d2-ba2c-c59cc192d2c4, 15 credits) dropped the pennant and pole entirely, so this one used the standard model decimated to the target. Decimation left some long sliver triangles on the flat walls (visible as faint shading creases)."
+ },
+ "requested_triangles": 6000,
+ "actual_triangles": 5580,
+ "vertices": 12154,
+ "file_bytes": 4090100,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+ },
+ "units": "GLB own units (unitless; this standard-model output is about 1.9 on its longest side, i.e. roughly twice the scale of the smart-topology assets). Origin is the bounding-box centre: lift by -bbox_min[1].",
+ "bbox_min": [
+  -0.8042,
+  -0.9518,
+  -0.8701
+ ],
+ "bbox_max": [
+  0.8159,
+  0.944,
+  0.8657
+ ],
+ "bbox_size": [
+  1.6201,
+  1.8958,
+  1.7359
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Porch, steps and dormer face +Z; chimney toward -X; pennant pole stands on the rear roof slope toward +X/-Z and the pennant flies toward +X.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "props sheet XdTaM1JANnRp52qCdA5z",
+  "chosen_generation_id": "F7Ch0x9YJ7lyApW9jSfL",
+  "prompt": "Use the attached image as the art-style reference (stylized 3D CGI, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky thick-edged shapes). Create a NEW reference image for 3D modelling of ONE single building, like the top-left building of the reference: a chunky wooden farmhouse headquarters with cream-white plank walls, a ROYAL BLUE shingled roof with one small dormer, a grey stone chimney, a small wooden porch with steps, warm yellow windows, and a plain royal blue pennant on a wooden pole rising from the roof. Clean saturated royal blue is used ONLY on the roof and the pennant and nowhere else. Three-quarter view from slightly above. No grass base, no bushes, no crates, no fence, no rocks. Whole building including the pennant in frame, centred, margin all around. Plain pure white background, flat even studio lighting, no ground, no cast shadow, no other objects, no text, no emblem on the pennant."
+ },
+ "alternate": {
+  "file": "farmhouse_alt_no_pennant.glb",
+  "why": "cleaner smart-topology mesh from the same ref.png but with NO pennant or pole",
+  "triangles": 5400,
+  "file_bytes": 5380148,
+  "bbox_size": [
+   0.7051,
+   0.7983,
+   0.9272
+  ],
+  "bbox_min": [
+   -0.3538,
+   -0.3982,
+   -0.4626
+  ],
+  "bbox_max": [
+   0.3513,
+   0.4001,
+   0.4646
+  ],
+  "task_id": "01a21130-be9d-76d2-ba2c-c59cc192d2c4",
+  "meshy": {
+   "endpoint": "POST /openapi/v1/image-to-3d",
+   "model_type": "smart-topology",
+   "ai_model": "meshy-t2.5",
+   "texture_model": "meshy-n1",
+   "texture_resolution": "2k",
+   "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps."
+  }
+ },
+ "meshy_credits": 45,
+ "meshy_credits_breakdown": {
+  "first attempt (kept as alternate)": 15,
+  "final": 30
+ },
+ "recolour_note": "Saturated royal blue is on the roof shingles, dormer roof and pennant only; walls cream, wood trim orange-brown, windows yellow."
+}

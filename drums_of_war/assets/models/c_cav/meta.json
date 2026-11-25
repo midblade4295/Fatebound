@@ -1,0 +1,56 @@
+{
+ "asset": "c_cav",
+ "file": "c_cav.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21130-0e2e-743b-9847-171c35f6cc04"
+  }
+ },
+ "requested_triangles": 9000,
+ "actual_triangles": 9494,
+ "vertices": 7644,
+ "file_bytes": 4050016,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.2258,
+  -0.4758,
+  -0.3811
+ ],
+ "bbox_max": [
+  0.2249,
+  0.4758,
+  0.3865
+ ],
+ "bbox_size": [
+  0.4507,
+  0.9517,
+  0.7676
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Horse and rider face +Z (horse length along Z). Sabre raised in the rider's right hand.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "Confederate lineup Re39emM6ZfUhrfr3SG4N",
+  "chosen_generation_id": "jE6w9dbJtts40GGVgwyh",
+  "prompt": "Use the attached image only as the art-style reference (stylized 3D CGI, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky shapes). Create a NEW reference image for 3D modelling of ONE single subject: a Confederate cavalry raider of the 1860s mounted on a stocky black horse with big goofy eyes. Three-quarter front view. The horse stands square and still on all four legs, all four legs clearly separated and fully visible, hooves level. The rider sits upright in the saddle holding a thick, chunky curved sabre raised in his right hand, left hand on the reins. Rider is stout with a broad chest, big head, a big curled moustache and a grin; light grey wool jacket with brass buttons, bright crimson sash and crimson collar, grey trousers, brown boots, grey slouch hat with a crimson plume. Simple brown leather saddle and bridle. Whole subject in frame, centred, margin all around. Plain pure white background, flat even studio lighting, no ground, no cast shadow, no other objects, no text, no flag. Family-friendly, not a real person."
+ },
+ "meshy_credits": 15
+}

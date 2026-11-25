@@ -1,0 +1,216 @@
+{
+ "asset": "u_line",
+ "file": "u_line.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "pose_mode": "a-pose",
+  "task_ids": {
+   "image_to_3d": "01a2112a-588d-7267-a8bc-9e19753d8824",
+   "rigging": "01a2112b-77c2-749c-8f62-6099164085c6"
+  },
+  "rigging": {
+   "endpoint": "POST /openapi/v1/rigging",
+   "animation_type": "biped",
+   "skeleton_template": "meshyrig (default, 24 bones, no fingers)",
+   "height_meters": 1.7
+  }
+ },
+ "requested_triangles": 6000,
+ "actual_triangles": 6315,
+ "vertices": 4752,
+ "file_bytes": 3595476,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+ },
+ "units": "Metres after skinning: the Armature root node carries scale 0.01 and the bones/inverse bind matrices are in centimetres, so the character stands 1.7 tall in world units. (The raw mesh accessor min/max are NOT the on-screen size.)",
+ "bbox_min": [
+  -0.6192,
+  0.0,
+  -0.233
+ ],
+ "bbox_max": [
+  0.6192,
+  1.7,
+  0.233
+ ],
+ "bbox_size": [
+  1.2383,
+  1.7,
+  0.466
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Character faces +Z. Feet on y=0, origin between the feet.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "union lineup GdHUKewDtNpkiPuWOU3E",
+  "chosen_generation_id": "eEBkyGrICrsl4YLrnumx",
+  "prompt": "Use the attached image only as the art-style reference (same stylized 3D CGI look, smooth slightly clay-like surfaces, bright saturated toy-like colours, same character proportions). Create a NEW single-character turnaround reference for 3D modelling: ONE Union infantry private from the 1860s, alone, front view, facing the camera straight on, standing in a neutral symmetrical A-pose: both arms straight and held about 35 degrees away from the body, EMPTY open hands with chunky fingers spread slightly, palms toward the thighs, legs straight and slightly apart, feet flat. Full body visible from the top of the hat to the soles of the boots, centred, with margin all around. He is top-heavy and stout: broad chest, thick forearms, oversized chunky hands, sturdy black boots, big head, thick sculpted eyebrows, prominent nose, bushy brown walrus moustache, confident grin. Clean simplified uniform in soft wool: royal blue coat with a row of brass buttons, sky-blue trousers, black boots, navy blue kepi cap with a plain brass button, two white leather cross-belts across the chest and a white waist belt with a plain brass buckle. No weapon, no backpack, no bedroll, no bag, nothing held, nothing on the back. Plain pure white background, flat even studio lighting, no ground, no cast shadow, no other objects, no text, no flag, no insignia lettering. Family-friendly comic tone, not a real person."
+ },
+ "bbox_note": "Skinned bind pose (A-pose), world units.",
+ "skeleton": {
+  "joints": 24,
+  "joint_names": [
+   "Hips",
+   "Spine02",
+   "Spine01",
+   "Spine",
+   "neck",
+   "Head",
+   "head_end",
+   "headfront",
+   "LeftShoulder",
+   "LeftArm",
+   "LeftForeArm",
+   "LeftHand",
+   "RightShoulder",
+   "RightArm",
+   "RightForeArm",
+   "RightHand",
+   "LeftUpLeg",
+   "LeftLeg",
+   "LeftFoot",
+   "LeftToeBase",
+   "RightUpLeg",
+   "RightLeg",
+   "RightFoot",
+   "RightToeBase"
+  ],
+  "rest_clip_in_main_glb": "Armature|clip0|baselayer"
+ },
+ "animations": {
+  "idle": {
+   "file": "anim_idle.glb",
+   "action_id": 11,
+   "action_name": "Idle 1",
+   "library_key": "Idle_02",
+   "clip_name_in_glb": "Armature|Idle_02|baselayer",
+   "animation_task_id": "01a2112d-1ff4-7778-9f79-30d7ae090edf",
+   "duration_s": 1.9,
+   "hips_travel_xyz": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "loops": true,
+   "file_bytes": 3597456,
+   "credits": 3,
+   "note": "Ready stance with the arms held away from the body (left arm forward), subtle breathing loop."
+  },
+  "walk": {
+   "file": "anim_walk.glb",
+   "action_id": 692,
+   "action_name": "Walking 2 (in place)",
+   "library_key": "walking_2_inplace",
+   "clip_name_in_glb": "Armature|walking_2_inplace|baselayer",
+   "animation_task_id": "01a2112d-213c-73b8-91d9-3a9bf9d280b2",
+   "duration_s": 1.2,
+   "hips_travel_xyz": [
+    0.003,
+    0.006,
+    -0.005
+   ],
+   "loops": true,
+   "file_bytes": 3578888,
+   "credits": 3
+  },
+  "run": {
+   "file": "anim_run.glb",
+   "action_id": 654,
+   "action_name": "Rifle Charge (in place)",
+   "library_key": "Rifle_Charge_inplace",
+   "clip_name_in_glb": "Armature|Rifle_Charge_inplace|baselayer",
+   "animation_task_id": "01a2112d-2228-7249-a4fd-6150a4552aa1",
+   "duration_s": 0.533,
+   "hips_travel_xyz": [
+    0.012,
+    0.018,
+    0.002
+   ],
+   "loops": true,
+   "file_bytes": 3561200,
+   "credits": 3,
+   "note": "Hunched charge with both hands in front as if carrying a rifle; in place."
+  },
+  "fire": {
+   "file": "anim_fire.glb",
+   "action_id": null,
+   "action_name": "Text to Motion clip (prime, 2.5 s)",
+   "library_key": null,
+   "clip_name_in_glb": "retarget_clip",
+   "animation_task_id": "01a2112f-af19-718b-aa60-7d0ef521171f",
+   "duration_s": 2.467,
+   "hips_travel_xyz": [
+    0.009,
+    0.005,
+    0.004
+   ],
+   "loops": false,
+   "file_bytes": 3686488,
+   "credits": 13,
+   "source": "Meshy Text to Motion (POST /openapi/v1/text-to-motion, mode prime) retargeted with POST /openapi/v1/animations motion_task_id",
+   "text_to_motion_task_id": "01a2112f-4447-75f6-9a4f-6348b178e417",
+   "motion_prompt": "A soldier stands upright with feet planted shoulder-width apart, raises a long rifle to his right shoulder with both hands, aims straight ahead, fires once with a sharp recoil kick, then lowers the rifle back to a ready stance in front of his chest. He stays facing forward and his feet stay in place.",
+   "note": "Standing, facing +Z, both hands held up in front of the upper chest as if shouldering a long gun, then lowered. Starts already in the aim pose; one-shot, not a loop. Used as anim_fire because no library action is a standing forward rifle shot."
+  },
+  "fire_kneel": {
+   "file": "anim_fire_kneel.glb",
+   "action_id": 104,
+   "action_name": "Side Shot",
+   "library_key": "Side_Shot",
+   "clip_name_in_glb": "Armature|Side_Shot|baselayer",
+   "animation_task_id": "01a2112d-233b-73b6-a64d-01b4f3e409d3",
+   "duration_s": 4.033,
+   "hips_travel_xyz": [
+    -0.0,
+    0.0,
+    0.001
+   ],
+   "loops": false,
+   "file_bytes": 3654112,
+   "credits": 3,
+   "note": "Library action closest to a rifle shot. Starts and ends kneeling and aims off to the side rather than straight ahead, so it is saved only as an extra."
+  },
+  "death": {
+   "file": "anim_death.glb",
+   "action_id": 183,
+   "action_name": "Shot and Fall Backward",
+   "library_key": "Shot_and_Fall_Backward",
+   "clip_name_in_glb": "Armature|Shot_and_Fall_Backward|baselayer",
+   "animation_task_id": "01a2112d-243a-779a-ad31-9926ce3fd974",
+   "duration_s": 3.533,
+   "hips_travel_xyz": [
+    -0.283,
+    -0.645,
+    -0.926
+   ],
+   "loops": false,
+   "file_bytes": 3640916,
+   "credits": 3,
+   "note": "One-shot. Has root motion: the body ends lying about 1 m behind the start (-Z)."
+  }
+ },
+ "animation_files_note": "Each anim_*.glb is a full copy of the skinned, textured character with one clip; all share the same skeleton as u_line.glb.",
+ "unused_free_clips": "The rigging task also returned basic walking_man and running clips (in place, looping) at no extra cost; raw copies are in the scratchpad at meshy_work/downloads/u_line/rig/.",
+ "meshy_credits": 48,
+ "meshy_credits_breakdown": {
+  "image_to_3d": 15,
+  "rigging": 5,
+  "library animations (idle, walk, run, fire_kneel, death)": 15,
+  "text_to_motion (fire)": 10,
+  "retarget fire": 3
+ }
+}

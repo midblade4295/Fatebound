@@ -1,0 +1,56 @@
+{
+ "asset": "bridge",
+ "file": "bridge.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21131-45ca-71c9-84aa-963be111029d"
+  }
+ },
+ "requested_triangles": 4000,
+ "actual_triangles": 4103,
+ "vertices": 3217,
+ "file_bytes": 3747664,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.4778,
+  -0.1995,
+  -0.2917
+ ],
+ "bbox_max": [
+  0.4744,
+  0.1951,
+  0.2913
+ ],
+ "bbox_size": [
+  0.9521,
+  0.3945,
+  0.583
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Span/deck runs along X (walk across it along X); arch opening faces +Z and -Z.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "props sheet XdTaM1JANnRp52qCdA5z",
+  "chosen_generation_id": "v6BYCNwQxP9WyqQHQkFM",
+  "prompt": "Use the attached image as the art-style reference (stylized 3D CGI, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky thick-edged shapes). Create a NEW reference image for 3D modelling of ONE single object, like the stone bridge in the reference: a short, chunky cobblestone arch bridge with a single arch, a gently humped stone deck and low stone parapets with square end posts, in warm grey stone. Three-quarter side view from slightly above so the arch opening, the deck and both parapets are visible. NO water, no ground, no grass, no rocks, no base. Whole bridge in frame, centred, margin all around. Plain pure white background, flat even studio lighting, no cast shadow, no other objects, no text."
+ },
+ "meshy_credits": 15
+}

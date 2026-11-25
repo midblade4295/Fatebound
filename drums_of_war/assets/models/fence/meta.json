@@ -1,0 +1,56 @@
+{
+ "asset": "fence",
+ "file": "fence.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21131-813f-74ee-a399-4ddfc44aa1d9"
+  }
+ },
+ "requested_triangles": 1500,
+ "actual_triangles": 1544,
+ "vertices": 1259,
+ "file_bytes": 4056028,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.4783,
+  -0.2214,
+  -0.0618
+ ],
+ "bbox_max": [
+  0.4783,
+  0.218,
+  0.0579
+ ],
+ "bbox_size": [
+  0.9565,
+  0.4395,
+  0.1196
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Runs along X (three posts), thin in Z.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "props sheet XdTaM1JANnRp52qCdA5z",
+  "chosen_generation_id": "CcHr6MYuv6gRmdER0wjN",
+  "prompt": "Use the attached image only as the art-style reference (stylized 3D CGI, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky thick-edged shapes). Create a NEW reference image for 3D modelling of ONE single object: one straight segment of chunky split-rail wooden fence, exactly three thick upright posts in a straight line joined by two thick rough-hewn horizontal rails, warm brown wood. Viewed almost from the side, turned only slightly (about 20 degrees) so the thickness is visible. No grass, no ground, no base, no rocks. Whole fence segment in frame, centred, margin all around. Plain pure white background, flat even studio lighting, no cast shadow, no other objects, no text."
+ },
+ "meshy_credits": 15
+}

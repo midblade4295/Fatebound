@@ -1,0 +1,57 @@
+{
+ "asset": "battery",
+ "file": "battery.glb",
+ "generated": "2026-11-25",
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "task_ids": {
+   "image_to_3d": "01a21131-41e8-77db-ad9f-714573a2ff26"
+  }
+ },
+ "requested_triangles": 6000,
+ "actual_triangles": 6038,
+ "vertices": 5045,
+ "file_bytes": 4582732,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "bbox_min": [
+  -0.4788,
+  -0.2874,
+  -0.467
+ ],
+ "bbox_max": [
+  0.4788,
+  0.2849,
+  0.4675
+ ],
+ "bbox_size": [
+  0.9575,
+  0.5723,
+  0.9346
+ ],
+ "up_axis": "+Y",
+ "orientation": "Y up. Cannon muzzle points -X (slightly raised); a +90 degree rotation about Y turns it to +Z. Ring is roughly round in XZ.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "props sheet XdTaM1JANnRp52qCdA5z",
+  "chosen_generation_id": "UGjnpwla1834p5AYdiVx",
+  "prompt": "Use the attached image as the art-style reference (stylized 3D CGI, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky thick-edged shapes). Create a NEW reference image for 3D modelling of ONE single structure, like the third item in the top row of the reference: a round earthwork gun battery made of a ring of stacked horizontal logs with upright log posts and tan sandbags piled on top, a fat brass cannon poking out through the front, and a small ROYAL BLUE canvas awning on wooden poles over it. Clean saturated royal blue is used ONLY on the awning and nowhere else. Three-quarter view from slightly above. No grass base, no crates, no barrels, no rocks, no cannonballs. Whole structure in frame, centred, margin all around. Plain pure white background, flat even studio lighting, no ground, no cast shadow, no other objects, no text."
+ },
+ "meshy_credits": 15,
+ "recolour_note": "Saturated royal blue is on the canvas awning only."
+}

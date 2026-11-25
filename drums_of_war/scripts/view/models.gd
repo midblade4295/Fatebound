@@ -16,7 +16,13 @@ const SOLDIER_MODELS := {
 	"heavy_cavalry": ["u_cav", "c_cav"],
 	"field_gun": ["u_line", "c_line"],
 }
-const HEIGHTS := {"infantry": 1.4, "artillery": 1.4, "scouts": 2.0, "heavy_cavalry": 2.3}
+const HEIGHTS := {"infantry": 2.1, "artillery": 2.1, "scouts": 2.8, "heavy_cavalry": 3.2}
+const SHARED_CLIPS := "u_line"     # rigged characters without clips of their own borrow this one's
+# Degrees to turn each generated model about the vertical so that it faces "forward" (-Z):
+# characters and riders come facing +Z, gun muzzles along -X, bridge and fence run along X.
+const YAW := {"u_line": 180.0, "c_line": 180.0, "u_skirm": 180.0, "c_skirm": 180.0, "u_militia": 180.0,
+		"c_militia": 180.0, "u_cav": 180.0, "c_cav": 180.0, "cannon": -90.0, "battery": -90.0,
+		"bridge": 90.0, "fence": 90.0}
 const CLIPS := ["idle", "walk", "run", "fire", "death"]
 const LOOPING := ["idle", "walk", "run"]
 
@@ -60,6 +66,7 @@ static func make(name: String, team: int) -> Node3D:
 	var holder := Node3D.new()
 	var inner: Node3D = scene.instantiate()
 	inner.name = "Model"
+	inner.rotation.y = deg_to_rad(float(YAW.get(name, 0.0)))
 	holder.add_child(inner)
 	if team == 1:
 		var red := _red_texture(name)
@@ -88,6 +95,13 @@ static func bounds(holder: Node3D) -> AABB:
 	for mi: MeshInstance3D in holder.find_children("*", "MeshInstance3D", true, false):
 		var xf := Transform3D.IDENTITY
 		var n: Node = mi
+		if mi.skin != null:
+			# A skinned mesh is drawn at its bind size whatever its rig's node scales are
+			# (the generated rigs use centimetre bones under a 0.01 armature), so only the
+			# model root's own transform applies.
+			n = holder.get_node("Model")
+			xf = (n as Node3D).transform
+			n = null
 		while n != null and n != holder:
 			if n is Node3D:
 				xf = (n as Node3D).transform * xf
@@ -142,7 +156,11 @@ static func _library(name: String) -> AnimationLibrary:
 				lib.add_animation(clip, copy)
 				found += 1
 		temp.free()
-	_libraries[name] = lib if found > 0 else null
+	if found == 0 and name != SHARED_CLIPS:
+		# Every generated rig has the same bones, so one character's clips drive them all.
+		_libraries[name] = _library(SHARED_CLIPS)
+	else:
+		_libraries[name] = lib if found > 0 else null
 	return _libraries[name]
 
 
@@ -185,7 +203,10 @@ static func make_soldier(card_id: String, arm: String, team: int, world: Node3D)
 		var made := make(model_name, team)
 		if made != null:
 			fit_height(made, height)
-			var lib := _library(model_name)
+			var rigged: bool = made.find_child("Skeleton3D", true, false) != null
+			var lib := _library(model_name) if rigged else null
+			if rigged and arm == "infantry":
+				_attach_musket(made)
 			if lib != null:
 				var inner: Node3D = made.get_node("Model")
 				var player: AnimationPlayer = inner.find_child("AnimationPlayer", true, false)
@@ -201,6 +222,39 @@ static func make_soldier(card_id: String, arm: String, team: int, world: Node3D)
 				player.seek(randf() * 1.5, true)
 			return made
 	return _stand_in_soldier(card_id, arm, team, height)
+
+
+## Puts the musket in a rigged character's right hand, lying along the forearm with most of
+## the barrel past the hand: pointing at the ground when the arm hangs, forward when it aims.
+static func _attach_musket(made: Node3D) -> void:
+	var skeleton: Skeleton3D = made.find_child("Skeleton3D", true, false)
+	if skeleton == null:
+		return
+	var hand := skeleton.find_bone("RightHand")
+	var fore := skeleton.find_bone("RightForeArm")
+	var musket := make("musket", 0)
+	if hand < 0 or fore < 0 or musket == null:
+		return
+	var g_hand := skeleton.get_bone_global_rest(hand)
+	var g_fore := skeleton.get_bone_global_rest(fore)
+	var along := g_hand.origin - g_fore.origin
+	var forearm := along.length()
+	if forearm < 0.0001:
+		return
+	var dir := along / forearm
+	var length := forearm * 4.6
+	fit_footprint(musket, length, 100000.0)          # the model lies along X, bayonet tip at -X
+	var up := Vector3(0, 0, 1) - dir * dir.z
+	up = up.normalized() if up.length() > 0.01 else Vector3(0, 1, 0)
+	var x_axis := -dir
+	var basis := Basis(x_axis, up, x_axis.cross(up))
+	var thickness := bounds(musket).size.y
+	var wanted := Transform3D(basis, g_hand.origin + dir * (length * 0.12) - up * (thickness * 0.5))
+	var attach := BoneAttachment3D.new()
+	attach.bone_name = "RightHand"
+	skeleton.add_child(attach)
+	attach.add_child(musket)
+	musket.transform = g_hand.affine_inverse() * wanted
 
 
 # ==========================================================================================
@@ -347,7 +401,7 @@ static func _stand_in_soldier(card_id: String, arm: String, team: int, height: f
 	var holder := Node3D.new()
 	var mi := MeshInstance3D.new()
 	mi.mesh = _meshes[key]
-	var natural := 1.72 if mounted else 0.98
+	var natural := 1.72 if mounted else 0.98     # the stand-in's own height before scaling
 	mi.scale = Vector3.ONE * (height / natural)
 	holder.add_child(mi)
 	return holder
