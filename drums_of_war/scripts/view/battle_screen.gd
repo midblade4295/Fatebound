@@ -14,6 +14,7 @@ const CARD_SIZE := Vector2(104.0, 96.0)
 const CARD_X0 := 84.0
 const CARD_STEP := 112.0
 const AUDIO_DIR := "res://assets/audio/"
+const CARD_ART_DIR := "res://assets/cards/"
 
 const COL_BLUE := Color("2456c9")
 const COL_RED := Color("c81e3a")
@@ -46,6 +47,7 @@ var _streams: Dictionary = {}
 var _music: AudioStreamPlayer
 var _last_played: Dictionary = {}
 var _clock: float = 0.0
+var _card_art: Dictionary = {}
 
 
 func _ready() -> void:
@@ -417,9 +419,17 @@ func _draw_hud() -> void:
 		draw_rect(Rect2(rect.position, Vector2(rect.size.x, 22)), band)
 		var kind := "ORDER" if def["type"] == "order" else String(def["arm"]).to_upper()
 		_text(rect.position + Vector2(rect.size.x * 0.5 + 8.0, 16), kind, 11, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 20.0)
-		_draw_card_words(rect.position + Vector2(rect.size.x * 0.5, 50), String(def["name"]), 15, COL_INK, rect.size.x - 8.0)
-		if def["type"] == "unit":
-			_text(rect.position + Vector2(rect.size.x * 0.5, 88), "%d men" % int(def["men"]), 11, COL_INK.lightened(0.3), HORIZONTAL_ALIGNMENT_CENTER, rect.size.x)
+		var art := _art(hand[i])
+		if art != null:
+			# Portrait in the middle, name on a strip underneath.
+			var art_rect := Rect2(rect.position + Vector2(0, 22), Vector2(rect.size.x, 52))
+			draw_texture_rect(art, art_rect, false, Color.WHITE if can_pay else Color(0.62, 0.62, 0.62))
+			draw_rect(Rect2(rect.position + Vector2(0, 74), Vector2(rect.size.x, 22)), COL_INK.lightened(0.08))
+			_text(rect.position + Vector2(rect.size.x * 0.5, 90), String(def["name"]), 12, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 4.0)
+		else:
+			_draw_card_words(rect.position + Vector2(rect.size.x * 0.5, 50), String(def["name"]), 15, COL_INK, rect.size.x - 8.0)
+			if def["type"] == "unit":
+				_text(rect.position + Vector2(rect.size.x * 0.5, 88), "%d men" % int(def["men"]), 11, COL_INK.lightened(0.3), HORIZONTAL_ALIGNMENT_CENTER, rect.size.x)
 		draw_circle(rect.position + Vector2(13, 12), 13.0, COL_AMBER)
 		draw_arc(rect.position + Vector2(13, 12), 13.0, 0.0, TAU, 24, COL_INK, 2.0)
 		_text(rect.position + Vector2(13, 18), str(int(def["cost"])), 17, COL_INK, HORIZONTAL_ALIGNMENT_CENTER, 26.0)
@@ -433,6 +443,13 @@ func _draw_hud() -> void:
 			draw_rect(Rect2(cell.position, Vector2(cell.size.x * fill, cell.size.y)), COL_AMBER if fill >= 1.0 else COL_AMBER.darkened(0.35))
 	_text(Vector2(43, y + 15), "%d" % int(have), 20, COL_AMBER, HORIZONTAL_ALIGNMENT_CENTER, 58.0)
 	_text(Vector2(43, y - 4), "POWDER", 10, Color(1, 1, 1, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
+
+
+func _art(card_id: String) -> Texture2D:
+	if not _card_art.has(card_id):
+		var path := CARD_ART_DIR + card_id + ".png"
+		_card_art[card_id] = load(path) if ResourceLoader.exists(path) else null
+	return _card_art[card_id]
 
 
 func _draw_card_words(centre: Vector2, name: String, size: int, colour: Color, width: float) -> void:

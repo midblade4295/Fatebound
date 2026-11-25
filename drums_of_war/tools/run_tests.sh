@@ -13,6 +13,14 @@ if ! "$GODOT" --version >/dev/null 2>&1; then
   exit 2
 fi
 
+# Models, textures and sounds are only loadable after Godot has imported them. Import on a
+# fresh checkout, and again whenever an asset is newer than the last import.
+if [ ! -d .godot/imported ] || [ -n "$(find assets -newer .godot/imported -type f 2>/dev/null | head -1)" ]; then
+  echo "Importing assets..."
+  timeout 600 "$GODOT" --headless --editor --path . --import >/dev/null 2>&1 || true
+  touch .godot/imported 2>/dev/null || true
+fi
+
 fail=0
 run() {   # run <name> <marker> <timeout> [extra godot args...]
   local name="$1" marker="$2" tmo="$3"; shift 3
