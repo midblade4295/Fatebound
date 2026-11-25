@@ -100,7 +100,7 @@ func test_deploy_and_hand() -> void:
 	sim.powder[0] = cost - 0.5
 	check(not sim.deploy(0, idx, Vector2(9, 10)), "cannot play a card you cannot afford")
 	sim.powder[0] = 10.0
-	check(sim.deploy_error(0, idx, Vector2(9, 16)) != "", "cannot deploy in the creek")
+	check(sim.deploy_error(0, idx, Vector2(9, 18)) != "", "cannot deploy in the creek")
 	check(sim.deploy(0, idx, Vector2(9, 10)), "a legal deploy is accepted")
 	check(near(sim.powder[0], 10.0 - cost), "the card's cost is spent")
 	check(sim.regiments.size() == 1 and sim.regiments[0].card_id == card_id, "the regiment is on the field")
@@ -128,7 +128,7 @@ func test_first_volley_and_reload() -> void:
 func test_ford() -> void:
 	var sim := quiet(new_sim())
 	var dry := sim.spawn(0, "line_infantry", Vector2(12, 5))
-	var wet := sim.spawn(0, "line_infantry", Vector2(3, 15.2))
+	var wet := sim.spawn(0, "line_infantry", Vector2(3, Sim.CREEK_Y0 + 0.2))
 	wet.lane = 0
 	var y_dry := dry.pos.y
 	var y_wet := wet.pos.y
@@ -138,8 +138,8 @@ func test_ford() -> void:
 	check(near(wet.pos.y - y_wet, 1.4 * 0.6, 0.05), "wading a ford is 40%% slower (%.2f)" % (wet.pos.y - y_wet))
 	# A regiment standing in the ford cannot fire.
 	var sim2 := quiet(new_sim())
-	var wader := sim2.spawn(0, "line_infantry", Vector2(3, 16))
-	var target := sim2.spawn(1, "militia", Vector2(3, 19))
+	var wader := sim2.spawn(0, "line_infantry", Vector2(3, Sim.CREEK_Y0 + 1.0))
+	var target := sim2.spawn(1, "militia", Vector2(3, Sim.CREEK_Y1 + 2.0))
 	target.reload = 99.0
 	sim2.tick()
 	check(not wader.fired_first, "no firing from the water")
@@ -148,8 +148,9 @@ func test_ford() -> void:
 
 func test_square_repels_cavalry() -> void:
 	var sim := quiet(new_sim())
-	var line := sim.spawn(0, "line_infantry", Vector2(9, 5))
-	var cav := sim.spawn(1, "scouts", Vector2(9, 11.5))
+	# Out in the open field, clear of the Headquarters, so the cavalry has nothing else to go for.
+	var line := sim.spawn(0, "line_infantry", Vector2(13, 10))
+	var cav := sim.spawn(1, "scouts", Vector2(13, 16.5))
 	run(sim, 4.0)
 	check(has_event(sim, "square"), "infantry forms square when cavalry closes")
 	check(has_event(sim, "repelled"), "the charge is repelled by the square")

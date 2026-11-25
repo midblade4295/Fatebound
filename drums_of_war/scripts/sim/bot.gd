@@ -64,7 +64,7 @@ func _try_orders(sim: Sim) -> bool:
 func _try_defend(sim: Sim) -> bool:
 	# The most advanced enemy on our half of the field.
 	var threat: Sim.Regiment = null
-	var threat_y := 16.5
+	var threat_y := Sim.FIELD_H * 0.5 + 0.5
 	for o: Sim.Regiment in sim.regiments:
 		if o.side == side or o.dead or o.state == Sim.ST_ROUT:
 			continue
@@ -128,11 +128,11 @@ func _try_counter_battery(sim: Sim) -> bool:
 		if answered:
 			continue
 		var x := o.pos.x
-		if _play(sim, "field_gun", Vector2(x, 13.6)):
+		if _play(sim, "field_gun", Vector2(x, Sim.DEPLOY_DEPTH - 0.4)):
 			return true
-		if _play(sim, "scouts", Vector2(x, 13.5)):
+		if _play(sim, "scouts", Vector2(x, Sim.DEPLOY_DEPTH - 0.5)):
 			return true
-		if _play(sim, "skirmishers", Vector2(x, 13.5)):
+		if _play(sim, "skirmishers", Vector2(x, Sim.DEPLOY_DEPTH - 0.5)):
 			return true
 	return false
 
@@ -160,13 +160,13 @@ func _try_attack(sim: Sim) -> bool:
 		return false
 	var base_x := 3.0 if attack_flank == 0 else 15.0
 	var depth := sim.deploy_depth(side, base_x)
-	var front_y := 13.0 if depth <= Sim.DEPLOY_DEPTH else depth - 1.0
+	var front_y := depth - 1.0
 	for card_id: String in ATTACK_ORDER:
 		var x := base_x + rng.range_f(-1.0, 1.0)
 		var y := front_y + rng.range_f(-0.8, 0.0)
 		if card_id == "field_gun":
 			x = 3.5 if attack_flank == 0 else 14.5
-			y = 13.8
+			y = Sim.DEPLOY_DEPTH - 0.2
 		elif card_id == "skirmishers":
 			y -= 1.5
 		if _play(sim, card_id, Vector2(x, y)):

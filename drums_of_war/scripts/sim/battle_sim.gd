@@ -16,16 +16,16 @@ const DT := 1.0 / 20.0
 
 # --- Field -------------------------------------------------------------------------------
 const FIELD_W := 18.0
-const FIELD_H := 32.0
-const CREEK_Y0 := 15.0
-const CREEK_Y1 := 17.0
+const FIELD_H := 36.0
+const CREEK_Y0 := 17.0
+const CREEK_Y1 := 19.0
 const CROSSINGS := [
 	{"x": 3.0, "half": 1.5, "ford": true},
 	{"x": 9.0, "half": 1.2, "ford": false},
 	{"x": 15.0, "half": 1.5, "ford": true},
 ]
-const DEPLOY_DEPTH := 14.0          # how far from your own baseline you may deploy
-const DEPLOY_DEPTH_OPEN := 22.0     # ... on a flank whose enemy redoubt has fallen
+const DEPLOY_DEPTH := 16.0          # how far from your own baseline you may deploy
+const DEPLOY_DEPTH_OPEN := 24.0     # ... on a flank whose enemy redoubt has fallen
 const FORD_SPEED_MULT := 0.6
 
 # --- Match -------------------------------------------------------------------------------
@@ -169,9 +169,9 @@ func _init(seed_value: int, card_defs: Dictionary, deck0: Array, deck1: Array) -
 	rng.shuffle(decks[0])
 	rng.shuffle(decks[1])
 	for side in 2:
-		_add_structure(side, "hq", -1, Vector2(9.0, 2.5), 1.6, HQ_HP, HQ_RANGE, HQ_DMG, HQ_PERIOD)
-		_add_structure(side, "redoubt", 0, Vector2(3.5, 6.5), 1.2, REDOUBT_HP, REDOUBT_RANGE, REDOUBT_DMG, REDOUBT_PERIOD)
-		_add_structure(side, "redoubt", 1, Vector2(14.5, 6.5), 1.2, REDOUBT_HP, REDOUBT_RANGE, REDOUBT_DMG, REDOUBT_PERIOD)
+		_add_structure(side, "hq", -1, Vector2(9.0, 4.5), 1.6, HQ_HP, HQ_RANGE, HQ_DMG, HQ_PERIOD)
+		_add_structure(side, "redoubt", 0, Vector2(3.5, 8.5), 1.2, REDOUBT_HP, REDOUBT_RANGE, REDOUBT_DMG, REDOUBT_PERIOD)
+		_add_structure(side, "redoubt", 1, Vector2(14.5, 8.5), 1.2, REDOUBT_HP, REDOUBT_RANGE, REDOUBT_DMG, REDOUBT_PERIOD)
 
 
 func _add_structure(side: int, kind: String, flank: int, local_pos: Vector2, radius: float,

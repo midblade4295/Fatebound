@@ -10,7 +10,7 @@ const Models = preload("res://scripts/view/models.gd")
 const GsRng = preload("res://scripts/sim/sim_rng.gd")
 
 const FIELD_HALF_W := 9.0
-const FIELD_HALF_L := 16.0
+const FIELD_HALF_L := 18.0
 const FORD_X := 6.0
 const WATER_Y := -0.12            # the water's surface; the grass is at 0
 const DEEP := 1.15                # depth of the creek bed below the grass
@@ -46,7 +46,7 @@ static func ford_weight(x: float) -> float:
 ## gently rolling beyond the woods.
 static func height(x: float, z: float) -> float:
 	var channel := lerpf(DEEP, SHALLOW, ford_weight(x)) * (1.0 - _smooth(0.55, 1.3, absf(z)))
-	var far := _smooth(13.0, 22.0, absf(x)) + _smooth(19.0, 28.0, absf(z))
+	var far := _smooth(13.0, 22.0, absf(x)) + _smooth(21.0, 30.0, absf(z))
 	var roll := (sin(x * 0.21 + 1.3) * cos(z * 0.17) + sin(x * 0.11 - z * 0.13)) * 0.45 * minf(far, 1.0)
 	return roll * (1.0 - _smooth(1.5, 0.6, absf(z))) - channel
 
@@ -112,8 +112,8 @@ func _noise(frequency: float, seed_value: int, normal_map: bool = false) -> Nois
 
 func _build_ground() -> void:
 	# A grid that is fine across the creek, where the channel is cut, and coarse elsewhere.
-	var zs: Array = [-60.0, -40.0, -28.0, -20.0, -16.0, -12.0, -8.0, -5.0, -3.0, -2.0, -1.5, -1.3, -1.1, -0.9, -0.7, -0.5, -0.25,
-			0.0, 0.25, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 2.0, 3.0, 5.0, 8.0, 12.0, 16.0, 20.0, 28.0, 40.0, 60.0]
+	var zs: Array = [-60.0, -40.0, -30.0, -22.0, -18.0, -13.0, -8.0, -5.0, -3.0, -2.0, -1.5, -1.3, -1.1, -0.9, -0.7, -0.5, -0.25,
+			0.0, 0.25, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 2.0, 3.0, 5.0, 8.0, 13.0, 18.0, 22.0, 30.0, 40.0, 60.0]
 	var xs: Array = []
 	var x := -48.0
 	while x <= 48.01:
@@ -148,7 +148,7 @@ void fragment() {
 	float n1 = texture(noise, wp.xz * 0.035).r;
 	float n2 = texture(noise, wp.xz * 0.21 + vec2(0.37, 0.11)).r;
 	float n3 = texture(noise, wp.xz * 0.9).r;
-	float in_field = smoothstep(0.0, 0.7, 9.0 - abs(wp.x)) * smoothstep(0.0, 0.7, 16.0 - abs(wp.z));
+	float in_field = smoothstep(0.0, 0.7, 9.0 - abs(wp.x)) * smoothstep(0.0, 0.7, 18.0 - abs(wp.z));
 	// The field: bright, soft mowing stripes, mottled so it is not a flat colour.
 	float stripe = smoothstep(0.42, 0.58, fract(wp.z * 0.25));
 	vec3 field = mix(vec3(0.47, 0.57, 0.25), vec3(0.56, 0.64, 0.3), stripe * 0.5 + (n2 - 0.5) * 0.7);
@@ -163,7 +163,7 @@ void fragment() {
 	meadow = mix(meadow, leaf, litter * 0.6);
 	vec3 col = mix(meadow, field, in_field);
 	// Worn earth: the road over the bridge, the approaches to the fords, around the works.
-	float path = (1.0 - smoothstep(0.6, 1.3, abs(wp.x))) * (1.0 - smoothstep(9.0, 13.5, abs(wp.z))) * 0.75;
+	float path = (1.0 - smoothstep(0.6, 1.3, abs(wp.x))) * (1.0 - smoothstep(11.0, 15.5, abs(wp.z))) * 0.75;
 	path = max(path, (1.0 - smoothstep(0.9, 1.9, abs(abs(wp.x) - 6.0))) * (1.0 - smoothstep(1.6, 3.6, abs(wp.z))) * 0.85);
 	for (int i = 0; i < 6; i++) {
 		path = max(path, (1.0 - smoothstep(1.5, 2.9, distance(wp.xz, worn[i]))) * 0.8);
@@ -191,7 +191,7 @@ void fragment() {
 	float cloud = texture(noise, wp.xz * 0.011 + TIME * vec2(0.008, 0.004)).r;
 	col *= mix(0.8, 1.07, smoothstep(0.34, 0.66, cloud));
 	float dapple = texture(noise, wp.xz * 0.5 + TIME * vec2(0.012, 0.007)).r;
-	float shade_edge = clamp(smoothstep(6.6, 10.0, abs(wp.x)) + smoothstep(13.0, 17.0, abs(wp.z)), 0.0, 1.0);
+	float shade_edge = clamp(smoothstep(6.6, 10.0, abs(wp.x)) + smoothstep(15.0, 19.0, abs(wp.z)), 0.0, 1.0);
 	col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
 	ALBEDO = pow(col, vec3(2.2));       // the colours above are written as seen on screen
 	ROUGHNESS = 0.95;
@@ -384,7 +384,7 @@ func _build_grass() -> void:
 	# Tall and thick in the meadow all round it.
 	for i in 8500:
 		var x := _rng.range_f(-24.0, 24.0)
-		var z := _rng.range_f(-27.0, 22.0)
+		var z := _rng.range_f(-29.0, 24.0)
 		if absf(x) < FIELD_HALF_W + 0.2 and absf(z) < FIELD_HALF_L + 0.2:
 			continue
 		if absf(z) < 1.5:
@@ -453,7 +453,7 @@ void fragment() {
 	var flowers: Array = []
 	for i in 520:
 		var x := _rng.range_f(-22.0, 22.0)
-		var z := _rng.range_f(-25.0, 21.0)
+		var z := _rng.range_f(-27.0, 23.0)
 		if (absf(x) < FIELD_HALF_W + 0.3 and absf(z) < FIELD_HALF_L + 0.3) or absf(z) < 1.6:
 			continue
 		flowers.append(Vector3(x, height(x, z) + _rng.range_f(0.35, 0.6), z))
@@ -577,8 +577,8 @@ func _build_woods() -> void:
 	# Deep woods down both flanks, three and four ranks back, thinning to nothing at the water.
 	var spots: Array = []     # [x, z, height]
 	for side: float in [-1.0, 1.0]:
-		var z := -27.0
-		while z < 20.5:
+		var z := -29.0
+		while z < 22.5:
 			for rank in 4:
 				var px := side * (10.9 + rank * 2.5 + _rng.range_f(-0.5, 0.7))
 				var pz := z + _rng.range_f(-1.0, 1.0) + rank * 0.7
@@ -591,7 +591,7 @@ func _build_woods() -> void:
 	var x := -9.5
 	while x < 9.6:
 		for rank in 3:
-			spots.append([x + _rng.range_f(-0.7, 0.7), -19.6 - rank * 2.4 + _rng.range_f(-0.5, 0.5), _rng.range_f(4.2, 5.4) + rank * 0.6])
+			spots.append([x + _rng.range_f(-0.7, 0.7), -21.6 - rank * 2.4 + _rng.range_f(-0.5, 0.5), _rng.range_f(4.2, 5.4) + rank * 0.6])
 		x += _rng.range_f(2.2, 3.0)
 	_tree_shade(spots)
 	for s: Array in spots:
@@ -607,18 +607,18 @@ func _build_woods() -> void:
 	var has_bush := Models.has_model("bush")
 	for i in 70:
 		var bx := _rng.range_f(9.9, 20.0) * (1.0 if _rng.next_f() < 0.5 else -1.0)
-		var bz := _rng.range_f(-25.0, 21.0)
+		var bz := _rng.range_f(-27.0, 23.0)
 		if absf(bz) < 2.0:
 			continue
 		if has_bush:
 			_plant("bush", Vector3(bx, height(bx, bz) - 0.03, bz), _rng.range_f(0.8, 1.4))
 	for i in 12:
 		var bx2 := _rng.range_f(-9.0, 9.0)
-		var bz2 := _rng.range_f(17.2, 20.5)
+		var bz2 := _rng.range_f(19.4, 22.5)
 		if has_bush:
 			_plant("bush", Vector3(bx2, height(bx2, bz2) - 0.03, bz2), _rng.range_f(0.8, 1.3))
-	_scatter_model("log", [Vector3(10.4, 0, -9.5), Vector3(-10.5, 0, 12.5), Vector3(-10.3, 0, -14.0), Vector3(10.6, 0, 16.0)], 1.6, 2.2)
-	_scatter_model("rocks", [Vector3(-10.2, 0, -6.5), Vector3(10.1, 0, 9.2), Vector3(-9.9, 0, 17.4), Vector3(9.8, 0, -17.6)], 1.2, 1.8)
+	_scatter_model("log", [Vector3(10.4, 0, -9.5), Vector3(-10.5, 0, 12.5), Vector3(-10.3, 0, -15.0), Vector3(10.6, 0, 17.5)], 1.6, 2.2)
+	_scatter_model("rocks", [Vector3(-10.2, 0, -6.5), Vector3(10.1, 0, 9.2), Vector3(-9.9, 0, 19.3), Vector3(9.8, 0, -19.5)], 1.2, 1.8)
 
 
 ## A soft dark pool on the ground under each tree, drawn in one pass, so the woods sit on the
@@ -654,7 +654,7 @@ void fragment() {
 
 
 func _build_fences() -> void:
-	for z: float in [-13.2, -9.6, -6.0, 6.0, 9.6, 13.2]:
+	for z: float in [-15.6, -12.0, -8.4, -4.8, 4.8, 8.4, 12.0, 15.6]:
 		for side: float in [-1.0, 1.0]:
 			var fence := Models.make("fence", 0)
 			if fence == null:
@@ -724,7 +724,7 @@ func _build_leaves() -> void:
 	var spots: Array = []
 	for i in 2600:
 		var x := _rng.range_f(-22.0, 22.0)
-		var z := _rng.range_f(-27.0, 21.0)
+		var z := _rng.range_f(-29.0, 23.0)
 		var on_field := absf(x) < FIELD_HALF_W and absf(z) < FIELD_HALF_L
 		if on_field:
 			# Only near the edges, and thinning quickly toward the middle.
@@ -769,7 +769,7 @@ func _build_leaves() -> void:
 	p.lifetime = 6.5
 	p.preprocess = 6.5
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	p.emission_box_extents = Vector3(13.0, 0.6, 19.0)
+	p.emission_box_extents = Vector3(13.0, 0.6, 21.0)
 	p.position = Vector3(-1.0, 6.5, -1.0)
 	p.direction = Vector3(0.5, -1.0, 0.1)
 	p.spread = 22.0
@@ -816,7 +816,7 @@ void fragment() {
 		mi.material_override = beam
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		# Each sheet runs from high over the right-hand woods down across the field.
-		mi.position = Vector3(4.0 + _rng.range_f(-1.5, 1.5), 3.2, -13.0 + i * 5.2 + _rng.range_f(-1.0, 1.0))
+		mi.position = Vector3(4.0 + _rng.range_f(-1.5, 1.5), 3.2, -15.0 + i * 6.0 + _rng.range_f(-1.0, 1.0))
 		mi.rotation = Vector3(0.0, deg_to_rad(62.0 + _rng.range_f(-6.0, 6.0)), deg_to_rad(-14.0))
 		mi.set_instance_shader_parameter("seed", _rng.next_f() * 10.0)
 		add_child(mi)

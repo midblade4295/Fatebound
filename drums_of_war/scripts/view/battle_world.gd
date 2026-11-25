@@ -204,14 +204,14 @@ func _build_environment() -> void:
 func fit_camera() -> void:
 	if camera == null or not is_inside_tree():
 		return
-	var pitch := deg_to_rad(50.0)
+	var pitch := deg_to_rad(58.0)
 	var back := Vector3(0.0, sin(pitch), cos(pitch))
 	var dist := 60.0
 	var look_z := 0.0
 	var hw := Sim.FIELD_W * 0.5
 	var hh := Sim.FIELD_H * 0.5
 	var pts := [Vector3(-hw, 0, hh), Vector3(hw, 0, hh), Vector3(-hw, 0, -hh), Vector3(hw, 0, -hh),
-			Vector3(0, 5.2, -hh + 2.5)]
+			Vector3(0, 5.2, -hh + 4.5)]
 	for step in 14:
 		camera.look_at_from_position(Vector3(0, 0, look_z) + back * dist, Vector3(0, 0, look_z), Vector3.UP)
 		var box := Rect2()
