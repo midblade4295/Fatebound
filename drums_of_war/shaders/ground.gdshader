@@ -1,7 +1,7 @@
-// The battlefield's ground: a striped green lawn inside a darker meadow, never one flat colour.
+// The battlefield's ground: open green pasture inside a darker meadow, never one flat colour.
 //
 // Colour comes from a single tiling noise texture sampled at three scales (macro patches,
-// mottling, fine speckle), plus clear mowing stripes on the field, worn earth on the road, at
+// mottling, fine speckle), plus worn earth on the road, at
 // the fords and around the works, sand and pebbles on the creek's banks, drifting cloud shadow
 // and dappled light at the wood's edge. Colours are written as seen on screen and converted to
 // linear at the end.
@@ -14,12 +14,17 @@ void fragment() {
 	float n1 = texture(noise, wp.xz * 0.035).r;
 	float n2 = texture(noise, wp.xz * 0.21 + vec2(0.37, 0.11)).r;
 	float n3 = texture(noise, wp.xz * 0.9).r;
-	float in_field = smoothstep(0.0, 0.7, 9.0 - abs(wp.x)) * smoothstep(0.0, 0.7, 18.0 - abs(wp.z));
-	// The field: a mown lawn in clear alternating bands, mottled just enough not to be flat.
-	float stripe = smoothstep(0.44, 0.56, abs(fract(wp.z * 0.23 + 0.25) - 0.5) * 2.0);
-	vec3 field = mix(vec3(0.40, 0.58, 0.19), vec3(0.50, 0.67, 0.24), stripe);
-	field *= 0.94 + 0.12 * n2;
-	field = mix(field, vec3(0.55, 0.68, 0.26), smoothstep(0.6, 0.9, n1) * 0.25);     // sunnier patches
+	// The pasture's edge wanders a little instead of running ruler-straight.
+	float ragged = (n2 - 0.5) * 1.1;
+	float in_field = smoothstep(-0.3, 0.8, 9.0 - abs(wp.x) + ragged) * smoothstep(-0.3, 0.8, 18.0 - abs(wp.z) + ragged);
+	// The field: open pasture, never two patches quite the same green. Broad drifts of lighter
+	// and deeper grass, smaller clumps inside them, sun-bleached tips here and there, and a
+	// fine fleck over all of it. No lines: nothing here was mown.
+	float n5 = texture(noise, wp.xz * 0.085 + vec2(0.61, 0.27)).r;
+	vec3 field = mix(vec3(0.37, 0.55, 0.17), vec3(0.49, 0.65, 0.23), smoothstep(0.28, 0.72, n1));
+	field = mix(field, vec3(0.33, 0.52, 0.16), smoothstep(0.52, 0.74, n5) * 0.55);          // lusher, darker clumps
+	field = mix(field, vec3(0.6, 0.69, 0.28), smoothstep(0.56, 0.8, n1 * 0.45 + n2 * 0.55) * 0.4);   // bleached drifts
+	field *= (0.93 + 0.14 * n2) * (0.96 + 0.08 * n3);
 	// The meadow around it: deeper greens, patchy.
 	vec3 meadow = mix(vec3(0.27, 0.42, 0.15), vec3(0.42, 0.53, 0.2), n1) * (0.88 + 0.24 * n2);
 	// Leaf litter under the trees: drifts of orange, red and gold.

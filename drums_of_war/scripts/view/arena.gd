@@ -280,7 +280,17 @@ func _build_grass() -> void:
 		if absf(z) < 2.4 or not _clear_of_structures(x, z, 2.3) or (absf(x) < 1.0 and absf(z) < 12.0):
 			continue
 		tufts.append([Vector3(x, 0, z), _rng.range_f(0.4, 0.62), Color(0.3, 0.5, 0.14).lerp(Color(0.38, 0.56, 0.18), _rng.next_f())])
-	# Thicker clumps where the lawn meets the creek's banks.
+	# Grass grows in clumps, not evenly: a couple of dozen loose patches of slightly longer tufts.
+	for patch in 26:
+		var cx := _rng.range_f(-FIELD_HALF_W + 1.0, FIELD_HALF_W - 1.0)
+		var cz := _rng.range_f(-FIELD_HALF_L + 1.0, FIELD_HALF_L - 1.0)
+		for i in _rng.range_i(5, 9):
+			var x := cx + _rng.range_f(-1.1, 1.1)
+			var z := cz + _rng.range_f(-0.9, 0.9)
+			if absf(z) < 2.4 or not _clear_of_structures(x, z, 2.3) or (absf(x) < 1.0 and absf(z) < 12.0):
+				continue
+			tufts.append([Vector3(x, 0, z), _rng.range_f(0.45, 0.8), Color(0.3, 0.5, 0.14).lerp(Color(0.44, 0.6, 0.2), _rng.next_f())])
+	# Thicker clumps where the pasture meets the creek's banks.
 	for i in 90:
 		var x := _rng.range_f(-FIELD_HALF_W, FIELD_HALF_W)
 		if absf(absf(x) - FORD_X) < 1.9 or absf(x) < 1.9:
@@ -363,6 +373,13 @@ void fragment() {
 		if (absf(x) < FIELD_HALF_W + 0.3 and absf(z) < FIELD_HALF_L + 0.3) or absf(z) < 1.6:
 			continue
 		flowers.append(Vector3(x, height(x, z) + _rng.range_f(0.35, 0.6), z))
+	# A few low daisies and buttercups out in the pasture itself.
+	for i in 70:
+		var x := _rng.range_f(-FIELD_HALF_W, FIELD_HALF_W)
+		var z := _rng.range_f(-FIELD_HALF_L, FIELD_HALF_L)
+		if absf(z) < 2.4 or not _clear_of_structures(x, z, 2.6) or absf(x) < 1.2:
+			continue
+		flowers.append(Vector3(x, 0.1, z))
 	fm.instance_count = flowers.size()
 	var petals := [Color("fff6d8"), Color("ffd84a"), Color("ff8fb0"), Color("b79cff"), Color("ffffff")]
 	for i in flowers.size():
