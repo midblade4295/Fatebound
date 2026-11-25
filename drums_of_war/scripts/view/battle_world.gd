@@ -40,6 +40,8 @@ var _flashes: Array = []              # {node, age, life}
 var _materials: Dictionary = {}
 var _time: float = 0.0
 var cheering_side: int = -1      # the winners, once the match is over
+var _lamps: Dictionary = {}
+var _chimney_clock: float = 0.0
 
 
 # ==========================================================================================
@@ -141,20 +143,26 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("8ecbff")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("a9d3ff")       # cool sky-blue fill in the shadows
-	env.ambient_light_energy = 0.55
+	env.ambient_light_color = Color("9fbcff")       # cool sky-blue fill in the shadows
+	env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.12
-	env.adjustment_contrast = 1.04
+	env.adjustment_saturation = 1.14
+	env.adjustment_contrast = 1.06
+	# Bloom: muzzle flashes, glints on the water and the motes in the sunbeams all flare a little.
+	env.glow_enabled = true
+	env.glow_intensity = 0.55
+	env.glow_bloom = 0.06
+	env.glow_hdr_threshold = 0.92
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 
 	var sun := DirectionalLight3D.new()             # warm golden-hour key light
-	sun.light_color = Color("ffdca6")
-	sun.light_energy = 1.05
-	sun.rotation_degrees = Vector3(-44.0, 32.0, 0.0)      # from behind the camera's right shoulder, so the faces you see are lit
+	sun.light_color = Color("ffd092")
+	sun.light_energy = 1.2
+	sun.rotation_degrees = Vector3(-33.0, 38.0, 0.0)      # from behind the camera's right shoulder, so the faces you see are lit
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	sun.directional_shadow_max_distance = 70.0
@@ -225,6 +233,17 @@ func _build_arena() -> void:
 		add_child(node)
 		_structures[s.id] = node
 		_structure_dead[s.id] = false
+		if s.kind == "hq":
+			# Lamplight spilling from the farmhouse onto the grass in front of it.
+			var lamp := OmniLight3D.new()
+			lamp.light_color = Color("ffb964")
+			lamp.light_energy = 2.2
+			lamp.omni_range = 6.5
+			lamp.omni_attenuation = 1.4
+			lamp.shadow_enabled = false
+			lamp.position = Vector3(0.0, 1.6, 2.6)
+			node.add_child(lamp)
+			_lamps[s.id] = lamp
 
 
 func team_colour(side: int) -> Color:
@@ -348,6 +367,16 @@ func _process(delta: float) -> void:
 		if _structure_dead.get(s.id, false):
 			var node: Node3D = _structures[s.id]
 			node.scale.y = lerpf(node.scale.y, 0.22, 1.0 - exp(-6.0 * delta))
+	# Chimney smoke from each farmhouse still standing.
+	_chimney_clock -= delta
+	if _chimney_clock <= 0.0:
+		_chimney_clock = 0.55
+		for s: Sim.Structure in sim.structures:
+			if s.kind == "hq" and not s.dead:
+				var w: Vector3 = _structures[s.id].position + Vector3(-1.05, 5.0, -0.5)
+				_puffs.append({"pos": w, "vel": Vector3(0.45, 0.7, 0.0), "age": 0.0, "life": 3.2, "size": 0.55})
+	for id in _lamps:
+		_lamps[id].visible = not _structure_dead.get(id, false)
 	_update_leaving(delta)
 	_update_puffs(delta)
 	_update_flashes(delta)

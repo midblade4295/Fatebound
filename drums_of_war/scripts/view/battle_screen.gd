@@ -11,9 +11,10 @@ const DECK := ["line_infantry", "skirmishers", "militia", "scouts", "heavy_caval
 # Layout. The design space is 540 wide; the game fills whatever screen it is given, so the
 # height (and on tablets the width) is whatever the display's shape makes it. _layout() works
 # out where the top bar and the card tray sit, clear of any notch or gesture bar.
-const HUD_H := 144.0
+const CARD_W := 104.0
+const CARD_BAND := 24.0             # the coloured strip across a card's top, and the name strip
+const POWDER_H := 20.0
 const BAR_H := 44.0
-const CARD_SIZE := Vector2(104.0, 96.0)
 const CARD_X0 := 84.0
 const CARD_STEP := 112.0
 const AUDIO_DIR := "res://assets/audio/"
@@ -58,6 +59,9 @@ var bottom: float = 0.0             # ... and at the bottom (gesture bar)
 var ox: float = 0.0                 # left edge of the centred 540-wide HUD column
 var hud_y: float = 816.0            # top of the card tray
 var _laid_out: bool = false
+var art_h: float = 64.0             # height of a card's portrait; taller screens get more
+var card_size: Vector2 = Vector2(104.0, 112.0)
+var _vignette: GradientTexture2D
 
 
 func _ready() -> void:
@@ -107,7 +111,11 @@ func _layout() -> void:
 	top = new_top
 	bottom = new_bottom
 	ox = (screen.x - 540.0) * 0.5
-	hud_y = screen.y - HUD_H - bottom
+	# The tray: cards with a portrait tall enough to show the whole figure where there is room,
+	# the Powder bar under them, and a margin so nothing sits in a rounded corner.
+	art_h = clampf(64.0 + (screen.y - 960.0) * 0.22, 64.0, 112.0)
+	card_size = Vector2(CARD_W, CARD_BAND + art_h + CARD_BAND)
+	hud_y = screen.y - (14.0 + card_size.y + 12.0 + POWDER_H + maxf(bottom, 14.0) + 8.0)
 	var field_top := top + BAR_H + 14.0
 	world.field_rect_design = Rect2(22.0, field_top, screen.x - 44.0, hud_y - field_top - 10.0)
 	world.fit_camera()
@@ -186,7 +194,7 @@ func _card_at(p: Vector2) -> int:
 
 
 func _card_rect(i: int) -> Rect2:
-	return Rect2(Vector2(ox + CARD_X0 + CARD_STEP * i, hud_y + 8.0), CARD_SIZE)
+	return Rect2(Vector2(ox + CARD_X0 + CARD_STEP * i, hud_y + 14.0), card_size)
 
 
 func to_screen(p: Vector2, height: float = 0.0) -> Vector2:
@@ -309,6 +317,7 @@ func _word(pos: Vector2, text: String, colour: Color) -> void:
 # ==========================================================================================
 
 func _draw() -> void:
+	_draw_vignette()
 	if selected >= 0:
 		_draw_deploy_zone()
 	for s: Sim.Structure in sim.structures:
@@ -436,55 +445,92 @@ func _draw_top_bar() -> void:
 		_text(mid + Vector2(0, 6), notice, 15, Color(COL_PAPER, a), HORIZONTAL_ALIGNMENT_CENTER, 400.0)
 
 
+## One card face: coloured strip with its kind, the portrait, the name, and the Powder cost.
+func _draw_card(rect: Rect2, card_id: String, can_pay: bool, chosen: bool) -> void:
+	var def: Dictionary = cards[card_id]
+	var is_order: bool = def["type"] == "order"
+	if chosen:
+		draw_rect(rect.grow(5.0), COL_AMBER)
+	draw_rect(rect, COL_PAPER)
+	var band := Color("7a4bb5") if is_order else COL_BLUE
+	draw_rect(Rect2(rect.position, Vector2(rect.size.x, CARD_BAND)), band)
+	var kind := "ORDER" if is_order else String(def["arm"]).to_upper()
+	_text(rect.position + Vector2(rect.size.x * 0.5 + 9.0, 17), kind, 11, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 22.0)
+	var art_rect := Rect2(rect.position + Vector2(0, CARD_BAND), Vector2(rect.size.x, rect.size.y - CARD_BAND * 2.0))
+	var art := _art(card_id)
+	if art != null:
+		# The portrait is drawn from the top of the picture down, as much as the card has room for.
+		var src_w := float(art.get_width())
+		var src_h := minf(float(art.get_height()), src_w * art_rect.size.y / art_rect.size.x)
+		draw_texture_rect_region(art, art_rect, Rect2(0, 0, src_w, src_h))
+	else:
+		draw_rect(art_rect, band.lightened(0.55))
+		_draw_card_words(art_rect.get_center() + Vector2(0, 6), String(def["name"]), 15, COL_INK, rect.size.x - 8.0)
+	var name_rect := Rect2(Vector2(rect.position.x, rect.end.y - CARD_BAND), Vector2(rect.size.x, CARD_BAND))
+	draw_rect(name_rect, COL_INK.lightened(0.1))
+	_text(name_rect.position + Vector2(rect.size.x * 0.5, 17), String(def["name"]), 12, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 4.0)
+	draw_rect(rect, COL_INK, false, 2.0)
+	if not can_pay:
+		draw_rect(rect, Color(0.08, 0.1, 0.16, 0.55))
+	draw_circle(rect.position + Vector2(12, 12), 14.0, COL_AMBER if can_pay else COL_AMBER.darkened(0.4))
+	draw_arc(rect.position + Vector2(12, 12), 14.0, 0.0, TAU, 24, COL_INK, 2.0)
+	_text(rect.position + Vector2(12, 18), str(int(def["cost"])), 18, COL_INK, HORIZONTAL_ALIGNMENT_CENTER, 26.0)
+
+
 func _draw_hud() -> void:
 	draw_rect(Rect2(0, hud_y, screen.x, screen.y - hud_y), COL_INK)
 	draw_rect(Rect2(0, hud_y, screen.x, 3), COL_BRASS.darkened(0.2))
 	draw_set_transform(Vector2(ox, 0.0), 0.0, Vector2.ONE)       # the tray's contents sit in a centred column
 	var hand: Array = sim.hand(local_side)
 	var have: float = sim.powder[local_side]
+	var cards_y := hud_y + 14.0
+	# The next card, small, at the left.
 	var next_id := sim.next_card(local_side)
-	draw_rect(Rect2(14, hud_y + 30, 58, 62), Color(1, 1, 1, 0.12))
-	_text(Vector2(43, hud_y + 24), "NEXT", 11, Color(1, 1, 1, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
+	_text(Vector2(43, cards_y + 9), "NEXT", 11, Color(1, 1, 1, 0.65), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
+	var next_rect := Rect2(14, cards_y + 16, 58, 58)
+	draw_rect(next_rect, Color(1, 1, 1, 0.12))
 	if next_id != "":
-		_draw_card_words(Vector2(43, hud_y + 56), String(cards[next_id]["name"]), 10, Color(1, 1, 1, 0.75), 56.0)
+		var next_art := _art(next_id)
+		if next_art != null:
+			var w := float(next_art.get_width())
+			draw_texture_rect_region(next_art, next_rect, Rect2(0, 0, w, w), Color(1, 1, 1, 0.9))
+		else:
+			_draw_card_words(next_rect.get_center() + Vector2(0, 4), String(cards[next_id]["name"]), 10, Color(1, 1, 1, 0.8), 56.0)
+		draw_rect(next_rect, COL_INK.lightened(0.3), false, 2.0)
 	for i in hand.size():
-		var def: Dictionary = cards[hand[i]]
 		var rect := _card_rect(i)
 		rect.position.x -= ox
-		var can_pay := have + 0.0001 >= float(def["cost"])
 		if i == selected:
-			rect.position.y -= 10.0
-			draw_rect(rect.grow(4.0), COL_AMBER)
-		draw_rect(rect, COL_PAPER if can_pay else Color("9a9a94"))
-		var band := COL_BLUE if def["type"] == "unit" else Color("7a4bb5")
-		draw_rect(Rect2(rect.position, Vector2(rect.size.x, 22)), band)
-		var kind := "ORDER" if def["type"] == "order" else String(def["arm"]).to_upper()
-		_text(rect.position + Vector2(rect.size.x * 0.5 + 8.0, 16), kind, 11, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 20.0)
-		var art := _art(hand[i])
-		if art != null:
-			# Portrait in the middle, name on a strip underneath.
-			var art_rect := Rect2(rect.position + Vector2(0, 22), Vector2(rect.size.x, 52))
-			draw_texture_rect(art, art_rect, false, Color.WHITE if can_pay else Color(0.62, 0.62, 0.62))
-			draw_rect(Rect2(rect.position + Vector2(0, 74), Vector2(rect.size.x, 22)), COL_INK.lightened(0.08))
-			_text(rect.position + Vector2(rect.size.x * 0.5, 90), String(def["name"]), 12, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 4.0)
-		else:
-			_draw_card_words(rect.position + Vector2(rect.size.x * 0.5, 50), String(def["name"]), 15, COL_INK, rect.size.x - 8.0)
-			if def["type"] == "unit":
-				_text(rect.position + Vector2(rect.size.x * 0.5, 88), "%d men" % int(def["men"]), 11, COL_INK.lightened(0.3), HORIZONTAL_ALIGNMENT_CENTER, rect.size.x)
-		draw_circle(rect.position + Vector2(13, 12), 13.0, COL_AMBER)
-		draw_arc(rect.position + Vector2(13, 12), 13.0, 0.0, TAU, 24, COL_INK, 2.0)
-		_text(rect.position + Vector2(13, 18), str(int(def["cost"])), 17, COL_INK, HORIZONTAL_ALIGNMENT_CENTER, 26.0)
+			rect.position.y -= 12.0
+		_draw_card(rect, hand[i], have + 0.0001 >= float(cards[hand[i]]["cost"]), i == selected)
+	# Powder: the count at the left, ten charges along the bottom.
 	var seg := 44.0
-	var y := hud_y + 116.0
+	var y := cards_y + card_size.y + 12.0
 	for i in int(Sim.POWDER_MAX):
-		var cell := Rect2(CARD_X0 + i * seg, y, seg - 4.0, 18)
+		var cell := Rect2(CARD_X0 + i * seg, y, seg - 4.0, POWDER_H)
 		draw_rect(cell, Color(1, 1, 1, 0.12))
 		var fill := clampf(have - i, 0.0, 1.0)
 		if fill > 0.0:
 			draw_rect(Rect2(cell.position, Vector2(cell.size.x * fill, cell.size.y)), COL_AMBER if fill >= 1.0 else COL_AMBER.darkened(0.35))
-	_text(Vector2(43, y + 15), "%d" % int(have), 20, COL_AMBER, HORIZONTAL_ALIGNMENT_CENTER, 58.0)
-	_text(Vector2(43, y - 4), "POWDER", 10, Color(1, 1, 1, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
+	_text(Vector2(43, y + 17), "%d" % int(have), 22, COL_AMBER, HORIZONTAL_ALIGNMENT_CENTER, 58.0)
+	_text(Vector2(43, y - 6), "POWDER", 10, Color(1, 1, 1, 0.65), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## A soft darkening toward the corners of the battlefield, drawn under the bars.
+func _draw_vignette() -> void:
+	if _vignette == null:
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.62, 1.0])
+		g.colors = PackedColorArray([Color(0.1, 0.05, 0.02, 0.0), Color(0.1, 0.05, 0.02, 0.0), Color(0.1, 0.05, 0.02, 0.42)])
+		_vignette = GradientTexture2D.new()
+		_vignette.gradient = g
+		_vignette.fill = GradientTexture2D.FILL_RADIAL
+		_vignette.fill_from = Vector2(0.5, 0.5)
+		_vignette.fill_to = Vector2(1.0, 1.0)
+		_vignette.width = 128
+		_vignette.height = 128
+	draw_texture_rect(_vignette, Rect2(0, top + BAR_H, screen.x, hud_y - top - BAR_H), false)
 
 
 func _art(card_id: String) -> Texture2D:

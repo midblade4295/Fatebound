@@ -73,8 +73,9 @@ match goes to one minute of sudden-death overtime.
   (cards, Powder, clock, health and nerve bars) over the 3D view.
 - `scripts/view/battle_world.gd`: the 3D battlefield: structures, regiments in formation, smoke,
   flashes, lighting, and the camera that fits the field to whatever shape the screen is.
-- `scripts/view/arena.gd`: the scenery: ground sculpted with a real creek channel, water, grass
-  tufts and reeds, wheat, wildflowers, woods, stepping stones. Units wade the fords and climb the
+- `scripts/view/arena.gd`: the scenery, set in autumn: ground sculpted with a real creek channel,
+  water, grass tufts and reeds, wheat, woods in fall colours, leaf litter and falling leaves,
+  pumpkins and hay bales, drifting cloud shadow, sunbeams and motes, stepping stones. Units wade the fords and climb the
   bridge because the view asks it how high the ground is.
 - `scripts/view/musket_drill.gd`: makes infantry hold their muskets. It moves the musket through
   drill positions (shoulder, port, aim, recoil, load, charge) and places both hands on it with

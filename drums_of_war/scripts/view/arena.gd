@@ -21,6 +21,10 @@ const BRIDGE_DECK := 0.62         # height of the bridge's roadway at its crown
 
 const TREES := ["tree", "tree_oak", "tree_pine", "tree_birch"]
 
+# Autumn leaf colours, as seen on screen. Weighted toward the warm ones; a few trees stay green.
+const LEAVES := [Color("c8291a"), Color("e2531a"), Color("f08a1c"), Color("f6c22e"), Color("9c4420"),
+		Color("d9a62a"), Color("b9c43a"), Color("3f7a2a"), Color("e06a1e"), Color("f2b12a")]
+
 var _structure_spots: Array = []  # Vector2 (x, z) of each structure, for worn earth and clearings
 var _rng: GsRng
 
@@ -68,6 +72,25 @@ func build(structure_spots: Array) -> void:
 	_build_grass()
 	_build_woods()
 	_build_fences()
+	_build_harvest()
+	_build_leaves()
+	_build_light_effects()
+
+
+func _leaf_colour() -> Color:
+	return LEAVES[_rng.range_i(0, LEAVES.size() - 1)]
+
+
+## A small leaf-shaped mask: white inside a pointed oval, clear outside.
+func _leaf_texture() -> ImageTexture:
+	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	for y in 16:
+		for x in 16:
+			var u := (x + 0.5) / 8.0 - 1.0
+			var v := (y + 0.5) / 8.0 - 1.0
+			var inside := (u * u) / 0.32 + (v * v) / 0.9 <= 1.0
+			img.set_pixel(x, y, Color(1, 1, 1, 1.0 if inside else 0.0))
+	return ImageTexture.create_from_image(img)
 
 
 func _noise(frequency: float, seed_value: int, normal_map: bool = false) -> NoiseTexture2D:
@@ -131,9 +154,12 @@ void fragment() {
 	vec3 field = mix(vec3(0.33, 0.66, 0.19), vec3(0.42, 0.75, 0.24), stripe * 0.55 + (n2 - 0.5) * 0.7);
 	field *= 0.9 + 0.2 * n1;
 	// The meadow around it: deeper greens, patchy, flecked with wildflowers.
-	vec3 meadow = mix(vec3(0.16, 0.42, 0.13), vec3(0.3, 0.58, 0.18), n1) * (0.85 + 0.3 * n2);
-	float fleck = smoothstep(0.8, 0.84, n3) * (1.0 - in_field);
-	meadow = mix(meadow, vec3(0.98, 0.92, 0.5), fleck * 0.55);
+	vec3 meadow = mix(vec3(0.24, 0.42, 0.13), vec3(0.5, 0.56, 0.18), n1) * (0.85 + 0.3 * n2);
+	// Leaf litter under the trees: drifts of orange, red and gold.
+	float litter = smoothstep(0.52, 0.7, n3) * (1.0 - in_field);
+	vec3 leaf = mix(vec3(0.85, 0.36, 0.1), vec3(0.95, 0.72, 0.2), n2);
+	leaf = mix(leaf, vec3(0.72, 0.18, 0.1), smoothstep(0.6, 0.8, n1));
+	meadow = mix(meadow, leaf, litter * 0.6);
 	vec3 col = mix(meadow, field, in_field);
 	// Worn earth: the road over the bridge, the approaches to the fords, around the works.
 	float path = (1.0 - smoothstep(0.6, 1.3, abs(wp.x))) * (1.0 - smoothstep(9.0, 13.5, abs(wp.z))) * 0.75;
@@ -147,6 +173,12 @@ void fragment() {
 	float bank = smoothstep(-0.02, -0.22, wp.y);
 	col = mix(col, vec3(0.78, 0.7, 0.5) * (0.82 + 0.36 * n3), bank);
 	col = mix(col, vec3(0.3, 0.33, 0.27) * (0.8 + 0.4 * n3), smoothstep(-0.55, -1.05, wp.y));
+	// Slow cloud shadow across everything, and dappled sun where the woods overhang the edges.
+	float cloud = texture(noise, wp.xz * 0.011 + TIME * vec2(0.008, 0.004)).r;
+	col *= mix(0.8, 1.07, smoothstep(0.34, 0.66, cloud));
+	float dapple = texture(noise, wp.xz * 0.5 + TIME * vec2(0.012, 0.007)).r;
+	float shade_edge = clamp(smoothstep(6.6, 10.0, abs(wp.x)) + smoothstep(13.0, 17.0, abs(wp.z)), 0.0, 1.0);
+	col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
 	ALBEDO = pow(col, vec3(2.2));       // the colours above are written as seen on screen
 	ROUGHNESS = 0.95;
 }
@@ -328,12 +360,12 @@ func _clear_of_structures(x: float, z: float, margin: float) -> bool:
 func _build_grass() -> void:
 	var tufts: Array = []      # [position, size, colour]
 	# Short and sparse on the field, so the troops stay readable.
-	for i in 1500:
+	for i in 1100:
 		var x := _rng.range_f(-FIELD_HALF_W, FIELD_HALF_W)
 		var z := _rng.range_f(-FIELD_HALF_L, FIELD_HALF_L)
 		if absf(z) < 1.6 or not _clear_of_structures(x, z, 2.3) or (absf(x) < 1.0 and absf(z) < 12.0):
 			continue
-		tufts.append([Vector3(x, 0, z), _rng.range_f(0.4, 0.7), Color(0.36, 0.7, 0.2).lerp(Color(0.44, 0.78, 0.25), _rng.next_f())])
+		tufts.append([Vector3(x, 0, z), _rng.range_f(0.35, 0.6), Color(0.4, 0.74, 0.22).lerp(Color(0.5, 0.8, 0.26), _rng.next_f())])
 	# Tall and thick in the meadow all round it.
 	for i in 8500:
 		var x := _rng.range_f(-24.0, 24.0)
@@ -342,14 +374,14 @@ func _build_grass() -> void:
 			continue
 		if absf(z) < 1.5:
 			continue
-		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(1.1, 2.1), Color(0.2, 0.5, 0.15).lerp(Color(0.38, 0.66, 0.2), _rng.next_f())])
+		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(1.1, 2.1), Color(0.3, 0.52, 0.15).lerp(Color(0.72, 0.68, 0.24), _rng.next_f() * _rng.next_f())])
 	# Reeds along both banks, away from the crossings.
 	for i in 520:
 		var x := _rng.range_f(-24.0, 24.0)
 		if absf(absf(x) - FORD_X) < 2.0 or absf(x) < 1.9:
 			continue
 		var z := _rng.range_f(1.25, 1.75) * (1.0 if _rng.next_f() < 0.5 else -1.0)
-		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(1.7, 2.9), Color(0.3, 0.5, 0.16).lerp(Color(0.5, 0.62, 0.2), _rng.next_f())])
+		tufts.append([Vector3(x, height(x, z), z), _rng.range_f(1.3, 2.2), Color(0.4, 0.55, 0.18).lerp(Color(0.74, 0.66, 0.28), _rng.next_f())])
 	# Two patches of ripe wheat beyond the fences.
 	for patch: Array in [[11.6, -5.0, 1.5, 3.2], [-11.7, 7.0, 1.5, 2.8]]:
 		for i in 700:
@@ -432,7 +464,7 @@ shader_type spatial;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
 uniform float y_min;
 uniform float y_size;
-instance uniform vec3 tint = vec3(1.0);
+instance uniform vec3 leaf_col = vec3(0.1, 0.3, 0.03);
 instance uniform float sway = 0.0;
 void vertex() {
 	float h = clamp((VERTEX.y - y_min) / y_size, 0.0, 1.0);
@@ -442,7 +474,12 @@ void vertex() {
 	VERTEX.z += cos(t * 0.8 + VERTEX.x * 2.0 / y_size) * 0.014 * y_size * w;
 }
 void fragment() {
-	ALBEDO = texture(albedo_tex, UV).rgb * tint;
+	vec3 tex = texture(albedo_tex, UV).rgb;
+	// Wherever the model's own texture is leafy green, paint the leaf colour in, keeping the
+	// texture's light and shade. Bark, stone and wood are left as they are.
+	float leafy = smoothstep(0.03, 0.14, tex.g - max(tex.r * 0.75, tex.b));
+	float lum = dot(tex, vec3(0.35, 0.55, 0.1));
+	ALBEDO = mix(tex, leaf_col * (0.3 + lum * 1.7), leafy);
 	ROUGHNESS = 0.9;
 }
 """
@@ -462,8 +499,9 @@ func _plant(model: String, pos: Vector3, tall: float) -> bool:
 	if _foliage_shader == null:
 		_foliage_shader = Shader.new()
 		_foliage_shader.code = FOLIAGE_SHADER
-	var shade := _rng.range_f(0.5, 0.82)
-	var tint := Vector3(shade * _rng.range_f(0.8, 0.98), shade, shade * _rng.range_f(0.9, 1.15))
+	var leaf := _leaf_colour().lerp(_leaf_colour(), _rng.next_f() * 0.35)
+	var shade := _rng.range_f(0.8, 1.05)
+	var tint := Vector3(pow(leaf.r, 2.2), pow(leaf.g, 2.2), pow(leaf.b, 2.2)) * shade
 	for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
 		if mi.mesh == null or mi.mesh.get_surface_count() == 0:
 			continue
@@ -479,7 +517,7 @@ func _plant(model: String, pos: Vector3, tall: float) -> bool:
 			mat.set_shader_parameter("y_size", box.size.y)
 			_foliage_mats[model] = mat
 		mi.material_override = _foliage_mats[model]
-		mi.set_instance_shader_parameter("tint", tint)
+		mi.set_instance_shader_parameter("leaf_col", tint)
 		mi.set_instance_shader_parameter("sway", _rng.range_f(0.0, TAU))
 	add_child(node)
 	return true
@@ -572,3 +610,192 @@ func _build_fences() -> void:
 			Models.fit_footprint(fence, 0.4, 3.5)
 			fence.position = Vector3(side * 9.55, 0.0, z)
 			add_child(fence)
+
+
+# --- Harvest ---------------------------------------------------------------------------------
+
+func _build_harvest() -> void:
+	# Pumpkins by the fences and hay bales beside the wheat: cheap shapes, but they say autumn.
+	var body := SphereMesh.new()
+	body.radius = 0.32
+	body.height = 0.5
+	body.radial_segments = 10
+	body.rings = 5
+	var pm := MultiMesh.new()
+	pm.transform_format = MultiMesh.TRANSFORM_3D
+	pm.mesh = body
+	var spots: Array = []
+	for cluster: Array in [[10.2, -11.5], [-10.3, -7.5], [10.3, 4.0], [-10.2, 10.5], [10.4, 14.5], [-10.4, -15.0]]:
+		for i in _rng.range_i(2, 4):
+			spots.append([Vector3(cluster[0] + _rng.range_f(-0.5, 0.5), 0.2, cluster[1] + _rng.range_f(-0.8, 0.8)), _rng.range_f(0.7, 1.3)])
+	pm.instance_count = spots.size()
+	for i in spots.size():
+		var size: float = spots[i][1]
+		pm.set_instance_transform(i, Transform3D(Basis.from_euler(Vector3(0, _rng.range_f(0.0, TAU), 0)).scaled(Vector3.ONE * size),
+				spots[i][0] * Vector3(1, size, 1)))
+	var pumpkins := MultiMeshInstance3D.new()
+	pumpkins.multimesh = pm
+	pumpkins.material_override = _colour_mat(Color("f08214"), 0.6)
+	add_child(pumpkins)
+
+	var bale := CylinderMesh.new()
+	bale.top_radius = 0.55
+	bale.bottom_radius = 0.55
+	bale.height = 0.8
+	bale.radial_segments = 14
+	for b: Array in [[11.9, -1.2, 0.3], [12.6, -8.8, 1.2], [-11.9, 3.4, 0.9], [-12.7, 10.6, 0.1], [11.4, -9.6, 2.0]]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = bale
+		mi.rotation = Vector3(0, b[2], PI * 0.5)
+		mi.position = Vector3(b[0], 0.55, b[1])
+		mi.material_override = _colour_mat(Color("e3bd4f"), 0.95)
+		add_child(mi)
+
+
+# --- Leaves ----------------------------------------------------------------------------------
+
+func _build_leaves() -> void:
+	var leaf_tex := _leaf_texture()
+	# Fallen leaves: thick under the trees, a scattering blown onto the edges of the field.
+	var lying := StandardMaterial3D.new()
+	lying.albedo_texture = leaf_tex
+	lying.vertex_color_use_as_albedo = true
+	lying.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	lying.cull_mode = BaseMaterial3D.CULL_DISABLED
+	lying.roughness = 0.9
+	var flat := PlaneMesh.new()
+	flat.size = Vector2(0.24, 0.24)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = flat
+	var spots: Array = []
+	for i in 2600:
+		var x := _rng.range_f(-22.0, 22.0)
+		var z := _rng.range_f(-27.0, 21.0)
+		var on_field := absf(x) < FIELD_HALF_W and absf(z) < FIELD_HALF_L
+		if on_field:
+			# Only near the edges, and thinning quickly toward the middle.
+			var from_edge := minf(FIELD_HALF_W - absf(x), FIELD_HALF_L - absf(z))
+			if from_edge > 2.6 or _rng.next_f() > 0.5:
+				continue
+		if absf(z) < 1.45:
+			continue
+		spots.append(Vector3(x, height(x, z) + 0.03, z))
+	mm.instance_count = spots.size()
+	for i in spots.size():
+		var size := _rng.range_f(0.7, 1.4)
+		var b := Basis.from_euler(Vector3(_rng.range_f(-0.25, 0.25), _rng.range_f(0.0, TAU), _rng.range_f(-0.25, 0.25))).scaled(Vector3.ONE * size)
+		mm.set_instance_transform(i, Transform3D(b, spots[i]))
+		mm.set_instance_color(i, _leaf_colour())
+	var litter := MultiMeshInstance3D.new()
+	litter.multimesh = mm
+	litter.material_override = lying
+	litter.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(litter)
+
+	# Falling leaves: a slow drift across the whole field, spinning as they come down.
+	var falling := StandardMaterial3D.new()
+	falling.albedo_texture = leaf_tex
+	falling.vertex_color_use_as_albedo = true
+	falling.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	falling.cull_mode = BaseMaterial3D.CULL_DISABLED
+	falling.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	falling.roughness = 0.9
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.3, 0.3)
+	quad.material = falling
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75, 1.0])
+	ramp.colors = PackedColorArray([LEAVES[0], LEAVES[2], LEAVES[3], LEAVES[1], LEAVES[5]])
+	var fade := Gradient.new()
+	fade.offsets = PackedFloat32Array([0.0, 0.08, 0.85, 1.0])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	var p := CPUParticles3D.new()
+	p.mesh = quad
+	p.amount = 70
+	p.lifetime = 6.5
+	p.preprocess = 6.5
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(13.0, 0.6, 19.0)
+	p.position = Vector3(-1.0, 6.5, -1.0)
+	p.direction = Vector3(0.5, -1.0, 0.1)
+	p.spread = 22.0
+	p.gravity = Vector3(0.22, -0.16, 0.05)
+	p.initial_velocity_min = 0.5
+	p.initial_velocity_max = 1.0
+	p.angle_min = 0.0
+	p.angle_max = 360.0
+	p.angular_velocity_min = -140.0
+	p.angular_velocity_max = 140.0
+	p.scale_amount_min = 0.7
+	p.scale_amount_max = 1.3
+	p.color_initial_ramp = ramp
+	p.color_ramp = fade
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(p)
+
+
+# --- Light -----------------------------------------------------------------------------------
+
+func _build_light_effects() -> void:
+	# Shafts of low sun slanting in over the eastern woods: faint additive sheets that shimmer.
+	var beam := ShaderMaterial.new()
+	beam.shader = Shader.new()
+	beam.shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
+uniform sampler2D noise : filter_linear_mipmap, repeat_enable;
+instance uniform float seed = 0.0;
+void fragment() {
+	float across = 1.0 - abs(UV.x * 2.0 - 1.0);
+	float along = smoothstep(0.0, 0.15, UV.y) * (1.0 - smoothstep(0.55, 1.0, UV.y));
+	float shimmer = texture(noise, vec2(UV.x * 0.6 + seed, UV.y * 0.25 + TIME * 0.01 + seed)).r;
+	ALBEDO = vec3(1.0, 0.82, 0.5);
+	ALPHA = across * across * along * (0.35 + 0.65 * shimmer) * 0.085;
+}
+"""
+	beam.set_shader_parameter("noise", _noise(0.03, 51))
+	var sheet := PlaneMesh.new()
+	sheet.size = Vector2(5.0, 30.0)
+	for i in 6:
+		var mi := MeshInstance3D.new()
+		mi.mesh = sheet
+		mi.material_override = beam
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# Each sheet runs from high over the right-hand woods down across the field.
+		mi.position = Vector3(4.0 + _rng.range_f(-1.5, 1.5), 3.2, -13.0 + i * 5.2 + _rng.range_f(-1.0, 1.0))
+		mi.rotation = Vector3(0.0, deg_to_rad(62.0 + _rng.range_f(-6.0, 6.0)), deg_to_rad(-14.0))
+		mi.set_instance_shader_parameter("seed", _rng.next_f() * 10.0)
+		add_child(mi)
+
+	# Motes in the sunlight: tiny bright specks drifting over the grass.
+	var speck := StandardMaterial3D.new()
+	speck.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	speck.albedo_color = Color(1.0, 0.92, 0.7)
+	speck.vertex_color_use_as_albedo = true
+	speck.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	speck.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	speck.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	var dot := QuadMesh.new()
+	dot.size = Vector2(0.09, 0.09)
+	dot.material = speck
+	var glow := Gradient.new()
+	glow.offsets = PackedFloat32Array([0.0, 0.3, 0.7, 1.0])
+	glow.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 0.9), Color(1, 1, 1, 0.9), Color(1, 1, 1, 0)])
+	var motes := CPUParticles3D.new()
+	motes.mesh = dot
+	motes.amount = 60
+	motes.lifetime = 7.0
+	motes.preprocess = 7.0
+	motes.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	motes.emission_box_extents = Vector3(11.0, 1.4, 17.0)
+	motes.position = Vector3(0.0, 2.4, 0.0)
+	motes.direction = Vector3(1.0, 0.3, 0.2)
+	motes.spread = 60.0
+	motes.gravity = Vector3(0.03, 0.02, 0.0)
+	motes.initial_velocity_min = 0.05
+	motes.initial_velocity_max = 0.25
+	motes.color_ramp = glow
+	motes.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(motes)
