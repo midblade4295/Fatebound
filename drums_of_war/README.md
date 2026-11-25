@@ -8,7 +8,7 @@ This is stage 2 of the concept. Stage 1 was a grey box that proved the rules; th
 the same match in the chosen art style: a 3D battlefield, generated character and prop models,
 smoke, sound, and card portraits. The rules engine is unchanged.
 
-![Grey-box battle screen from stage 1](docs/greybox.png)
+![The art slice: a match in progress](docs/artslice.png)
 
 ## Run and test
 

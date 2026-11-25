@@ -16,7 +16,7 @@ const SOLDIER_MODELS := {
 	"heavy_cavalry": ["u_cav", "c_cav"],
 	"field_gun": ["u_line", "c_line"],
 }
-const HEIGHTS := {"infantry": 2.1, "artillery": 2.1, "scouts": 2.8, "heavy_cavalry": 3.2}
+const HEIGHTS := {"infantry": 2.1, "artillery": 2.1, "skirmishers": 2.2, "militia": 2.0, "scouts": 2.8, "heavy_cavalry": 3.2}
 const SHARED_CLIPS := "u_line"     # rigged characters without clips of their own borrow this one's
 # Degrees to turn each generated model about the vertical so that it faces "forward" (-Z):
 # characters and riders come facing +Z, gun muzzles along -X, bridge and fence run along X.
@@ -158,10 +158,32 @@ static func _library(name: String) -> AnimationLibrary:
 		temp.free()
 	if found == 0 and name != SHARED_CLIPS:
 		# Every generated rig has the same bones, so one character's clips drive them all.
-		_libraries[name] = _library(SHARED_CLIPS)
+		_libraries[name] = _borrowed_library()
 	else:
 		_libraries[name] = lib if found > 0 else null
 	return _libraries[name]
+
+
+## The shared clips with only what transfers between characters: bone rotations, and the hips'
+## movement. The clips' other position and scale tracks hold the first character's own bone
+## lengths, which would pull every borrower toward his proportions.
+static func _borrowed_library() -> AnimationLibrary:
+	if _libraries.has("_borrowed"):
+		return _libraries["_borrowed"]
+	var source := _library(SHARED_CLIPS)
+	var out: AnimationLibrary = null
+	if source != null:
+		out = AnimationLibrary.new()
+		for clip: StringName in source.get_animation_list():
+			var anim: Animation = source.get_animation(clip).duplicate()
+			for track in range(anim.get_track_count() - 1, -1, -1):
+				var kind := anim.track_get_type(track)
+				var is_hips := String(anim.track_get_path(track)).to_lower().ends_with(":hips")
+				if kind == Animation.TYPE_SCALE_3D or (kind == Animation.TYPE_POSITION_3D and not is_hips):
+					anim.remove_track(track)
+			out.add_animation(clip, anim)
+	_libraries["_borrowed"] = out
+	return out
 
 
 ## The rules move regiments; a clip that also walks the hips forward would double the motion.
