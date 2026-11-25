@@ -34,6 +34,7 @@ var _bake_rows: Array = []        # world position -> baked-shade texture coordi
 var _bake_draws: int = 0
 var _live_casters: Array = []     # trees that go back to casting live shadows if the bake cannot be made
 var _ground_mat: ShaderMaterial
+var _groups: Dictionary = {}      # name -> nodes, for the on-device cost meter (bench.gd)
 var _extras: Array = []           # falling leaves and motes: pretty, and the first to go on a slow device
 
 
@@ -201,6 +202,19 @@ func set_plain_ground(on: bool) -> void:
 		_ground_mat.set_shader_parameter("plain", on)
 
 
+func _group(group: String, node: Node3D) -> void:
+	if not _groups.has(group):
+		_groups[group] = []
+	_groups[group].append(node)
+
+
+## Shows or hides one kind of scenery: "plants", "grass", "props", "water" or "litter".
+func show_group(group: String, on: bool) -> void:
+	for node: Node3D in _groups.get(group, []):
+		if is_instance_valid(node):
+			node.visible = on
+
+
 func set_extras(on: bool) -> void:
 	for node: Node3D in _extras:
 		node.visible = on
@@ -299,6 +313,7 @@ func _build_water() -> void:
 	mat.set_shader_parameter("bridge_half", BRIDGE_HALF_W + 0.25)
 	water.material_override = mat
 	add_child(water)
+	_group("water", water)
 
 
 func _colour_mat(colour: Color, roughness: float = 0.85) -> StandardMaterial3D:
@@ -313,6 +328,7 @@ func _build_bridge_and_stones() -> void:
 	if bridge != null:
 		Models.fit_footprint(bridge, BRIDGE_HALF_W * 2.0 + 0.5, BRIDGE_HALF_L * 2.0)
 		add_child(bridge)
+		_group("props", bridge)
 	else:
 		var deck := MeshInstance3D.new()
 		var box := BoxMesh.new()
@@ -367,6 +383,7 @@ func _scatter_model(model: String, where: Array, min_size: float, max_size: floa
 		node.position = Vector3(p.x, height(p.x, p.z) - 0.05, p.z)
 		node.rotation.y = _rng.range_f(0.0, TAU)
 		add_child(node)
+		_group("props", node)
 		for mi: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			mi.lod_bias = 0.6
@@ -505,6 +522,7 @@ void fragment() {
 		grass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		grass.material_override = mat
 		add_child(grass)
+		_group("grass", grass)
 
 	# Wildflowers: small bright heads standing in the meadow grass.
 	var head := SphereMesh.new()
@@ -543,6 +561,7 @@ void fragment() {
 	flower_mat.roughness = 0.8
 	flower_node.material_override = flower_mat
 	add_child(flower_node)
+	_group("grass", flower_node)
 
 
 # --- Woods ---------------------------------------------------------------------------------
@@ -620,6 +639,7 @@ func _plant(model: String, pos: Vector3, tall: float, shadow: bool = true, detai
 		mi.set_instance_shader_parameter("leaf_col", tint)
 		mi.set_instance_shader_parameter("sway", _rng.range_f(0.0, TAU))
 	add_child(node)
+	_group("plants", node)
 	return true
 
 
@@ -712,6 +732,7 @@ func _build_fences() -> void:
 			Models.fit_footprint(fence, 0.4, 3.5)
 			fence.position = Vector3(side * 9.55, 0.0, z)
 			add_child(fence)
+			_group("props", fence)
 			for mi: MeshInstance3D in fence.find_children("*", "MeshInstance3D", true, false):
 				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				mi.lod_bias = 0.6
@@ -802,6 +823,7 @@ func _build_leaves() -> void:
 	litter.material_override = lying
 	litter.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(litter)
+	_group("litter", litter)
 
 	# Falling leaves: a slow drift across the whole field, spinning as they come down.
 	var falling := StandardMaterial3D.new()

@@ -8,6 +8,7 @@ const World = preload("res://scripts/view/battle_world.gd")
 const Kit = preload("res://scripts/view/ui_kit.gd")
 const CardView = preload("res://scripts/view/card_view.gd")
 const Quality = preload("res://scripts/view/quality.gd")
+const Bench = preload("res://scripts/view/bench.gd")
 
 const DECK := ["line_infantry", "skirmishers", "militia", "scouts", "heavy_cavalry", "field_gun", "fire", "rally"]
 
@@ -90,11 +91,14 @@ var _fps_worst: float = 0.0
 var _fps_text: String = ""
 var show_fps: bool = true
 var quality: Quality
+var bench: Bench
+var _hud_hidden: bool = false
 
 
 func _ready() -> void:
 	kit = Kit.new()
 	quality = Quality.new()
+	bench = Bench.new()
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED      # the wood grain tiles
 	cards = Sim.load_cards()
 	if match_seed == 0:
@@ -196,6 +200,13 @@ func _process(delta: float) -> void:
 		queue_redraw()
 		return                         # the battle starts once everything it needs is loaded
 	_curtain = maxf(0.0, _curtain - delta * 2.5)
+	if bench.running or bench.done:
+		# The cost meter is at work (or showing its list): the battle waits.
+		bench.tick()
+		_overlay.visible = true
+		_overlay.queue_redraw()
+		queue_redraw()
+		return
 	acc += delta
 	var steps := 0
 	while acc >= Sim.DT and steps < 6:
@@ -257,8 +268,13 @@ func _on_press(p: Vector2) -> void:
 	if sim.phase == Sim.PHASE_OVER:
 		start_match(match_seed + 1)
 		return
+	if bench.running:
+		return
+	if bench.done:
+		bench.done = false                # the list has been read: back to the battle
+		return
 	if show_fps and _fps_rect().has_point(p):
-		quality.restart(world, get_viewport())       # tap the readout: judge quality afresh from the top
+		bench.start(self)                 # tap the readout: measure what each part of the picture costs
 		return
 	_press_slot = _card_at(p)
 	_press_at = p
@@ -287,8 +303,15 @@ func _on_release(p: Vector2) -> void:
 		selected = -1
 
 
+## For the cost meter: draws nothing of the HUD and hides the cards, to see what they cost.
+func set_hud_hidden(hidden: bool) -> void:
+	_hud_hidden = hidden
+	for card: CardView in hand_cards:
+		card.visible = not hidden
+
+
 func _fps_rect() -> Rect2:
-	return Rect2(ox + 22.0, plaque.end.y + 2.0, 200.0, 26.0)
+	return Rect2(ox + 16.0, plaque.end.y - 2.0, 300.0, 34.0)
 
 
 ## Frames a second, and the longest single frame in the last second (a hitch shows there even
@@ -302,9 +325,9 @@ func _count_frames() -> void:
 	if now - _fps_since >= 1000:
 		var fps := _fps_frames * 1000.0 / maxf(1.0, float(now - _fps_since))
 		# Judge the frame rate only while a battle is actually running in front of the player.
-		if not world.warming() and _curtain <= 0.0 and sim.phase != Sim.PHASE_OVER:
+		if not world.warming() and _curtain <= 0.0 and sim.phase != Sim.PHASE_OVER and not bench.running and not bench.done:
 			quality.report(fps, world, get_viewport())
-		_fps_text = "%d FPS   worst %d ms   Q%d" % [int(round(fps)), int(_fps_worst), quality.level]
+		_fps_text = "%d FPS   worst %d ms   Q%d   tap to measure" % [int(round(fps)), int(_fps_worst), quality.level]
 		_fps_frames = 0
 		_fps_since = now
 		_fps_worst = 0.0
@@ -523,6 +546,8 @@ func _word(pos: Vector2, text: String, colour: Color) -> void:
 # ==========================================================================================
 
 func _draw() -> void:
+	if _hud_hidden:
+		return
 	_draw_vignette()
 	if selected >= 0:
 		_draw_deploy_zone()
@@ -733,6 +758,17 @@ func _art(card_id: String) -> Texture2D:
 ## above the cards.
 func _draw_result() -> void:
 	var c: CanvasItem = _overlay
+	if bench.running:
+		kit.outlined(c, Vector2(screen.x * 0.5, screen.y * 0.5), bench.progress, 18, Kit.CREAM, 520.0, 6)
+		return
+	if bench.done:
+		var rows := bench.lines
+		var panel := Rect2(8.0, plaque.end.y + 30.0, screen.x - 16.0, 26.0 + rows.size() * 19.0)
+		c.draw_style_box(kit.box("bench_panel", Color(0.08, 0.05, 0.03, 0.93), 8.0, 2.0, Kit.BRASS_MID), panel)
+		for i in rows.size():
+			c.draw_string(kit.font, panel.position + Vector2(12.0, 26.0 + i * 19.0), rows[i], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 20.0, 11,
+					Kit.CREAM if i != 2 else Kit.AMBER)
+		return
 	if _curtain > 0.0:
 		c.draw_rect(Rect2(Vector2.ZERO, screen), Color(0.13, 0.08, 0.04, _curtain))
 		kit.outlined(c, Vector2(screen.x * 0.5, screen.y * 0.45), "DRUMS OF WAR", 34, Color(Kit.CREAM, _curtain), 500.0, 8)

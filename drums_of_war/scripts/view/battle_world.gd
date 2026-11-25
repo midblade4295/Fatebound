@@ -352,6 +352,12 @@ func _build_structure(s: Sim.Structure) -> Node3D:
 			made.position.x += 0.68
 		else:
 			Models.fit_footprint(made, 3.3, 3.3)
+		# Each building is about 250 pixels across on a phone but modelled with some 25,000
+		# triangles; drawn in full, the six of them were half of everything on screen. At
+		# this size a coarser level of the same model looks the same (its surface detail
+		# comes from its normal map), so ask for one.
+		for mi: MeshInstance3D in made.find_children("*", "MeshInstance3D", true, false):
+			mi.lod_bias = float(OS.get_environment("STRUCT_LOD")) if OS.has_environment("STRUCT_LOD") else 0.3
 		root.add_child(made)
 		return root
 	if made == null:
@@ -561,6 +567,19 @@ func set_quality(level: int) -> void:
 		arena.set_extras(level < 4)
 	if _sun != null:
 		_sun.shadow_enabled = level < 3
+
+
+## Shows or hides everything that moves: regiments, falling men, smoke and sparks. For the
+## on-device cost meter (bench.gd).
+func show_troops(on: bool) -> void:
+	for id in _regiments:
+		_regiments[id].root.visible = on
+	for e: Dictionary in _leaving:
+		e["node"].visible = on
+	if _puff_mesh != null:
+		_puff_mesh.visible = on
+	if _contact != null:
+		_contact.visible = on
 
 
 ## True while warm_up() still has things on show or figures left to build for the first deploys.

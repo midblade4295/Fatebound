@@ -29,7 +29,7 @@ var _settle: int = 3               # readings to ignore after a change (or at th
 
 
 func _init() -> void:
-	enabled = DisplayServer.get_name() != "headless"
+	enabled = DisplayServer.get_name() != "headless" and not OS.has_environment("DRUMS_NO_GOVERNOR")
 	var rate := DisplayServer.screen_get_refresh_rate()
 	target = clampf(rate, 30.0, 60.0) if rate > 1.0 else 60.0
 	if enabled:

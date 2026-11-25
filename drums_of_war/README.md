@@ -93,6 +93,9 @@ match goes to one minute of sudden-death overtime.
   detail, then live shadows) until it holds. It is a safety net and slow to act: the game is
   built to run at level 0. The picture is never scaled down. The level is shown
   beside the FPS readout; tapping the readout starts again from the top.
+- `scripts/view/bench.gd`: a cost meter that runs on the device. Tap the FPS readout: it turns
+  each part of the picture off in turn, reads the engine's GPU and CPU render timers with and
+  without it, and lists what each part costs per frame, heaviest first.
 - `scripts/view/arena.gd`: the scenery, set in autumn: ground sculpted with a real creek channel,
   water, grass tufts and reeds, wheat, woods in fall colours, leaf litter and falling leaves,
   pumpkins and hay bales, drifting cloud shadow, sunbeams and motes, stepping stones. Units wade the fords and climb the
