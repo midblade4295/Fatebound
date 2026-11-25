@@ -5,6 +5,7 @@ extends Node3D
 
 const Sim = preload("res://scripts/sim/battle_sim.gd")
 const Models = preload("res://scripts/view/models.gd")
+const Arena = preload("res://scripts/view/arena.gd")
 const Drill = preload("res://scripts/view/musket_drill.gd").Drill
 
 const COL_BLUE := Color("2456c9")
@@ -26,7 +27,8 @@ const MAX_PUFFS := 220
 var sim: Sim
 var local_side: int = 0
 var camera: Camera3D
-var field_rect_design := Rect2(2.0, 50.0, 536.0, 758.0)   # where the field must fit on the 540 x 960 screen
+var arena: Arena
+var field_rect_design := Rect2(22.0, 58.0, 496.0, 748.0)   # where the field must fit on screen; the battle screen sets it
 
 var _regiments: Dictionary = {}       # regiment id -> RegimentView
 var _structures: Dictionary = {}      # structure id -> Node3D
@@ -52,8 +54,9 @@ func to_world(p: Vector2, height: float = 0.0) -> Vector3:
 
 ## Height of the ground a regiment stands on at a field position: 0 on grass, raised over the
 ## bridge, lowered where a ford is waded.
-func ground_height(_p: Vector2) -> float:
-	return 0.0
+func ground_height(p: Vector2) -> float:
+	var w := to_world(p)
+	return Arena.standing_height(w.x, w.z)
 
 
 func dir_to_world(d: Vector2) -> Vector3:
@@ -205,166 +208,23 @@ func fit_camera() -> void:
 
 
 func _build_arena() -> void:
-	var arena := Node3D.new()
+	var spots: Array = []
+	for s: Sim.Structure in sim.structures:
+		var w := to_world(s.pos)
+		spots.append(Vector2(w.x, w.z))
+	arena = Arena.new()
 	arena.name = "Arena"
 	add_child(arena)
-
-	# Meadow all around, then the mown field with its stripes.
-	var meadow := MeshInstance3D.new()
-	var meadow_mesh := PlaneMesh.new()
-	meadow_mesh.size = Vector2(90.0, 110.0)
-	meadow.mesh = meadow_mesh
-	meadow.position = Vector3(0, -0.02, 0)
-	meadow.material_override = _mat(COL_MEADOW, 0.95)
-	arena.add_child(meadow)
-
-	var field := MeshInstance3D.new()
-	var field_mesh := PlaneMesh.new()
-	field_mesh.size = Vector2(Sim.FIELD_W, Sim.FIELD_H)
-	field.mesh = field_mesh
-	var grass := ShaderMaterial.new()
-	grass.shader = Shader.new()
-	grass.shader.code = """
-shader_type spatial;
-uniform vec3 a : source_color;
-uniform vec3 b : source_color;
-varying vec3 wp;
-void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
-void fragment() {
-	float stripe = step(0.5, fract(wp.z * 0.25));
-	float edge = smoothstep(0.0, 0.5, min(9.0 - abs(wp.x), 16.0 - abs(wp.z)));
-	ALBEDO = mix(a, b, stripe) * mix(0.82, 1.0, edge);
-	ROUGHNESS = 0.92;
-}
-"""
-	grass.set_shader_parameter("a", COL_GRASS_A)
-	grass.set_shader_parameter("b", COL_GRASS_B)
-	field.material_override = grass
-	arena.add_child(field)
-
-	# The creek runs the full width of the view, not just the field.
-	var creek_len := (Sim.CREEK_Y1 - Sim.CREEK_Y0)
-	var creek_z := to_world(Vector2(0, (Sim.CREEK_Y0 + Sim.CREEK_Y1) * 0.5)).z
-	var creek := MeshInstance3D.new()
-	var creek_mesh := PlaneMesh.new()
-	creek_mesh.size = Vector2(90.0, creek_len)
-	creek.mesh = creek_mesh
-	creek.position = Vector3(0, 0.03, creek_z)
-	var water := ShaderMaterial.new()
-	water.shader = Shader.new()
-	water.shader.code = """
-shader_type spatial;
-uniform vec3 deep : source_color;
-uniform vec3 light : source_color;
-varying vec3 wp;
-void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
-void fragment() {
-	float w = sin(wp.x * 2.6 + TIME * 1.4 + sin(wp.z * 5.0 + TIME) * 1.3) * 0.5 + 0.5;
-	float w2 = sin(wp.x * 5.1 - TIME * 0.9 + wp.z * 3.0) * 0.5 + 0.5;
-	ALBEDO = mix(deep, light, smoothstep(0.86, 1.0, w) * 0.3 + smoothstep(0.93, 1.0, w2) * 0.18);
-	ROUGHNESS = 0.25;
-	SPECULAR = 0.6;
-}
-"""
-	water.set_shader_parameter("deep", COL_CREEK)
-	water.set_shader_parameter("light", COL_CREEK_LIGHT)
-	creek.material_override = water
-	arena.add_child(creek)
-	# Banks
-	for sign_z in [-1.0, 1.0]:
-		_box(arena, Vector3(90.0, 0.08, 0.22), Vector3(0, 0.02, creek_z + sign_z * (creek_len * 0.5 + 0.08)), Color("d9c9a0"), false)
-
-	for c: Dictionary in Sim.CROSSINGS:
-		var cx := to_world(Vector2(float(c["x"]), 0)).x
-		var half := float(c["half"])
-		if bool(c["ford"]):
-			var ford := MeshInstance3D.new()
-			var fm := PlaneMesh.new()
-			fm.size = Vector2(half * 2.0, creek_len + 0.3)
-			ford.mesh = fm
-			ford.position = Vector3(cx, 0.045, creek_z)
-			ford.material_override = _mat(Color(COL_FORD, 0.7), 0.6)
-			arena.add_child(ford)
-			for k in 9:
-				var pebble := MeshInstance3D.new()
-				var pm := SphereMesh.new()
-				pm.radius = 0.11 + 0.04 * (k % 3)
-				pm.height = pm.radius * 1.1
-				pm.radial_segments = 8
-				pm.rings = 4
-				pebble.mesh = pm
-				pebble.position = Vector3(cx + sin(k * 1.7) * (half - 0.25), 0.05, creek_z + sin(k * 2.4) * creek_len * 0.4)
-				pebble.material_override = _mat(Color("e8e2d2"))
-				arena.add_child(pebble)
-		else:
-			var bridge := Models.make("bridge", 0)
-			if bridge != null:
-				Models.fit_footprint(bridge, half * 2.0 + 0.5, creek_len + 1.4)
-				bridge.position = Vector3(cx, 0.0, creek_z)
-				arena.add_child(bridge)
-			else:
-				_box(arena, Vector3(half * 2.0, 0.34, creek_len + 1.0), Vector3(cx, 0.1, creek_z), COL_STONE)
-				for sx in [-1.0, 1.0]:
-					_box(arena, Vector3(0.24, 0.5, creek_len + 1.0), Vector3(cx + sx * (half - 0.12), 0.42, creek_z), COL_STONE.darkened(0.12))
-
-	# Scenery along both edges: trees, a wheat patch and fences. Never on the field itself.
-	var spots := [[-10.6, -13.0, 1.0], [10.7, -9.0, 1.15], [-10.9, -3.5, 0.9], [10.6, 4.5, 1.0],
-			[-10.5, 9.5, 1.1], [10.9, 13.0, 0.95], [-11.3, 15.2, 1.2], [11.2, -15.0, 1.05], [-10.4, 3.2, 0.8]]
-	for s: Array in spots:
-		_add_tree(arena, Vector3(s[0], 0, s[1]), s[2])
-	_box(arena, Vector3(2.2, 0.5, 5.0), Vector3(11.4, 0.25, -3.0), Color("f0c444"))        # wheat
-	_box(arena, Vector3(2.2, 0.5, 4.0), Vector3(-11.4, 0.25, 6.4), Color("f0c444"))
-	for z in [-12.0, -6.0, 6.0, 12.0]:
-		for sx in [-1.0, 1.0]:
-			_add_fence(arena, Vector3(sx * 9.45, 0, z))
+	arena.build(spots)
 
 	for s: Sim.Structure in sim.structures:
 		var node := _build_structure(s)
 		node.position = to_world(s.pos)
 		if s.side != local_side and s.kind != "hq":
 			node.rotation.y = PI            # enemy guns point at you; both farmhouses show their porch
-		arena.add_child(node)
+		add_child(node)
 		_structures[s.id] = node
 		_structure_dead[s.id] = false
-
-
-func _add_tree(parent: Node3D, pos: Vector3, scale_by: float) -> void:
-	var tree := Models.make("tree", 0)
-	if tree != null:
-		Models.fit_height(tree, 2.6 * scale_by)
-		tree.position = pos
-		tree.rotation.y = pos.z * 1.7
-		parent.add_child(tree)
-		return
-	var t := Node3D.new()
-	t.position = pos
-	t.scale = Vector3.ONE * scale_by
-	_cyl(t, 0.22, 0.9, Vector3(0, 0.45, 0), COL_WOOD.darkened(0.2), 0.16)
-	for b: Array in [[0.0, 1.5, 0.0, 0.95], [0.45, 1.25, 0.2, 0.62], [-0.4, 1.3, -0.25, 0.66], [0.05, 2.05, 0.05, 0.6]]:
-		var blob := MeshInstance3D.new()
-		var sm := SphereMesh.new()
-		sm.radius = b[3]
-		sm.height = b[3] * 1.8
-		sm.radial_segments = 12
-		sm.rings = 6
-		blob.mesh = sm
-		blob.position = Vector3(b[0], b[1], b[2])
-		blob.material_override = _mat(Color("3f9a3c") if b[3] > 0.7 else Color("4eac45"))
-		t.add_child(blob)
-	parent.add_child(t)
-
-
-func _add_fence(parent: Node3D, pos: Vector3) -> void:
-	var fence := Models.make("fence", 0)
-	if fence != null:
-		Models.fit_footprint(fence, 0.3, 3.4)
-		fence.position = pos
-		parent.add_child(fence)
-		return
-	for k in 3:
-		_box(parent, Vector3(0.14, 0.62, 0.14), pos + Vector3(0, 0.31, (k - 1) * 1.5), COL_WOOD)
-	for h in [0.26, 0.5]:
-		_box(parent, Vector3(0.08, 0.09, 3.3), pos + Vector3(0, h, 0), COL_WOOD.lightened(0.1))
 
 
 func team_colour(side: int) -> Color:

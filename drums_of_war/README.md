@@ -71,8 +71,14 @@ match goes to one minute of sudden-death overtime.
 - `scripts/sim/bot.gd`: the computer opponent. It plays through the same `deploy()` a player uses.
 - `scripts/view/battle_screen.gd`: runs the match, takes input, plays sound, and draws the HUD
   (cards, Powder, clock, health and nerve bars) over the 3D view.
-- `scripts/view/battle_world.gd`: the 3D battlefield: arena, structures, regiments in formation,
-  smoke, flashes, lighting, and the camera that fits the field to the screen.
+- `scripts/view/battle_world.gd`: the 3D battlefield: structures, regiments in formation, smoke,
+  flashes, lighting, and the camera that fits the field to whatever shape the screen is.
+- `scripts/view/arena.gd`: the scenery: ground sculpted with a real creek channel, water, grass
+  tufts and reeds, wheat, wildflowers, woods, stepping stones. Units wade the fords and climb the
+  bridge because the view asks it how high the ground is.
+- `scripts/view/musket_drill.gd`: makes infantry hold their muskets. It moves the musket through
+  drill positions (shoulder, port, aim, recoil, load, charge) and places both hands on it with
+  two-bone inverse kinematics, after the body clip has played.
 - `scripts/view/models.gd`: hands out figures and props. A generated model is used when
   `assets/models/<name>/<name>.glb` exists; otherwise a primitive stand-in is built, so any card
   can be played before its model is made.
@@ -93,14 +99,20 @@ match goes to one minute of sudden-death overtime.
 4. Animation clips (idle, walk, run, fire, death) were made once, for the Union line
    infantryman. Every other rigged character borrows them, because the rigs share one skeleton.
 
-Cavalry are single unrigged models and move like toys: they hop and rock. Horses with real
-gaits need a quadruped rig, which this stage does not have.
+Cavalry are single unrigged models. A vertex shader swings everything below the horse's belly
+fore and aft and rocks the body, which reads as a gallop at game distance; a real gait needs a
+quadruped rig, which this stage does not have.
+
+The game fills the screen on any shape of display (`window/stretch/aspect="expand"`); the HUD
+is pinned to the top and bottom, clear of a notch or gesture bar, and the camera refits the field.
 
 ## Not in yet
 
 The other ten cards of the 18-card launch deck, smoke as a rule (it is a visual effect only),
 deck building, a menu, and online play. Known rough edges in this stage: the sounds were chosen
-by measurement and have not been listened to; muskets are fixed to one hand and only sit right
-in the firing pose; cavalry are not animated; the HUD is still plain. The Android APK builds
+by measurement and have not been listened to; the body clips under the musket drill are still
+the first set (a wide-stance idle, a plain walk); every tree is the one tree model in different
+sizes and greens (reference images for an oak, pine, birch, bush and log are in `assets/models/`
+but their models have not been made); the HUD is still plain. The Android APK builds
 and is signed, but has not been run on a physical phone, and nothing here has been profiled on
 one. Balance is the stage 1 first pass, tuned on bot-versus-bot matches.

@@ -84,7 +84,7 @@ func _process(_delta: float) -> bool:
 		if sim.phase == Sim.PHASE_OVER:
 			finished = true
 			check(sim.winner >= 0, "the match reaches a result")
-			tap(Vector2(270, 480))
+			tap(screen.screen * 0.5)
 	elif finished:
 		check(screen.sim.phase != Sim.PHASE_OVER and screen.sim.time < 1.0, "tapping the result starts a new match")
 		print("frames: %d, failures: %d" % [frame, failures])

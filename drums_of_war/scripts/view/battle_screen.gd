@@ -8,8 +8,11 @@ const World = preload("res://scripts/view/battle_world.gd")
 
 const DECK := ["line_infantry", "skirmishers", "militia", "scouts", "heavy_cavalry", "field_gun", "fire", "rally"]
 
-# Layout, in the 540 x 960 design space.
-const HUD_Y := 816.0
+# Layout. The design space is 540 wide; the game fills whatever screen it is given, so the
+# height (and on tablets the width) is whatever the display's shape makes it. _layout() works
+# out where the top bar and the card tray sit, clear of any notch or gesture bar.
+const HUD_H := 144.0
+const BAR_H := 44.0
 const CARD_SIZE := Vector2(104.0, 96.0)
 const CARD_X0 := 84.0
 const CARD_STEP := 112.0
@@ -49,6 +52,13 @@ var _last_played: Dictionary = {}
 var _clock: float = 0.0
 var _card_art: Dictionary = {}
 
+var screen: Vector2 = Vector2(540.0, 960.0)   # the visible area, in design units
+var top: float = 0.0                # height kept clear at the top (camera notch)
+var bottom: float = 0.0             # ... and at the bottom (gesture bar)
+var ox: float = 0.0                 # left edge of the centred 540-wide HUD column
+var hud_y: float = 816.0            # top of the card tray
+var _laid_out: bool = false
+
 
 func _ready() -> void:
 	font = ThemeDB.fallback_font
@@ -78,7 +88,33 @@ func start_match(seed_value: int) -> void:
 		_music.play()
 
 
+## Fits the HUD and the battlefield to the screen as it is right now.
+func _layout() -> void:
+	var now := get_viewport_rect().size
+	var new_top := 0.0
+	var new_bottom := 0.0
+	if OS.has_feature("mobile"):
+		var window := Vector2(DisplayServer.window_get_size())
+		var safe := DisplayServer.get_display_safe_area()
+		if window.y > 0.0 and safe.size.y > 0:
+			var per_pixel := now.y / window.y
+			new_top = clampf(float(safe.position.y) * per_pixel, 0.0, 90.0)
+			new_bottom = clampf((window.y - float(safe.end.y)) * per_pixel, 0.0, 90.0)
+	if now == screen and new_top == top and new_bottom == bottom and world.field_rect_design.size.x > 0.0 and _laid_out:
+		return
+	_laid_out = true
+	screen = now
+	top = new_top
+	bottom = new_bottom
+	ox = (screen.x - 540.0) * 0.5
+	hud_y = screen.y - HUD_H - bottom
+	var field_top := top + BAR_H + 14.0
+	world.field_rect_design = Rect2(22.0, field_top, screen.x - 44.0, hud_y - field_top - 10.0)
+	world.fit_camera()
+
+
 func _process(delta: float) -> void:
+	_layout()
 	_clock += delta
 	acc += delta
 	var steps := 0
@@ -130,7 +166,7 @@ func _on_press(p: Vector2) -> void:
 func _on_release(p: Vector2) -> void:
 	if selected < 0 or sim.phase == Sim.PHASE_OVER:
 		return
-	if p.y >= HUD_Y or p.y < 44.0:
+	if p.y >= hud_y or p.y < top + BAR_H:
 		return
 	var where := to_field(p)
 	var why := sim.deploy_error(local_side, selected, where)
@@ -150,7 +186,7 @@ func _card_at(p: Vector2) -> int:
 
 
 func _card_rect(i: int) -> Rect2:
-	return Rect2(Vector2(CARD_X0 + CARD_STEP * i, HUD_Y + 8.0), CARD_SIZE)
+	return Rect2(Vector2(ox + CARD_X0 + CARD_STEP * i, hud_y + 8.0), CARD_SIZE)
 
 
 func to_screen(p: Vector2, height: float = 0.0) -> Vector2:
@@ -322,7 +358,7 @@ func _draw_deploy_zone() -> void:
 			var quad := _field_quad(x0, x0 + Sim.FIELD_W * 0.5, 0.0, depth)
 			draw_colored_polygon(quad, tint)
 			draw_line(quad[2], quad[3], edge, 2.0)
-	if pointer.y < HUD_Y and pointer.y > 44.0:
+	if pointer.y < hud_y and pointer.y > top + BAR_H:
 		var at := to_field(pointer)
 		var ok := sim.deploy_error(local_side, selected, at) == ""
 		var ring := COL_PAPER if ok else Color("ff5a4d")
@@ -373,7 +409,8 @@ func _draw_words() -> void:
 
 func _draw_top_bar() -> void:
 	var enemy := 1 - local_side
-	draw_rect(Rect2(0, 0, 540, 44), Color(COL_INK, 0.92))
+	draw_rect(Rect2(0, 0, screen.x, top + BAR_H), Color(COL_INK, 0.92))
+	draw_set_transform(Vector2(ox, top), 0.0, Vector2.ONE)
 	_text(Vector2(16, 29), "ENEMY", 16, COL_RED.lightened(0.35), HORIZONTAL_ALIGNMENT_LEFT)
 	_text(Vector2(524, 29), "YOU", 16, COL_BLUE.lightened(0.45), HORIZONTAL_ALIGNMENT_RIGHT)
 	for i in 2:
@@ -391,25 +428,29 @@ func _draw_top_bar() -> void:
 		_outlined(Vector2(270, 64), "OVERTIME", 14, Color("ff8a1f"))
 	elif sim.double_powder() and sim.phase != Sim.PHASE_OVER:
 		_outlined(Vector2(270, 64), "DOUBLE POWDER", 14, COL_AMBER)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if notice_time > 0.0:
 		var a := clampf(notice_time, 0.0, 1.0)
-		draw_rect(Rect2(70, 392, 400, 34), Color(0, 0, 0, 0.6 * a))
-		_text(Vector2(270, 415), notice, 15, Color(COL_PAPER, a), HORIZONTAL_ALIGNMENT_CENTER, 400.0)
+		var mid := Vector2(screen.x * 0.5, (top + BAR_H + hud_y) * 0.5)
+		draw_rect(Rect2(mid.x - 200.0, mid.y - 17.0, 400, 34), Color(0, 0, 0, 0.6 * a))
+		_text(mid + Vector2(0, 6), notice, 15, Color(COL_PAPER, a), HORIZONTAL_ALIGNMENT_CENTER, 400.0)
 
 
 func _draw_hud() -> void:
-	draw_rect(Rect2(0, HUD_Y, 540, 960 - HUD_Y), COL_INK)
-	draw_rect(Rect2(0, HUD_Y, 540, 3), COL_BRASS.darkened(0.2))
+	draw_rect(Rect2(0, hud_y, screen.x, screen.y - hud_y), COL_INK)
+	draw_rect(Rect2(0, hud_y, screen.x, 3), COL_BRASS.darkened(0.2))
+	draw_set_transform(Vector2(ox, 0.0), 0.0, Vector2.ONE)       # the tray's contents sit in a centred column
 	var hand: Array = sim.hand(local_side)
 	var have: float = sim.powder[local_side]
 	var next_id := sim.next_card(local_side)
-	draw_rect(Rect2(14, HUD_Y + 30, 58, 62), Color(1, 1, 1, 0.12))
-	_text(Vector2(43, HUD_Y + 24), "NEXT", 11, Color(1, 1, 1, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
+	draw_rect(Rect2(14, hud_y + 30, 58, 62), Color(1, 1, 1, 0.12))
+	_text(Vector2(43, hud_y + 24), "NEXT", 11, Color(1, 1, 1, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
 	if next_id != "":
-		_draw_card_words(Vector2(43, HUD_Y + 56), String(cards[next_id]["name"]), 10, Color(1, 1, 1, 0.75), 56.0)
+		_draw_card_words(Vector2(43, hud_y + 56), String(cards[next_id]["name"]), 10, Color(1, 1, 1, 0.75), 56.0)
 	for i in hand.size():
 		var def: Dictionary = cards[hand[i]]
 		var rect := _card_rect(i)
+		rect.position.x -= ox
 		var can_pay := have + 0.0001 >= float(def["cost"])
 		if i == selected:
 			rect.position.y -= 10.0
@@ -434,7 +475,7 @@ func _draw_hud() -> void:
 		draw_arc(rect.position + Vector2(13, 12), 13.0, 0.0, TAU, 24, COL_INK, 2.0)
 		_text(rect.position + Vector2(13, 18), str(int(def["cost"])), 17, COL_INK, HORIZONTAL_ALIGNMENT_CENTER, 26.0)
 	var seg := 44.0
-	var y := HUD_Y + 116.0
+	var y := hud_y + 116.0
 	for i in int(Sim.POWDER_MAX):
 		var cell := Rect2(CARD_X0 + i * seg, y, seg - 4.0, 18)
 		draw_rect(cell, Color(1, 1, 1, 0.12))
@@ -443,6 +484,7 @@ func _draw_hud() -> void:
 			draw_rect(Rect2(cell.position, Vector2(cell.size.x * fill, cell.size.y)), COL_AMBER if fill >= 1.0 else COL_AMBER.darkened(0.35))
 	_text(Vector2(43, y + 15), "%d" % int(have), 20, COL_AMBER, HORIZONTAL_ALIGNMENT_CENTER, 58.0)
 	_text(Vector2(43, y - 4), "POWDER", 10, Color(1, 1, 1, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 58.0)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _art(card_id: String) -> Texture2D:
@@ -461,7 +503,9 @@ func _draw_card_words(centre: Vector2, name: String, size: int, colour: Color, w
 
 
 func _draw_result() -> void:
-	draw_rect(Rect2(0, 0, 540, 960), Color(0, 0, 0, 0.55))
+	draw_rect(Rect2(Vector2.ZERO, screen), Color(0, 0, 0, 0.55))
+	var cx := screen.x * 0.5
+	var cy := screen.y * 0.44
 	var text := "DRAW"
 	var col := COL_PAPER
 	if sim.winner == local_side:
@@ -470,11 +514,11 @@ func _draw_result() -> void:
 	elif sim.winner == 1 - local_side:
 		text = "DEFEAT"
 		col = Color("ff6a5a")
-	_text(Vector2(270, 420), text, 64, col, HORIZONTAL_ALIGNMENT_CENTER, 520.0)
+	_text(Vector2(cx, cy), text, 64, col, HORIZONTAL_ALIGNMENT_CENTER, 520.0)
 	var how := "Time ran out"
 	if sim.hq(0).dead or sim.hq(1).dead:
 		how = "The Colours were captured"
 	elif sim.time > Sim.MATCH_TIME + 0.5 and sim.time < Sim.MATCH_TIME + Sim.OVERTIME:
 		how = "Decided in overtime"
-	_text(Vector2(270, 462), how, 18, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, 520.0)
-	_text(Vector2(270, 520), "Tap to play again", 18, Color(1, 1, 1, 0.8), HORIZONTAL_ALIGNMENT_CENTER, 520.0)
+	_text(Vector2(cx, cy + 42.0), how, 18, COL_PAPER, HORIZONTAL_ALIGNMENT_CENTER, 520.0)
+	_text(Vector2(cx, cy + 100.0), "Tap to play again", 18, Color(1, 1, 1, 0.8), HORIZONTAL_ALIGNMENT_CENTER, 520.0)
