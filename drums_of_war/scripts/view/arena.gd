@@ -137,66 +137,7 @@ func _build_ground() -> void:
 	ground.mesh = st.commit()
 	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat := ShaderMaterial.new()
-	mat.shader = Shader.new()
-	mat.shader.code = """
-shader_type spatial;
-uniform sampler2D noise : filter_linear_mipmap, repeat_enable;
-uniform vec2 worn[6];
-varying vec3 wp;
-void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
-void fragment() {
-	float n1 = texture(noise, wp.xz * 0.035).r;
-	float n2 = texture(noise, wp.xz * 0.21 + vec2(0.37, 0.11)).r;
-	float n3 = texture(noise, wp.xz * 0.9).r;
-	float in_field = smoothstep(0.0, 0.7, 9.0 - abs(wp.x)) * smoothstep(0.0, 0.7, 18.0 - abs(wp.z));
-	// The field: bright, soft mowing stripes, mottled so it is not a flat colour.
-	float stripe = smoothstep(0.42, 0.58, fract(wp.z * 0.25));
-	vec3 field = mix(vec3(0.47, 0.57, 0.25), vec3(0.56, 0.64, 0.3), stripe * 0.5 + (n2 - 0.5) * 0.7);
-	field *= 0.9 + 0.2 * n1;
-	field = mix(field, vec3(0.62, 0.6, 0.3), smoothstep(0.62, 0.9, n1) * 0.35);      // sun-dried patches
-	// The meadow around it: deeper greens, patchy, flecked with wildflowers.
-	vec3 meadow = mix(vec3(0.3, 0.4, 0.17), vec3(0.5, 0.52, 0.22), n1) * (0.85 + 0.3 * n2);
-	// Leaf litter under the trees: drifts of orange, red and gold.
-	float litter = smoothstep(0.52, 0.7, n3) * (1.0 - in_field);
-	vec3 leaf = mix(vec3(0.85, 0.36, 0.1), vec3(0.95, 0.72, 0.2), n2);
-	leaf = mix(leaf, vec3(0.72, 0.18, 0.1), smoothstep(0.6, 0.8, n1));
-	meadow = mix(meadow, leaf, litter * 0.6);
-	vec3 col = mix(meadow, field, in_field);
-	// Worn earth: the road over the bridge, the approaches to the fords, around the works.
-	float path = (1.0 - smoothstep(0.6, 1.3, abs(wp.x))) * (1.0 - smoothstep(11.0, 15.5, abs(wp.z))) * 0.75;
-	path = max(path, (1.0 - smoothstep(0.9, 1.9, abs(abs(wp.x) - 6.0))) * (1.0 - smoothstep(1.6, 3.6, abs(wp.z))) * 0.85);
-	for (int i = 0; i < 6; i++) {
-		path = max(path, (1.0 - smoothstep(1.5, 2.9, distance(wp.xz, worn[i]))) * 0.8);
-	}
-	// Break the wear up with noise so its edges are ragged, then lay dry earth with darker,
-	// damper mud where the traffic is heaviest.
-	path = clamp(path * (0.3 + 1.25 * n2), 0.0, 1.0);
-	path = smoothstep(0.18, 0.62, path);
-	vec3 earth = mix(vec3(0.7, 0.6, 0.42), vec3(0.6, 0.5, 0.34), n3);
-	earth = mix(earth, vec3(0.44, 0.35, 0.24), smoothstep(0.75, 1.0, path) * smoothstep(0.45, 0.7, n1) * 0.7);
-	col = mix(col, earth, path * 0.92);
-	// Banks of sand and gravel, then the darker bed under the water.
-	// The bank: grass thins to sand before the ground even drops, then sand and pebbles down
-	// to the waterline, so the meadow and the creek blend instead of meeting at a line.
-	float n4 = texture(noise, wp.xz * 2.3).r;
-	float near_water = 1.0 - smoothstep(1.25, 2.1 + (n2 - 0.5) * 0.7, abs(wp.z));
-	col = mix(col, vec3(0.74, 0.67, 0.47), near_water * 0.55);
-	float bank = smoothstep(-0.01, -0.2, wp.y);
-	vec3 sand = vec3(0.8, 0.73, 0.53) * (0.85 + 0.3 * n3);
-	sand = mix(sand, vec3(0.6, 0.6, 0.58), smoothstep(0.6, 0.66, n4));       // pebbles
-	sand = mix(sand, vec3(0.93, 0.9, 0.82), smoothstep(0.74, 0.78, n4));     // pale stones
-	col = mix(col, sand, bank);
-	col = mix(col, vec3(0.3, 0.33, 0.27) * (0.8 + 0.4 * n3), smoothstep(-0.55, -1.05, wp.y));
-	// Slow cloud shadow across everything, and dappled sun where the woods overhang the edges.
-	float cloud = texture(noise, wp.xz * 0.011 + TIME * vec2(0.008, 0.004)).r;
-	col *= mix(0.8, 1.07, smoothstep(0.34, 0.66, cloud));
-	float dapple = texture(noise, wp.xz * 0.5 + TIME * vec2(0.012, 0.007)).r;
-	float shade_edge = clamp(smoothstep(6.6, 10.0, abs(wp.x)) + smoothstep(15.0, 19.0, abs(wp.z)), 0.0, 1.0);
-	col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
-	ALBEDO = pow(col, vec3(2.2));       // the colours above are written as seen on screen
-	ROUGHNESS = 0.95;
-}
-"""
+	mat.shader = load("res://shaders/ground.gdshader")
 	mat.set_shader_parameter("noise", _noise(0.02, 7))
 	var worn := PackedVector2Array()
 	for i in 6:
@@ -214,51 +155,7 @@ func _build_water() -> void:
 	water.position = Vector3(0.0, WATER_Y, 0.0)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat := ShaderMaterial.new()
-	mat.shader = Shader.new()
-	# The depth of water at any point is worked out from the same channel shape the ground mesh
-	# uses, so the shallows, the fords and the foam line need no depth texture.
-	mat.shader.code = """
-shader_type spatial;
-render_mode blend_mix, cull_back, specular_schlick_ggx;
-uniform sampler2D wave_a : hint_normal, filter_linear_mipmap, repeat_enable;
-uniform sampler2D wave_b : hint_normal, filter_linear_mipmap, repeat_enable;
-uniform sampler2D foam_noise : filter_linear_mipmap, repeat_enable;
-uniform vec3 shallow_col : source_color;
-uniform vec3 deep_col : source_color;
-uniform vec3 sky_col : source_color;
-uniform float surface;
-uniform float deep;
-uniform float shallow;
-varying vec3 wp;
-float bed(vec2 p) {
-	float ford = max(1.0 - smoothstep(1.3, 2.0, abs(p.x + 6.0)), 1.0 - smoothstep(1.3, 2.0, abs(p.x - 6.0)));
-	return mix(deep, shallow, ford) * (1.0 - smoothstep(0.55, 1.3, abs(p.y)));
-}
-void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
-void fragment() {
-	float depth = max(0.0, bed(wp.xz) + surface);
-	float d01 = clamp(depth / 0.95, 0.0, 1.0);
-	vec2 flow = vec2(TIME * 0.2, 0.0);
-	vec3 na = texture(wave_a, wp.xz * 0.21 - flow * 0.55 + vec2(0.0, TIME * 0.025)).rgb;
-	vec3 nb = texture(wave_b, wp.xz * 0.46 - flow).rgb;
-	NORMAL_MAP = mix(na, nb, 0.5);
-	NORMAL_MAP_DEPTH = 1.1 + 0.8 * (1.0 - d01);       // choppier over the shallows
-	vec3 col = mix(shallow_col, deep_col, smoothstep(0.0, 1.0, d01));
-	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
-	col = mix(col, sky_col, fres * 0.55);
-	// Foam where the water runs thin: the line along each bank and the riffles over the fords.
-	float fn = texture(foam_noise, wp.xz * 0.55 - flow * 1.6).r;
-	float fn2 = texture(foam_noise, wp.xz * 1.3 - flow * 2.4 + vec2(0.4, 0.2)).r;
-	float edge = (1.0 - smoothstep(0.02, 0.2, depth)) * smoothstep(0.32, 0.6, fn + 0.25);
-	float riffle = (1.0 - smoothstep(0.24, 0.46, depth)) * smoothstep(0.56, 0.7, fn) * smoothstep(0.4, 0.6, fn2);
-	float foam = clamp(edge * 0.9 + riffle * 0.8, 0.0, 1.0);
-	ALBEDO = mix(col, vec3(1.0), foam);
-	ALPHA = clamp(mix(0.42, 0.94, d01) + foam * 0.5, 0.0, 1.0) * smoothstep(0.0, 0.035, depth);
-	ROUGHNESS = mix(0.04, 0.45, foam);
-	SPECULAR = 0.9;
-	METALLIC = 0.15;
-}
-"""
+	mat.shader = load("res://shaders/river.gdshader")
 	mat.set_shader_parameter("wave_a", _noise(0.035, 11, true))
 	mat.set_shader_parameter("wave_b", _noise(0.06, 23, true))
 	mat.set_shader_parameter("foam_noise", _noise(0.05, 31))
@@ -268,6 +165,7 @@ void fragment() {
 	mat.set_shader_parameter("surface", WATER_Y)
 	mat.set_shader_parameter("deep", DEEP)
 	mat.set_shader_parameter("shallow", SHALLOW)
+	mat.set_shader_parameter("bridge_half", BRIDGE_HALF_W + 0.25)
 	water.material_override = mat
 	add_child(water)
 

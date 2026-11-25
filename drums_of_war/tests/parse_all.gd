@@ -6,9 +6,9 @@ extends SceneTree
 func _init() -> void:
 	var bad := 0
 	var count := 0
-	for dir_path: String in ["res://scripts", "res://scenes", "res://tests", "res://tools"]:
+	for dir_path: String in ["res://scripts", "res://scenes", "res://tests", "res://tools", "res://shaders"]:
 		for path: String in _walk(dir_path):
-			if not (path.ends_with(".gd") or path.ends_with(".tscn")):
+			if not (path.ends_with(".gd") or path.ends_with(".tscn") or path.ends_with(".gdshader")):
 				continue
 			count += 1
 			if load(path) == null:

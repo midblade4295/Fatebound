@@ -153,9 +153,19 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("8ecbff")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("a8bdf0")       # cool sky-blue fill in the shadows
-	env.ambient_light_energy = 0.52
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.ambient_light_color = Color("8ba8d6")       # cool sky-blue fill in the shadows
+	env.ambient_light_energy = 0.62
+	# ACES: a filmic curve that keeps saturated team colours rich as they brighten instead of
+	# clipping to flat, plastic-looking patches. TONEMAP=agx or filmic to compare.
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 1.18          # ACES runs darker in the shadows than the old curve
+	env.tonemap_white = 6.0
+	if OS.has_environment("TONEMAP"):
+		match OS.get_environment("TONEMAP"):
+			"agx":
+				env.tonemap_mode = Environment.TONE_MAPPER_AGX
+			"filmic":
+				env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.0      # the palette itself is already rich; grading keeps it calm
 	env.adjustment_contrast = 1.09
@@ -175,7 +185,7 @@ func _build_environment() -> void:
 	sun.light_energy = 1.25
 	# Low in the east: long shadows fall across the field from the right-hand woods, and the
 	# light still catches the sides of the figures that face the camera.
-	sun.rotation_degrees = Vector3(-37.0, 58.0, 0.0)
+	sun.rotation_degrees = Vector3(-48.0, 58.0, 0.0)
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	sun.directional_shadow_max_distance = 95.0
