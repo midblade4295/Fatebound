@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bnt61qq1oofwc"
-path="res://.godot/imported/farmhouse_0.jpg-32272e584cb29a8629968740edaaba3c.ctex"
+uid="uid://n7s5miitv2v5"
+path="res://.godot/imported/farmhouse_Image_1.jpg-38fa1efded7da7499049851bb9b186f5.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "e8298a81077a37bbae12dfb78c5a9788"
+"md5": "2248c7af80ba77a714c783442707af72"
 }
 
 [deps]
 
-source_file="res://assets/models/farmhouse/farmhouse_0.jpg"
-dest_files=["res://.godot/imported/farmhouse_0.jpg-32272e584cb29a8629968740edaaba3c.ctex"]
+source_file="res://assets/models/farmhouse/farmhouse_Image_1.jpg"
+dest_files=["res://.godot/imported/farmhouse_Image_1.jpg-38fa1efded7da7499049851bb9b186f5.ctex"]
 
 [params]
 

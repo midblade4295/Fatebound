@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dg785uh0u4g84"
-path="res://.godot/imported/farmhouse_alt_no_pennant_0.png-1a90d3e1a3aec09d463e625d0f4a3b40.ctex"
+uid="uid://c50rbhs1ra3y6"
+path="res://.godot/imported/battery_1.jpg-b498fcb0e4314d127af6782fdc77bac9.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "337a1c27a0aebc052d7b4bcc02cd3fd3"
+"md5": "b34d5e54698df1284915c17d6cd18572"
 }
 
 [deps]
 
-source_file="res://assets/models/farmhouse/farmhouse_alt_no_pennant_0.png"
-dest_files=["res://.godot/imported/farmhouse_alt_no_pennant_0.png-1a90d3e1a3aec09d463e625d0f4a3b40.ctex"]
+source_file="res://assets/models/battery/battery_1.jpg"
+dest_files=["res://.godot/imported/battery_1.jpg-b498fcb0e4314d127af6782fdc77bac9.ctex"]
 
 [params]
 

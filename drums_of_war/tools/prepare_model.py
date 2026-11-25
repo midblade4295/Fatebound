@@ -106,6 +106,16 @@ def main():
             base_image = doc["textures"][tex["index"]].get("source")
             break
 
+    # Images that hold numbers rather than colour (normal, metallic-roughness, occlusion): each
+    # channel is separate data, so they are written without JPEG chroma subsampling, which
+    # would smear the metallic and normal-X channels across neighbouring texels.
+    data_images = set()
+    for mat in doc.get("materials", []):
+        for tex in (mat.get("normalTexture"), mat.get("occlusionTexture"),
+                    mat.get("pbrMetallicRoughness", {}).get("metallicRoughnessTexture")):
+            if tex is not None:
+                data_images.add(doc["textures"][tex["index"]].get("source"))
+
     target = 4 if args.strip_textures else args.tex
     new_blob = bytearray()
     before = after = 0
@@ -128,6 +138,9 @@ def main():
             if has_alpha:
                 img.save(buf, "PNG", optimize=True)
                 images[image_index]["mimeType"] = "image/png"
+            elif image_index in data_images:
+                img.convert("RGB").save(buf, "JPEG", quality=92, subsampling=0, optimize=True)
+                images[image_index]["mimeType"] = "image/jpeg"
             else:
                 img.convert("RGB").save(buf, "JPEG", quality=88, optimize=True)
                 images[image_index]["mimeType"] = "image/jpeg"

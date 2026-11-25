@@ -335,7 +335,10 @@ func _build_structure(s: Sim.Structure) -> Node3D:
 	var made: Node3D = Models.make("farmhouse" if s.kind == "hq" else "battery", team)
 	if made != null:
 		if s.kind == "hq":
-			Models.fit_footprint(made, 4.4, 4.4)
+			# The model's bounds include the pennant streaming off to one side: fit a little wide
+			# so the house itself keeps its size, then slide it back over its spot.
+			Models.fit_footprint(made, 5.15, 4.6)
+			made.position.x += 0.68
 		else:
 			Models.fit_footprint(made, 3.3, 3.3)
 		root.add_child(made)

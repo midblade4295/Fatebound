@@ -6,43 +6,61 @@
   "endpoint": "POST /openapi/v1/image-to-3d",
   "model_type": "smart-topology",
   "ai_model": "meshy-t2.5",
-  "texture_model": "meshy-n1",
+  "target_polycount": 24000,
+  "texture_model": "meshy-7",
+  "enable_pbr": true,
   "texture_resolution": "2k",
-  "note": "Smart Topology generates directly at target_polycount (no remesh pass); base colour only, no PBR maps.",
+  "target_formats": [
+   "glb"
+  ],
   "task_ids": {
-   "image_to_3d": "01a21131-41e8-77db-ad9f-714573a2ff26"
-  }
+   "image_to_3d": "01a213ef-67a5-75fa-82da-e17c0bffa0f8"
+  },
+  "note": "Higher-fidelity regeneration from the same ref.png, one attempt. Smart Topology generates directly at target_polycount (no remesh pass). Ring of logs, sandbags, brass cannon and awning on four poles are all present."
  },
- "requested_triangles": 6000,
- "actual_triangles": 6038,
- "vertices": 5045,
- "file_bytes": 4582732,
+ "requested_triangles": 24000,
+ "actual_triangles": 24563,
+ "vertices": 18819,
+ "file_bytes": 3235136,
  "texture": {
-  "count": 1,
+  "count": 3,
   "resolution": [
    2048,
    2048
   ],
-  "maps": "base colour only (metallicFactor 0, roughnessFactor 1)"
+  "maps": "base colour, normal, metallic-roughness (glTF packing: roughness in green, metallic in blue), all embedded as JPEG; the two data maps are written without chroma subsampling",
+  "material": "metallicFactor 0.3 (the map marks the cannon barrel and carriage ironwork as metal), roughnessFactor 1"
  },
- "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0.",
+ "post_processing": {
+  "why": "The game's other models are matte (roughness 1, no metal) under a cool ambient light, and the raw PBR output looked glossy and washed out beside them, so the download was toned before tools/prepare_model.py ran. With full metal the cannon turned dark (the game has no reflections to light it), and the pale tan sandbags read as grey stone.",
+  "steps": [
+   "metallicFactor 1 -> 0.3",
+   "roughness map: only 40% of its glossiness kept, r' = 1 - (1 - r) * 0.4 (mean 0.59 -> 0.84)",
+   "base colour: saturation of the warm texels (sandbags, logs, brass) raised, s' = s ** 0.55 on a 0..1 scale, median 172 -> 205 of 255, back to the earlier model's palette",
+   "python3 tools/prepare_model.py <toned>.glb assets/models/battery/battery.glb --tex 2048 --canvas"
+  ],
+  "canvas": "6.1% of texels (the awning cloth and its scraps around the pole tops) turned from blue to cream; nothing else changed"
+ },
+ "units": "GLB own units (unitless, Meshy normalises the longest side to about 0.95; NOT metres). Origin is the bounding-box centre, not the ground: lift by -bbox_min[1] to stand it on y=0. The base of the log ring is level.",
  "bbox_min": [
-  -0.4788,
-  -0.2874,
-  -0.467
+  -0.47,
+  -0.2561,
+  -0.4817
  ],
  "bbox_max": [
-  0.4788,
-  0.2849,
-  0.4675
+  0.4685,
+  0.2571,
+  0.4783
  ],
  "bbox_size": [
-  0.9575,
-  0.5723,
-  0.9346
+  0.9385,
+  0.5132,
+  0.96
  ],
  "up_axis": "+Y",
- "orientation": "Y up. Cannon muzzle points -X (slightly raised); a +90 degree rotation about Y turns it to +Z. Ring is roughly round in XZ.",
+ "orientation": "Y up. Same facing as the model it replaces, so YAW stays -90: cannon muzzle points -X (slightly raised); a +90 degree rotation about Y turns it to +Z. Ring is roughly round in XZ.",
+ "game_note": "scripts/view/models.gd still multiplies this model's base colour by LIFT (1.3, 1.24, 1.14), which was tuned for the earlier, darker texture; the toning above was judged with that lift in place.",
+ "godot_import": "The GLB importer extracts the embedded textures beside the GLB (battery_0.jpg base colour, battery_1.jpg metallic-roughness, battery_2.jpg normal) and the imported scene loads those files; they are regenerated on import.",
  "reference_image": {
   "file": "ref.png",
   "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
@@ -53,5 +71,9 @@
   "prompt": "Use the attached image as the art-style reference (stylized 3D CGI, smooth slightly clay-like surfaces, bright saturated toy-like colours, chunky thick-edged shapes). Create a NEW reference image for 3D modelling of ONE single structure, like the third item in the top row of the reference: a round earthwork gun battery made of a ring of stacked horizontal logs with upright log posts and tan sandbags piled on top, a fat brass cannon poking out through the front, and a small ROYAL BLUE canvas awning on wooden poles over it. Clean saturated royal blue is used ONLY on the awning and nowhere else. Three-quarter view from slightly above. No grass base, no crates, no barrels, no rocks, no cannonballs. Whole structure in frame, centred, margin all around. Plain pure white background, flat even studio lighting, no ground, no cast shadow, no other objects, no text."
  },
  "meshy_credits": 15,
- "recolour_note": "Saturated royal blue is on the canvas awning only."
+ "history": {
+  "replaced": "smart-topology meshy-t2.5 at 6,000 (6,038 triangles, 5,045 vertices, bbox 0.9575 x 0.5723 x 0.9346), meshy-n1 2K base colour only, task 01a21131-41e8-77db-ad9f-714573a2ff26, 15 credits",
+  "credits_all_attempts": 30
+ },
+ "recolour_note": "Meshy painted the awning royal blue as in ref.png; prepare_model.py --canvas turns it cream inside the GLB, because both sides' batteries are alike."
 }
