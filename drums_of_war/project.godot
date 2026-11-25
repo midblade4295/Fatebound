@@ -6,7 +6,7 @@ config_version=5
 [application]
 
 config/name="Drums of War Prototype"
-config/description="Grey-box prototype of a black-powder card battler."
+config/description="Art slice of a black-powder card battler."
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 

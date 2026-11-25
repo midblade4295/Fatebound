@@ -1,0 +1,103 @@
+{
+ "asset": "c_skirm",
+ "file": "c_skirm.glb",
+ "generated": "2026-11-25",
+ "phase": 2,
+ "meshy": {
+  "endpoint": "POST /openapi/v1/image-to-3d",
+  "model_type": "smart-topology",
+  "ai_model": "meshy-t2.5",
+  "texture_model": "meshy-n1",
+  "texture_resolution": "2k",
+  "pose_mode": "a-pose",
+  "task_ids": {
+   "image_to_3d": "01a2113b-47c5-7423-862d-b871574f106c",
+   "rigging": "01a2113c-c086-740c-b416-c32a06e5a738"
+  },
+  "rigging": {
+   "endpoint": "POST /openapi/v1/rigging",
+   "animation_type": "biped",
+   "skeleton_template": "meshyrig (default, 24 bones, no fingers)",
+   "height_meters": 1.7
+  }
+ },
+ "requested_triangles": 6000,
+ "actual_triangles": 5953,
+ "vertices": 4954,
+ "file_bytes": 4232792,
+ "texture": {
+  "count": 1,
+  "resolution": [
+   2048,
+   2048
+  ],
+  "maps": "base colour only"
+ },
+ "units": "Metres after skinning: Armature root node scale 0.01, bones and inverse bind matrices in centimetres; stands 1.7 tall including the hat (same rigging height as u_line).",
+ "bbox_min": [
+  -0.5008,
+  -0.0,
+  -0.2118
+ ],
+ "bbox_max": [
+  0.5008,
+  1.7,
+  0.2118
+ ],
+ "bbox_size": [
+  1.0017,
+  1.7,
+  0.4237
+ ],
+ "bbox_note": "Skinned bind pose (A-pose), world units.",
+ "up_axis": "+Y",
+ "orientation": "Y up. Character faces +Z. Feet on y=0, origin between the feet.",
+ "skeleton": {
+  "joints": 24,
+  "joint_names": [
+   "Hips",
+   "Spine02",
+   "Spine01",
+   "Spine",
+   "neck",
+   "Head",
+   "head_end",
+   "headfront",
+   "LeftShoulder",
+   "LeftArm",
+   "LeftForeArm",
+   "LeftHand",
+   "RightShoulder",
+   "RightArm",
+   "RightForeArm",
+   "RightHand",
+   "LeftUpLeg",
+   "LeftLeg",
+   "LeftFoot",
+   "LeftToeBase",
+   "RightUpLeg",
+   "RightLeg",
+   "RightFoot",
+   "RightToeBase"
+  ],
+  "identical_names_order_hierarchy_to_u_line": true,
+  "rest_clip_in_glb": "Armature|clip0|baselayer"
+ },
+ "animations": "None requested (rig only). u_line clips are meant to be reused; see retarget_note.",
+ "retarget_note": "Bone names, order and hierarchy match u_line exactly, but the rest pose is this character's own: bone offsets differ from u_line by a few cm and rest rotations by several degrees. u_line clips carry translation, rotation and scale tracks for all 24 bones, so playing them unmodified imposes u_line's bone offsets (proportions shift slightly); dropping translation/scale tracks except Hips translation keeps this character's proportions.",
+ "reference_image": {
+  "file": "ref.png",
+  "tool": "ElevenLabs creative flow WpDtTyACKuXCSB7PGBVX",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect": "1:1 1024px",
+  "style_reference": "Confederate lineup Re39emM6ZfUhrfr3SG4N",
+  "chosen_generation_id": "w5rNzM3ENIXnJg2tcE6B",
+  "prompt": "Use the attached image only as the art-style reference (same stylized 3D CGI look, smooth slightly clay-like surfaces, bright saturated toy-like colours, same character proportions). Create a NEW single-character reference for 3D modelling: ONE Confederate sharpshooter of the 1860s, alone, front view, facing the camera straight on, standing in a neutral symmetrical A-pose: both arms straight and held about 35 degrees away from the body, EMPTY open hands with chunky fingers, legs straight and slightly apart, feet flat. Full body from the top of the hat to the soles of the boots, centred, margin all around. He is lanky but still cartoon-proportioned: broad shoulders, oversized chunky hands, big head, thick eyebrows, prominent nose, thin moustache, squinting grin. Clean simplified soft-wool dress: battered grey slouch hat with a large crimson feather, butternut-brown short jacket worn open over a bright saturated crimson shirt, big bright crimson neckerchief, grey trousers, sturdy brown boots. Large areas of saturated crimson red. No weapon, no backpack, no bag, nothing held. Plain pure white background, flat even studio lighting, no ground, no cast shadow, no other objects, no text, no flag. Family-friendly comic tone, not a real person."
+ },
+ "model_notes": "From behind and above the crimson is limited to the feather, hat band, neckerchief and cuffs; the jacket back is plain butternut brown.",
+ "meshy_credits": 20,
+ "meshy_credits_breakdown": {
+  "image_to_3d": 15,
+  "rigging": 5
+ }
+}

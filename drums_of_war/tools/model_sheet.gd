@@ -4,7 +4,8 @@ extends SceneTree
 ## Needs a display:
 ##   xvfb-run -a $GODOT --rendering-method mobile --resolution 1280x720 --path drums_of_war -s tools/model_sheet.gd
 ## Environment: SHEET_OUT (default res://captures/model_sheet.png), SHEET_NAMES (comma list),
-## SHEET_CLIP (animation clip to pose rigged characters in), SHEET_TIME (seconds into the clip).
+## SHEET_CLIP (animation clip to pose rigged characters in), SHEET_TIME (seconds into the clip),
+## SHEET_FRONT (set to view the models from the front), SHEET_MUSKET (set to put muskets in hands).
 
 const Models = preload("res://scripts/view/models.gd")
 
@@ -57,6 +58,8 @@ func _initialize() -> void:
 			var node := Models.make(name, team)
 			if node == null:
 				continue
+			if OS.has_environment("SHEET_MUSKET"):
+				Models._attach_musket(node, name)
 			if name in ["farmhouse", "battery", "bridge", "fence"]:
 				Models.fit_footprint(node, float(SIZES[name]), float(SIZES[name]))
 			else:
@@ -77,7 +80,7 @@ func _initialize() -> void:
 				player.add_animation_library("a", lib)
 				player.play("a/" + OS.get_environment("SHEET_CLIP"))
 				player.seek(float(OS.get_environment("SHEET_TIME")) if OS.has_environment("SHEET_TIME") else 0.3, true)
-				player.pause()
+				player.speed_scale = 0.0
 			# A marker on the "forward" side (-Z), so facing can be checked in the picture.
 			var arrow := MeshInstance3D.new()
 			var am := BoxMesh.new()
@@ -92,9 +95,13 @@ func _initialize() -> void:
 	cam.fov = 30.0
 	world.add_child(cam)
 	var mid := x * 0.5
-	var dist := maxf(8.0, x * 1.05)
+	var dist := maxf(4.5, x * 1.05)
 	# Looking from the front-left: "forward" (-Z) is toward the top of the picture.
-	cam.look_at_from_position(Vector3(mid - dist * 0.25, dist * 0.42, dist * 0.8), Vector3(mid, 0.8, 0), Vector3.UP)
+	if OS.has_environment("SHEET_FRONT"):
+		# From in front of the models (they face -Z), for checking faces and poses.
+		cam.look_at_from_position(Vector3(mid + dist * 0.2, dist * 0.3, -dist * 0.75), Vector3(mid, 0.8, 0), Vector3.UP)
+	else:
+		cam.look_at_from_position(Vector3(mid - dist * 0.25, dist * 0.42, dist * 0.8), Vector3(mid, 0.8, 0), Vector3.UP)
 	cam.make_current()
 	print("placed ", placed)
 

@@ -206,7 +206,7 @@ static func make_soldier(card_id: String, arm: String, team: int, world: Node3D)
 			var rigged: bool = made.find_child("Skeleton3D", true, false) != null
 			var lib := _library(model_name) if rigged else null
 			if rigged and arm == "infantry":
-				_attach_musket(made)
+				_attach_musket(made, model_name)
 			if lib != null:
 				var inner: Node3D = made.get_node("Model")
 				var player: AnimationPlayer = inner.find_child("AnimationPlayer", true, false)
@@ -224,38 +224,81 @@ static func make_soldier(card_id: String, arm: String, team: int, world: Node3D)
 	return _stand_in_soldier(card_id, arm, team, height)
 
 
-## Puts the musket in a rigged character's right hand, lying along the forearm with most of
-## the barrel past the hand: pointing at the ground when the arm hangs, forward when it aims.
-static func _attach_musket(made: Node3D) -> void:
+## Where a bone sits in skeleton space at a moment of a clip, worked out from the clip's tracks
+## (bones the clip does not move keep their rest pose).
+static func _clip_pose(skeleton: Skeleton3D, anim: Animation, bone: int, time: float) -> Transform3D:
+	var chain: Array = []
+	var b := bone
+	while b >= 0:
+		chain.push_front(b)
+		b = skeleton.get_bone_parent(b)
+	var out := Transform3D.IDENTITY
+	for index: int in chain:
+		var rest := skeleton.get_bone_rest(index)
+		var pos := rest.origin
+		var rot := rest.basis.get_rotation_quaternion()
+		var bone_name := skeleton.get_bone_name(index)
+		for track in anim.get_track_count():
+			var path := anim.track_get_path(track)
+			if path.get_subname_count() == 0 or String(path.get_subname(0)) != bone_name:
+				continue
+			if anim.track_get_type(track) == Animation.TYPE_ROTATION_3D:
+				rot = anim.rotation_track_interpolate(track, time)
+			elif anim.track_get_type(track) == Animation.TYPE_POSITION_3D:
+				pos = anim.position_track_interpolate(track, time)
+		out = out * Transform3D(Basis(rot), pos)
+	return out
+
+
+## Puts the musket in a rigged character's hands. It is fixed to the rear hand so that, at the
+## start of the firing clip, it lies level through both hands and points the way he faces.
+static func _attach_musket(made: Node3D, model_name: String = SHARED_CLIPS) -> void:
 	var skeleton: Skeleton3D = made.find_child("Skeleton3D", true, false)
-	if skeleton == null:
-		return
-	var hand := skeleton.find_bone("RightHand")
-	var fore := skeleton.find_bone("RightForeArm")
+	var lib := _library(model_name)
 	var musket := make("musket", 0)
-	if hand < 0 or fore < 0 or musket == null:
+	if skeleton == null or musket == null or lib == null or not lib.has_animation("fire"):
 		return
-	var g_hand := skeleton.get_bone_global_rest(hand)
-	var g_fore := skeleton.get_bone_global_rest(fore)
-	var along := g_hand.origin - g_fore.origin
-	var forearm := along.length()
+	var left := skeleton.find_bone("LeftHand")
+	var right := skeleton.find_bone("RightHand")
+	var fore := skeleton.find_bone("RightForeArm")
+	if left < 0 or right < 0 or fore < 0:
+		return
+	# Work in the model's own space (Y up, facing +Z), not the skeleton's, whose axes and
+	# units depend on how the rig was exported.
+	var to_model := Transform3D.IDENTITY
+	var n: Node = skeleton
+	var model_root: Node = made.get_node("Model")
+	while n != null and n != model_root:
+		if n is Node3D:
+			to_model = (n as Node3D).transform * to_model
+		n = n.get_parent()
+	var fire := lib.get_animation("fire")
+	var rear_bone := left
+	var g_rear := to_model * _clip_pose(skeleton, fire, left, 0.15)
+	var g_front := to_model * _clip_pose(skeleton, fire, right, 0.15)
+	if g_front.origin.z < g_rear.origin.z:
+		var swap := g_rear
+		g_rear = g_front
+		g_front = swap
+		rear_bone = right
+	var forearm := (to_model * skeleton.get_bone_global_rest(right).origin).distance_to(to_model * skeleton.get_bone_global_rest(fore).origin)
 	if forearm < 0.0001:
 		return
-	var dir := along / forearm
-	var length := forearm * 4.6
+	var length := forearm * 5.2
 	fit_footprint(musket, length, 100000.0)          # the model lies along X, bayonet tip at -X
-	var up := Vector3(0, 0, 1) - dir * dir.z
-	up = up.normalized() if up.length() > 0.01 else Vector3(0, 1, 0)
+	var through := g_front.origin - g_rear.origin
+	var dir := Vector3(through.x * 0.15, through.y * 0.3, maxf(through.z, forearm)).normalized()
 	var x_axis := -dir
+	var up := (Vector3.UP - dir * dir.y).normalized()
 	var basis := Basis(x_axis, up, x_axis.cross(up))
 	var thickness := bounds(musket).size.y
-	var wanted := Transform3D(basis, g_hand.origin + dir * (length * 0.12) - up * (thickness * 0.5))
+	# The rear hand holds the musket about a quarter of the way along from the butt.
+	var wanted := Transform3D(basis, g_rear.origin + dir * (length * 0.25) - up * (thickness * 0.5))
 	var attach := BoneAttachment3D.new()
-	attach.bone_name = "RightHand"
+	attach.bone_name = skeleton.get_bone_name(rear_bone)
 	skeleton.add_child(attach)
 	attach.add_child(musket)
-	musket.transform = g_hand.affine_inverse() * wanted
-
+	musket.transform = g_rear.affine_inverse() * wanted
 
 # ==========================================================================================
 # Stand-in figures built from primitives

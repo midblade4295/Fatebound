@@ -1,13 +1,14 @@
-# Drums of War: grey-box prototype
+# Drums of War: art slice
 
 A three-minute, portrait card battler set in the black-powder era: Union blue against
 Confederate crimson. This folder is a **new, separate Godot 4.7 project**. It shares the
 toolchain with Fatebound Siege (`../godot`) and none of its code, assets, package or keys.
 
-This is stage 1 of the concept: one field, eight cards, a computer opponent, and plain shapes
-for soldiers. Its only job is to answer whether volleys, routs and squares are fun.
+This is stage 2 of the concept. Stage 1 was a grey box that proved the rules; this stage shows
+the same match in the chosen art style: a 3D battlefield, generated character and prop models,
+smoke, sound, and card portraits. The rules engine is unchanged.
 
-![Grey-box battle screen](docs/greybox.png)
+![Grey-box battle screen from stage 1](docs/greybox.png)
 
 ## Run and test
 
@@ -20,7 +21,14 @@ GODOT=$GODOT drums_of_war/tools/run_tests.sh    # all tests, headless, about 10 
 # Screenshots of a bot-versus-bot match on the real screen (needs a display):
 xvfb-run -a $GODOT --rendering-method mobile --fixed-fps 30 --resolution 540x960 \
     --path drums_of_war -s tools/capture.gd
+
+# Every generated model, fitted the way the game fits it (SHEET_NAMES=u_line,cannon to pick):
+xvfb-run -a $GODOT --rendering-method mobile --resolution 540x960 \
+    --path drums_of_war -s tools/model_sheet.gd
 ```
+
+The test runner imports assets first when any are new; models, textures and sounds cannot be
+loaded until Godot has imported them.
 
 Android prototype APK (package `com.fatebound.drumsofwar.proto`, arm64, signed with a debug key
 you supply; never the Fatebound preview key or the Play upload key):
@@ -61,13 +69,38 @@ match goes to one minute of sudden-death overtime.
 - `scripts/sim/battle_sim.gd`: the rules. Pure data at a fixed 20 steps a second with its own
   seeded random source, so the same seed and the same deploys always give the same battle.
 - `scripts/sim/bot.gd`: the computer opponent. It plays through the same `deploy()` a player uses.
-- `scripts/view/battle_screen.gd`: draws the state with shapes and turns taps into deploys.
-- `tests/`, `tools/`: headless tests, the test runner and the screenshot tool.
+- `scripts/view/battle_screen.gd`: runs the match, takes input, plays sound, and draws the HUD
+  (cards, Powder, clock, health and nerve bars) over the 3D view.
+- `scripts/view/battle_world.gd`: the 3D battlefield: arena, structures, regiments in formation,
+  smoke, flashes, lighting, and the camera that fits the field to the screen.
+- `scripts/view/models.gd`: hands out figures and props. A generated model is used when
+  `assets/models/<name>/<name>.glb` exists; otherwise a primitive stand-in is built, so any card
+  can be played before its model is made.
+- `assets/models/<name>/`: the model, the reference image it was generated from (`ref.png`),
+  how it was made (`meta.json`), and for structures a crimson texture for the enemy's copy.
+- `assets/audio/`: sound effects and the battle tune; `SOURCES.md` lists how each was made.
+- `assets/cards/`: card portraits, made from the reference images by `tools/make_card_art.py`.
+- `tests/`, `tools/`: headless tests, the test runner, screenshot and model-sheet tools, and
+  `tools/prepare_model.py`, which shrinks a generated model's textures.
+
+## How the art is made
+
+1. A reference image per asset in the approved style: one subject on white, characters in an
+   A-pose with empty hands.
+2. Image-to-3D at a set triangle count, then auto-rigging for characters.
+3. `tools/prepare_model.py` shrinks textures (and writes the crimson texture for structures);
+   `models.gd` turns each model to face forward, scales it, and puts a musket in infantry hands.
+4. Animation clips (idle, walk, run, fire, death) were made once, for the Union line
+   infantryman. Every other rigged character borrows them, because the rigs share one skeleton.
+
+Cavalry are single unrigged models and move like toys: they hop and rock. Horses with real
+gaits need a quadruped rig, which this stage does not have.
 
 ## Not in yet
 
-The other ten cards of the 18-card launch deck, smoke as a rule (it is a visual effect only for
-now), deck building, a menu, sound, any 3D art, and online play. The Android APK builds and is signed,
-but has not yet been run on a physical phone. Balance is a
-first pass tuned on bot-versus-bot matches: sides come out even (31 to 29 over 60 seeds), about
-0.7 redoubts fall per match, and roughly a quarter of matches are decided in regular time.
+The other ten cards of the 18-card launch deck, smoke as a rule (it is a visual effect only),
+deck building, a menu, and online play. Known rough edges in this stage: the sounds were chosen
+by measurement and have not been listened to; muskets are fixed to one hand and only sit right
+in the firing pose; cavalry are not animated; the HUD is still plain. The Android APK builds
+and is signed, but has not been run on a physical phone, and nothing here has been profiled on
+one. Balance is the stage 1 first pass, tuned on bot-versus-bot matches.
