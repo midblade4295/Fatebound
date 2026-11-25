@@ -300,7 +300,13 @@ func _take_events() -> void:
 				if from_structure:
 					_sfx("redoubt_gun", -4.0, 0.1)
 				else:
-					_sfx("cannon_big" if _stream("cannon_big") != null else "cannon", 0.0, 0.1)
+					# The layered take has the hard crack of the new cannon over the low body of the old.
+					var boom := "cannon"
+					for candidate: String in ["cannon_big_layered", "cannon_big"]:
+						if _stream(candidate) != null:
+							boom = candidate
+							break
+					_sfx(boom, 0.0, 0.1)
 					_buzz(22)
 			"canister":
 				_sfx("canister", 1.0)
