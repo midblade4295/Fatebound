@@ -34,7 +34,10 @@ var _settle: int = 3               # readings to ignore after a change (or at th
 
 
 func _init() -> void:
-	enabled = DisplayServer.get_name() != "headless" and not OS.has_environment("DRUMS_NO_GOVERNOR")
+	# Off unless asked for (DRUMS_GOVERNOR=1). Measured on a Galaxy S21 Ultra, stepping down did
+	# not buy frames: the phone settles on a frame rate of its own and slows its graphics chip
+	# to match, so the levels only took shadows away. The game stays at level 0.
+	enabled = OS.has_environment("DRUMS_GOVERNOR") and DisplayServer.get_name() != "headless"
 	var rate := DisplayServer.screen_get_refresh_rate()
 	target = clampf(rate, 30.0, 60.0) if rate > 1.0 else 60.0
 	if enabled:

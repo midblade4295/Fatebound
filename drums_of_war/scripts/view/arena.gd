@@ -607,9 +607,7 @@ void fragment() {
 
 const FOLIAGE_SHADER := """
 shader_type spatial;
-// Both sides of every leaf surface are drawn: where a simplified canopy has a hairline crack,
-// the far side of the canopy shows through it instead of a black gap.
-render_mode diffuse_lambert, specular_disabled, shadows_disabled, cull_disabled;
+render_mode diffuse_lambert, specular_disabled, shadows_disabled;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
 uniform float y_min;
 uniform float y_size;

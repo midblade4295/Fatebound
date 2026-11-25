@@ -92,6 +92,33 @@ func start(screen: Node) -> void:
 	done = false
 
 
+## What the phone itself reports about its state: how hot it is, whether power saving is on,
+## and which game mode it has put this app in. Each can cap or slow a game from outside it.
+## Returns "" where the Android calls are not available.
+func _device_state() -> String:
+	if OS.get_name() != "Android" or not Engine.has_singleton("AndroidRuntime"):
+		return ""
+	var runtime: Object = Engine.get_singleton("AndroidRuntime")
+	var activity: Variant = runtime.getActivity()
+	if activity == null:
+		return ""
+	var parts: PackedStringArray = []
+	var power: Variant = activity.getSystemService("power")
+	if power != null and power is JavaObject:
+		if power.has_java_method("getCurrentThermalStatus"):
+			var heat := ["none", "light", "moderate", "severe", "critical", "emergency", "shutdown"]
+			var status: int = power.getCurrentThermalStatus()
+			parts.append("phone heat: " + (heat[status] if status >= 0 and status < heat.size() else str(status)))
+		if power.has_java_method("isPowerSaveMode"):
+			parts.append("power saving: " + ("ON" if power.isPowerSaveMode() else "off"))
+	var game: Variant = activity.getSystemService("game")
+	if game != null and game is JavaObject and game.has_java_method("getGameMode"):
+		var modes := ["unsupported", "standard", "performance", "battery", "custom"]
+		var mode: int = game.getGameMode()
+		parts.append("game mode: " + (modes[mode] if mode >= 0 and mode < modes.size() else str(mode)))
+	return "   ".join(parts)
+
+
 func _begin_step() -> void:
 	_frames = 0
 	_gpu = 0.0
@@ -144,7 +171,10 @@ func _finish() -> void:
 	lines.append("%s  |  %s" % [OS.get_model_name(), RenderingServer.get_video_adapter_name()])
 	var hz := DisplayServer.screen_get_refresh_rate()
 	lines.append("%d x %d px, screen %s Hz, %s" % [size.x, size.y, str(int(hz)) if hz >= 1.0 and hz < 1000.0 else "?", String(RenderingServer.get_current_rendering_method())])
-	lines.append("Everything on:  frame %.1f ms (%d FPS)   GPU %.1f ms   CPU draw %.1f ms   scripts %.1f ms" % [
+	var state: Variant = _device_state()
+	if state is String and state != "":
+		lines.append(state)
+	lines.append("Flat out, everything on:  frame %.1f ms (%d FPS)   GPU %.1f ms   CPU draw %.1f ms   scripts %.1f ms" % [
 			_base[2], int(round(1000.0 / maxf(_base[2], 0.1))), _base[0], _base[1], _base_script])
 	lines.append("%d triangles, %d draw calls, antialiasing %s, bloom %s, Q%d before the test" % [_base_tris, _base_draws,
 			"off" if _base_msaa == Viewport.MSAA_DISABLED else "2x", "on" if _base_glow else "off", _saved_level])
