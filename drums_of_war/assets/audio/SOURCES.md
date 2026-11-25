@@ -48,3 +48,33 @@ pitch tracking). "Take" is the position among the four variations returned for t
   Enable looping on import in Godot.
 - `victory_alt_fife.ogg`: optional extra, not one of the requested files. No victory take contained a fife, so
   this is the first 8-beat phrase of the battle tune as a mono sting, to audition against `victory.ogg`.
+
+## Impact set (second batch)
+
+Generated the same way on the same flow with `eleven_text_to_sound_v3` (default settings, 4 takes per prompt)
+and converted with the same rules: mono OGG Vorbis, 44.1 kHz, quality 5, leading silence trimmed, 25 Hz
+high-pass, 20 ms fade-out, peak about -1.5 dBFS. Takes were again chosen from measurements only (first-transient
+strength, stroke counts, band energy, peak, clipping), not by listening.
+
+| File | Take used | Prompt |
+|---|---|---|
+| `hit_volley.ogg` | 4, 2, 3, 1 (layered) | Musket balls striking home, three or four hard punchy thuds then a ricochet whine, one man grunting, strong first transient, close-mic, dry, no reverb, 0.7 seconds |
+| `hit_shot.ogg` | 2 | Cannonball ploughing into earth, heavy low thump, a spray of dirt and a rolling bounce, strong first transient, close-mic, dry, no reverb, 1 second |
+| `hit_structure.ogg` | 1 | Cannonball smashing into timber and sandbags, deep crack of splintering wood then falling debris, strong first transient, close-mic, dry, no reverb, 0.9 seconds |
+| `melee.ogg` | 2, 3, 4 (sequenced) | Brief scuffle of bayonets and sabres clashing, two or three sharp metallic clangs with wordless grunts, comic, strong first transient, close-mic, dry, no reverb, 0.9 seconds |
+| `cannon_big.ogg` | 4 | Heavy field cannon blast, sharp crack at the front then a huge chest-thumping low boom with deep sub bass and a short tail, close-mic, dry, no reverb, 1.6 seconds |
+| `cannon_big_layered.ogg` | `cannon_big` take 4 + `cannon` take 1 | (prompts of `cannon_big` and `cannon`) |
+| `charge_hit.ogg` | composite, no prompt of its own | (prompts of `hit_shot`, `hit_structure`, `melee` and `repelled`) |
+
+Edits beyond trim and normalise:
+
+- `hit_volley.ogg`: every take was a single thud with a grunt-like tail. The four generated thuds are layered
+  as a ragged cluster at 0 / 0.055 / 0.125 / 0.20 s (take 4 first and ringing out, then takes 2, 3 and 1).
+- `melee.ogg`: every take was essentially one clang. Three generated clangs are sequenced at 0 / 0.17 / 0.36 s
+  (takes 2, 3, 4).
+- `cannon_big.ogg`: take 4 as generated; it had the most energy below 120 Hz of the four takes and no clipping.
+- `cannon_big_layered.ogg`: optional extra, not one of the requested files. `cannon_big` with the sub-160 Hz
+  body of the original cannon take (take 1, low-passed) added underneath.
+- `charge_hit.ogg`: not generated from its own prompt. It is a mix of takes from this project: `hit_shot`
+  take 4 (thump) and `hit_structure` take 4 (crack) at 0 s, `melee` takes 3, 4 and 1 (steel) at 0.05 / 0.17 /
+  0.30 s, and the first 0.85 s of `repelled` take 3 (horse) from 0.20 s.
