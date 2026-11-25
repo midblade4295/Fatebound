@@ -14,8 +14,10 @@ extends RefCounted
 ##       3  no live shadows (the woods' baked shade and the blob shadows remain), plainer ground
 ##       4  no falling leaves or motes, coarser models again
 ##
-## Multisample antialiasing is only used on screens under 1300 pixels across. On a denser
-## screen the pixels are too small for it to show, and it is one of the dearest things to draw.
+## Multisample antialiasing and bloom are only used on screens under 1300 pixels across. On a
+## denser screen each is a pass over millions more pixels (measured on a 1440 x 3200 phone:
+## about 10 ms and 7 ms of a 16.7 ms frame), antialiasing cannot be seen at that pixel size, and
+## what bloom did for the gun flashes is done by the glow painted under them.
 ##
 ## It is a safety net for weak devices, so it is slow to act: the rate has to stay well under
 ## the target for several seconds before anything is given up.
@@ -38,14 +40,14 @@ func _init() -> void:
 	if enabled:
 		var file := ConfigFile.new()
 		if file.load(PATH) == OK:
-			level = clampi(int(file.get_value("quality", "level_v3", 0)), 0, MAX_LEVEL)
+			level = clampi(int(file.get_value("quality", "level_v4", 0)), 0, MAX_LEVEL)
 
 
 func _save() -> void:
 	if not enabled:
 		return
 	var file := ConfigFile.new()
-	file.set_value("quality", "level_v3", level)
+	file.set_value("quality", "level_v4", level)
 	file.save(PATH)
 
 
@@ -53,12 +55,14 @@ func _save() -> void:
 func apply(world: Node, viewport: Viewport) -> void:
 	var size := DisplayServer.window_get_size()
 	var dense := mini(size.x, size.y) >= 1300
+	if OS.has_environment("DRUMS_DENSE"):
+		dense = true                    # for trying the dense-screen settings on a desktop
 	viewport.msaa_3d = Viewport.MSAA_2X if level < 1 and not dense else Viewport.MSAA_DISABLED
 	viewport.scaling_3d_scale = 1.0
 	viewport.mesh_lod_threshold = float(LOD_PIXELS[level])
 	RenderingServer.directional_soft_shadow_filter_set_quality(
 			RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW if level < 2 else RenderingServer.SHADOW_QUALITY_HARD)
-	world.set_quality(level)
+	world.set_quality(level, level < 1 and not dense)
 
 
 ## Call once a second with the measured frame rate while a battle is running.

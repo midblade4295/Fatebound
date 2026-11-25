@@ -44,7 +44,9 @@ var _lamps: Dictionary = {}
 var _shake: float = 0.0            # 0..1, how hard the camera is being rattled
 var _cam_base: Transform3D
 var _hitstop_until: int = 0        # real-time milliseconds; 0 when time is running normally
-var _lights: Array = []            # a small pool of lights for muzzle flashes
+var _lights: Array = []            # a small pool of glow discs for muzzle flashes
+var _glow_material: ShaderMaterial
+var script_usec: int = 0           # time spent in _process since the battle screen last read it
 var _chunks: Array = []            # flung clods and splinters: {node, vel, age, life}
 var _jolts: Dictionary = {}        # structure id -> how hard it is still shuddering
 var _hit_flash: StandardMaterial3D
@@ -568,9 +570,9 @@ func warm_up(cards: Dictionary) -> void:
 
 
 ## What each quality level (see quality.gd) switches off in the 3D scene.
-func set_quality(level: int) -> void:
+func set_quality(level: int, bloom: bool) -> void:
 	if _env != null:
-		_env.glow_enabled = level < 1
+		_env.glow_enabled = bloom
 	if arena != null:
 		arena.set_plain_ground(level >= 3)
 		arena.set_extras(level < 4)
@@ -639,6 +641,12 @@ func reset(new_sim: Sim) -> void:
 
 
 func _process(delta: float) -> void:
+	var began := Time.get_ticks_usec()
+	_step(delta)
+	script_usec += Time.get_ticks_usec() - began
+
+
+func _step(delta: float) -> void:
 	if sim == null:
 		return
 	_time += delta
@@ -732,27 +740,46 @@ func hitstop(milliseconds: int) -> void:
 	_hitstop_until = maxi(_hitstop_until, Time.get_ticks_msec() + milliseconds)
 
 
+## The glow a muzzle flash or a blast throws on the ground: a warm pool of light, added to
+## whatever is under it. It is a painted disc, not a light: a real light is worked out for every
+## pixel of the field while it burns, and in a firefight several are always burning.
 func _light_flash(at: Vector3, energy: float, reach: float, life: float) -> void:
-	var light: OmniLight3D = null
+	var slot: Dictionary = {}
 	for l: Dictionary in _lights:
 		if float(l["age"]) >= float(l["life"]):
-			light = l["node"]
-			l["age"] = 0.0
-			l["life"] = life
-			l["energy"] = energy
+			slot = l
 			break
-	if light == null:
-		if _lights.size() >= 5:
+	if slot.is_empty():
+		if _lights.size() >= 8:
 			return
-		light = OmniLight3D.new()
-		light.light_color = Color("ffb35a")
-		light.shadow_enabled = false
-		add_child(light)
-		_lights.append({"node": light, "age": 0.0, "life": life, "energy": energy})
-	light.position = at
-	light.omni_range = reach
-	light.light_energy = energy
-	light.visible = true
+		if _glow_material == null:
+			_glow_material = ShaderMaterial.new()
+			_glow_material.shader = Shader.new()
+			_glow_material.shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, shadows_disabled, cull_disabled;
+instance uniform float strength = 0.0;
+void fragment() {
+	float d = length(UV - 0.5) * 2.0;
+	float g = 1.0 - smoothstep(0.0, 1.0, d);
+	ALBEDO = vec3(1.0, 0.6, 0.24) * g * g * strength;
+}
+"""
+		var disc := MeshInstance3D.new()
+		disc.mesh = PlaneMesh.new()
+		disc.material_override = _glow_material
+		disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(disc)
+		slot = {"node": disc}
+		_lights.append(slot)
+	slot["age"] = 0.0
+	slot["life"] = life
+	slot["energy"] = clampf(energy / 12.0, 0.2, 1.1)
+	var node: MeshInstance3D = slot["node"]
+	node.position = Vector3(at.x, Arena.standing_height(at.x, at.z) + 0.12, at.z)
+	node.scale = Vector3.ONE * reach * 1.25
+	node.set_instance_shader_parameter("strength", float(slot["energy"]))
+	node.visible = true
 
 
 ## Flings clods of earth or splinters of wood from a point, in roughly one direction.
@@ -823,9 +850,9 @@ func _update_impact(delta: float) -> void:
 	for l: Dictionary in _lights:
 		l["age"] = float(l["age"]) + delta
 		var k := 1.0 - float(l["age"]) / float(l["life"])
-		var node: OmniLight3D = l["node"]
+		var node: MeshInstance3D = l["node"]
 		node.visible = k > 0.0
-		node.light_energy = float(l["energy"]) * maxf(k, 0.0)
+		node.set_instance_shader_parameter("strength", float(l["energy"]) * maxf(k, 0.0))
 	var keep: Array = []
 	for c: Dictionary in _chunks:
 		c["age"] = float(c["age"]) + delta

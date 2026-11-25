@@ -92,6 +92,8 @@ var show_fps: bool = true
 var quality: Quality
 var bench: Bench
 var _hud_hidden: bool = false
+var _script_usec: int = 0
+var script_ms: float = 0.0          # this screen's and the world's script time per frame, last second
 
 
 func _ready() -> void:
@@ -190,6 +192,12 @@ func _layout() -> void:
 
 
 func _process(delta: float) -> void:
+	var began := Time.get_ticks_usec()
+	_step(delta)
+	_script_usec += Time.get_ticks_usec() - began
+
+
+func _step(delta: float) -> void:
 	_layout()
 	_clock += delta
 	_count_frames()
@@ -323,6 +331,9 @@ func _count_frames() -> void:
 	_fps_frames += 1
 	if now - _fps_since >= 1000:
 		var fps := _fps_frames * 1000.0 / maxf(1.0, float(now - _fps_since))
+		script_ms = (_script_usec + world.script_usec) / 1000.0 / maxf(1.0, float(_fps_frames))
+		_script_usec = 0
+		world.script_usec = 0
 		# Judge the frame rate only while a battle is actually running in front of the player.
 		if not world.warming() and _curtain <= 0.0 and sim.phase != Sim.PHASE_OVER and not bench.running and not bench.done:
 			quality.report(fps, world, get_viewport())
@@ -547,6 +558,12 @@ func _word(pos: Vector2, text: String, colour: Color) -> void:
 func _draw() -> void:
 	if _hud_hidden:
 		return
+	var began := Time.get_ticks_usec()
+	_draw_all()
+	_script_usec += Time.get_ticks_usec() - began
+
+
+func _draw_all() -> void:
 	if selected >= 0:
 		_draw_deploy_zone()
 	for s: Sim.Structure in sim.structures:

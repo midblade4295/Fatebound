@@ -37,8 +37,9 @@ var _saved_vsync: int = 0
 var _base_tris: int = 0
 var _base_draws: int = 0
 var _base_script: float = 0.0
-var _script: float = 0.0
 var _base_msaa: int = 0
+var _base_glow: bool = false
+var _saved_cap: int = 0
 
 
 func start(screen: Node) -> void:
@@ -48,8 +49,14 @@ func start(screen: Node) -> void:
 	_rid = _viewport.get_viewport_rid()
 	RenderingServer.viewport_set_measure_render_time(_rid, true)
 	var arena: Node = _world.arena
+	_saved_level = screen.quality.level
+	screen.quality.level = 0
+	screen.quality.apply(_world, _viewport)
+	_base_msaa = _viewport.msaa_3d
+	_base_glow = _world._env.glow_enabled
+	_base_script = screen.script_ms
 	_steps = [
-		["Bloom", func(on: bool) -> void: _world._env.glow_enabled = on],
+		["(test) add bloom" if not _base_glow else "Bloom", func(on: bool) -> void: _world._env.glow_enabled = _base_glow if on else not _base_glow],
 		["(test) add 2x antialiasing", func(on: bool) -> void: _viewport.msaa_3d = _base_msaa if on else (Viewport.MSAA_DISABLED if _base_msaa != Viewport.MSAA_DISABLED else Viewport.MSAA_2X)],
 		["Live shadows", func(on: bool) -> void: _world._sun.shadow_enabled = on],
 		["Sky light (fill, rim)", func(on: bool) -> void:
@@ -72,13 +79,11 @@ func start(screen: Node) -> void:
 		["(test) half resolution", func(on: bool) -> void: _viewport.scaling_3d_scale = 1.0 if on else 0.5],
 		["(test) whole 3D scene", func(on: bool) -> void: _viewport.disable_3d = not on],
 	]
-	_saved_level = screen.quality.level
-	screen.quality.level = 0
-	screen.quality.apply(_world, _viewport)
-	_base_msaa = _viewport.msaa_3d
 	# Let frames come as fast as the device can make them, if it will allow that.
 	_saved_vsync = DisplayServer.window_get_vsync_mode()
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	_saved_cap = Engine.max_fps
+	Engine.max_fps = 0
 	_found.clear()
 	lines = PackedStringArray()
 	_index = -1
@@ -92,7 +97,6 @@ func _begin_step() -> void:
 	_gpu = 0.0
 	_cpu = 0.0
 	_frame = 0.0
-	_script = 0.0
 	_count = 0
 	_last_usec = 0
 	progress = "Measuring %d of %d: %s" % [_index + 2, _steps.size() + 1, "everything on" if _index < 0 else String(_steps[_index][0])]
@@ -108,7 +112,6 @@ func tick() -> void:
 		_gpu += RenderingServer.viewport_get_measured_render_time_gpu(_rid)
 		_cpu += RenderingServer.viewport_get_measured_render_time_cpu(_rid) + RenderingServer.get_frame_setup_time_cpu()
 		_frame += (now - _last_usec) / 1000.0
-		_script += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
 		_count += 1
 	_last_usec = now
 	if _count < measure:
@@ -118,7 +121,6 @@ func tick() -> void:
 		_base = got
 		_base_tris = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 		_base_draws = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
-		_base_script = _script / _count
 	else:
 		_found.append([_steps[_index][0], _base[0] - got[0], _base[1] - got[1], _base[2] - got[2]])
 		(_steps[_index][1] as Callable).call(true)
@@ -134,6 +136,7 @@ func _finish() -> void:
 	running = false
 	done = true
 	DisplayServer.window_set_vsync_mode(_saved_vsync)
+	Engine.max_fps = _saved_cap
 	_screen.quality.level = _saved_level
 	_screen.quality.apply(_world, _viewport)
 	var has_gpu: bool = _base[0] > 0.05
@@ -143,8 +146,8 @@ func _finish() -> void:
 	lines.append("%d x %d px, screen %s Hz, %s" % [size.x, size.y, str(int(hz)) if hz >= 1.0 and hz < 1000.0 else "?", String(RenderingServer.get_current_rendering_method())])
 	lines.append("Everything on:  frame %.1f ms (%d FPS)   GPU %.1f ms   CPU draw %.1f ms   scripts %.1f ms" % [
 			_base[2], int(round(1000.0 / maxf(_base[2], 0.1))), _base[0], _base[1], _base_script])
-	lines.append("%d triangles, %d draw calls per frame, antialiasing %s, level Q%d before the test" % [_base_tris, _base_draws,
-			"off" if _base_msaa == Viewport.MSAA_DISABLED else "2x", _saved_level])
+	lines.append("%d triangles, %d draw calls, antialiasing %s, bloom %s, Q%d before the test" % [_base_tris, _base_draws,
+			"off" if _base_msaa == Viewport.MSAA_DISABLED else "2x", "on" if _base_glow else "off", _saved_level])
 	lines.append("")
 	lines.append("What each part costs per frame, in ms (heaviest first):" + ("" if has_gpu else "  (no GPU timer here: frame time only)"))
 	var key := 1 if has_gpu else 3
@@ -158,5 +161,6 @@ func _finish() -> void:
 			lines.append("%s:   whole frame %.1f   CPU %.1f" % [f[0], float(f[3]), float(f[2])])
 	lines.append("")
 	lines.append("60 FPS needs the whole frame under 16.7 ms. Small or negative numbers are noise.")
+	lines.append("If every row is near zero, the chip is keeping up and slowing its clock to save power.")
 	lines.append("Screenshot this, then tap to close.")
 	print("DRUMS_BENCH\n" + "\n".join(lines))
