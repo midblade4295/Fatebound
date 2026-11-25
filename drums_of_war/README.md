@@ -93,6 +93,9 @@ match goes to one minute of sudden-death overtime.
   detail, then live shadows) until it holds. It is a safety net and slow to act: the game is
   built to run at level 0. The picture is never scaled down. The level is shown
   beside the FPS readout; tapping the readout starts again from the top.
+  Per-pixel work is rationed, because a phone screen can have 4.6 million pixels: the fill
+  and rim light come from a painted sky rather than two more lights, the porch lamps are
+  painted by the ground shader, and the ground's five noises are read from two textures.
 - `scripts/view/bench.gd`: a cost meter that runs on the device. Tap the FPS readout: it turns
   each part of the picture off in turn, reads the engine's GPU and CPU render timers with and
   without it, and lists what each part costs per frame, heaviest first.

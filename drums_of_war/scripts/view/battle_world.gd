@@ -52,8 +52,6 @@ var _chunk_mesh: BoxMesh
 var _ring_tex: GradientTexture2D
 var _chimney_clock: float = 0.0
 var _sun: DirectionalLight3D
-var _rim: DirectionalLight3D
-var _fill: DirectionalLight3D
 var _env: Environment
 var _warm: Node3D                  # one of everything, drawn out of sight for a moment at the start
 var _warm_frames: int = 0
@@ -160,9 +158,47 @@ func _build_environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("8ecbff")
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("8ba8d6")       # cool sky-blue fill in the shadows
+	# The light that is not the sun comes from a painted sky: cool blue all round (the fill in
+	# the shadows), a broad warm glow from the camera's side so the faces turned toward the
+	# player are never dull, and a cool one from beyond the far end for a rim. These used to be
+	# two more lights, each worked out for every pixel on screen; read from the sky they cost
+	# one texture lookup.
+	var sky_shader := Shader.new()
+	sky_shader.code = """
+shader_type sky;
+uniform vec3 base : source_color;
+uniform vec3 fill : source_color;
+uniform vec3 rim : source_color;
+uniform vec3 fill_from;
+uniform vec3 rim_from;
+uniform float fill_gain;
+uniform float rim_gain;
+void sky() {
+	float f = max(dot(EYEDIR, fill_from), 0.0);
+	float r = max(dot(EYEDIR, rim_from), 0.0);
+	COLOR = base + fill * f * fill_gain + rim * r * rim_gain;
+}
+"""
+	var sky_mat := ShaderMaterial.new()
+	sky_mat.shader = sky_shader
+	sky_mat.set_shader_parameter("base", Color("8ba8d6"))
+	sky_mat.set_shader_parameter("fill", Color("ffe9c8"))
+	sky_mat.set_shader_parameter("rim", Color("cfe6ff"))
+	# Where each glow sits in the sky: the way back along the old light's rays.
+	sky_mat.set_shader_parameter("fill_from", Basis.from_euler(Vector3(deg_to_rad(-42.0), deg_to_rad(12.0), 0.0)).z)
+	sky_mat.set_shader_parameter("rim_from", Basis.from_euler(Vector3(deg_to_rad(-30.0), deg_to_rad(168.0), 0.0)).z)
+	# Gains set by eye and by measurement so that the field and the woods come out as bright as
+	# the two lights they replace (energies 0.34 and 0.42) made them.
+	sky_mat.set_shader_parameter("fill_gain", float(OS.get_environment("SKY_FILL")) if OS.has_environment("SKY_FILL") else 0.25)
+	sky_mat.set_shader_parameter("rim_gain", float(OS.get_environment("SKY_RIM")) if OS.has_environment("SKY_RIM") else 0.31)
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
+	sky.radiance_size = Sky.RADIANCE_SIZE_32
+	sky.process_mode = Sky.PROCESS_MODE_QUALITY
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_energy = 0.62
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	# ACES: a filmic curve that keeps saturated team colours rich as they brighten instead of
 	# clipping to flat, plastic-looking patches. TONEMAP=agx or filmic to compare.
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
@@ -206,22 +242,6 @@ func _build_environment() -> void:
 	sun.shadow_blur = 2.2                # soft-edged shadows
 	sun.shadow_opacity = 0.66            # never pitch black: the sky fills them
 	add_child(sun)
-
-	var fill := DirectionalLight3D.new()            # soft warm fill from the camera's side, so the
-	fill.light_color = Color("ffe9c8")              # faces turned toward the player are never dull
-	fill.light_energy = 0.34
-	fill.rotation_degrees = Vector3(-42.0, 12.0, 0.0)
-	fill.shadow_enabled = false
-	_fill = fill
-	add_child(fill)
-
-	var rim := DirectionalLight3D.new()             # crisp cool rim from behind the field
-	rim.light_color = Color("cfe6ff")
-	rim.light_energy = 0.42
-	rim.rotation_degrees = Vector3(-30.0, 168.0, 0.0)     # from beyond the far end, back toward the camera
-	rim.shadow_enabled = false
-	_rim = rim
-	add_child(rim)
 
 	camera = Camera3D.new()
 	camera.fov = 26.0
@@ -290,15 +310,8 @@ func _build_arena() -> void:
 		_add_blob(node, 7.0 if s.kind == "hq" else 5.0, 0.34)
 		if s.kind == "hq":
 			# Lamplight spilling from the farmhouse onto the grass in front of it.
-			var lamp := OmniLight3D.new()
-			lamp.light_color = Color("ffb964")
-			lamp.light_energy = 2.2
-			lamp.omni_range = 6.5
-			lamp.omni_attenuation = 1.4
-			lamp.shadow_enabled = false
-			lamp.position = Vector3(0.0, 1.6, 2.6)
-			node.add_child(lamp)
-			_lamps[s.id] = lamp
+			# Its lamplight is painted on the ground by the ground shader (see arena.set_lamp).
+			_lamps[s.id] = _lamps.size()
 
 
 ## A white wash laid over a figure for an instant when it is struck.
@@ -558,10 +571,6 @@ func warm_up(cards: Dictionary) -> void:
 func set_quality(level: int) -> void:
 	if _env != null:
 		_env.glow_enabled = level < 1
-	if _rim != null:
-		_rim.visible = level < 2
-	if _fill != null:
-		_fill.visible = level < 4
 	if arena != null:
 		arena.set_plain_ground(level >= 3)
 		arena.set_extras(level < 4)
@@ -666,7 +675,8 @@ func _process(delta: float) -> void:
 				var w: Vector3 = _structures[s.id].position + Vector3(-1.05, 5.0, -0.5)
 				_puffs.append({"pos": w, "vel": Vector3(0.45, 0.7, 0.0), "age": 0.0, "life": 3.2, "size": 0.55})
 	for id in _lamps:
-		_lamps[id].visible = not _structure_dead.get(id, false)
+		var at: Vector3 = _structures[id].position
+		arena.set_lamp(int(_lamps[id]), at.x, at.z + 2.6, 0.0 if _structure_dead.get(id, false) else 1.0)
 	_update_impact(delta)
 	_update_contact_shadows()
 	_update_leaving(delta)

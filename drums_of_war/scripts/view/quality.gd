@@ -10,9 +10,12 @@ extends RefCounted
 ##
 ## Level 0  everything on: this is what the game is built to run at
 ##       1  no bloom, no multisample antialiasing
-##       2  hard-edged shadows, no rim light, coarser distant models
+##       2  hard-edged shadows, coarser distant models
 ##       3  no live shadows (the woods' baked shade and the blob shadows remain), plainer ground
-##       4  no falling leaves or motes, no fill light, coarser models again
+##       4  no falling leaves or motes, coarser models again
+##
+## Multisample antialiasing is only used on screens under 1300 pixels across. On a denser
+## screen the pixels are too small for it to show, and it is one of the dearest things to draw.
 ##
 ## It is a safety net for weak devices, so it is slow to act: the rate has to stay well under
 ## the target for several seconds before anything is given up.
@@ -35,20 +38,22 @@ func _init() -> void:
 	if enabled:
 		var file := ConfigFile.new()
 		if file.load(PATH) == OK:
-			level = clampi(int(file.get_value("quality", "level_v2", 0)), 0, MAX_LEVEL)
+			level = clampi(int(file.get_value("quality", "level_v3", 0)), 0, MAX_LEVEL)
 
 
 func _save() -> void:
 	if not enabled:
 		return
 	var file := ConfigFile.new()
-	file.set_value("quality", "level_v2", level)
+	file.set_value("quality", "level_v3", level)
 	file.save(PATH)
 
 
 ## Applies the current level. world is the battle world (battle_world.gd).
 func apply(world: Node, viewport: Viewport) -> void:
-	viewport.msaa_3d = Viewport.MSAA_2X if level < 1 else Viewport.MSAA_DISABLED
+	var size := DisplayServer.window_get_size()
+	var dense := mini(size.x, size.y) >= 1300
+	viewport.msaa_3d = Viewport.MSAA_2X if level < 1 and not dense else Viewport.MSAA_DISABLED
 	viewport.scaling_3d_scale = 1.0
 	viewport.mesh_lod_threshold = float(LOD_PIXELS[level])
 	RenderingServer.directional_soft_shadow_filter_set_quality(

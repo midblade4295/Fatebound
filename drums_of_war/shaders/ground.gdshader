@@ -1,31 +1,38 @@
 // The battlefield's ground: open green pasture inside a darker meadow, never one flat colour.
 //
-// Colour comes from a single tiling noise texture sampled at three scales (macro patches,
-// mottling, fine speckle), plus worn earth on the road, at
-// the fords and around the works, sand and pebbles on the creek's banks, drifting cloud shadow
-// and dappled light at the wood's edge. Colours are written as seen on screen and converted to
-// linear at the end.
+// Colour comes from noise at five scales (macro patches, clumps, mottling, fine speckle,
+// pebbles), plus worn earth on the road, at the fords and around the works, sand and pebbles on
+// the creek's banks, drifting cloud shadow and dappled light at the wood's edge. Colours are
+// written as seen on screen and converted to linear at the end.
+//
+// This shader runs on most of the screen's pixels, so texture reads are rationed: the five
+// noises live in the channels of two small textures (arena.gd _noise_pack), read once each.
 shader_type spatial;
 render_mode diffuse_lambert, specular_disabled;      // rough ground: none of the highlight maths is worth its cost
-uniform sampler2D noise : filter_linear_mipmap, repeat_enable;
+uniform sampler2D pack_a : filter_linear_mipmap, repeat_enable;     // r macro, g clumps (2.4x finer), b mottling (6x finer)
+uniform sampler2D pack_b : filter_linear_mipmap, repeat_enable;     // r fine speckle, g pebbles (2.6x finer)
+uniform vec3 lamp[2];               // each farmhouse's porch lamp: x, z, brightness
 uniform vec2 worn[6];
 uniform sampler2D shade_tex : filter_linear_mipmap, repeat_disable, hint_default_white;   // the woods' baked shadow
 uniform vec4 shade_u = vec4(0.0);
 uniform vec4 shade_v = vec4(0.0);
-uniform bool plain = false;         // slow devices: skip the pebbles, cloud shadow and dappled light
+uniform bool plain = false;         // slow devices: skip the cloud shadow and dappled light
 varying vec3 wp;
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 void fragment() {
-	float n1 = texture(noise, wp.xz * 0.035).r;
-	float n2 = texture(noise, wp.xz * 0.21 + vec2(0.37, 0.11)).r;
-	float n3 = texture(noise, wp.xz * 0.9).r;
+	vec3 a = texture(pack_a, wp.xz * 0.035).rgb;
+	vec2 b = texture(pack_b, wp.xz * 0.9).rg;
+	float n1 = a.r;
+	float n5 = a.g;
+	float n2 = a.b;
+	float n3 = b.r;
+	float n4 = b.g;
 	// The pasture's edge wanders a little instead of running ruler-straight.
 	float ragged = (n2 - 0.5) * 1.1;
 	float in_field = smoothstep(-0.3, 0.8, 9.0 - abs(wp.x) + ragged) * smoothstep(-0.3, 0.8, 18.0 - abs(wp.z) + ragged);
 	// The field: open pasture, never two patches quite the same green. Broad drifts of lighter
 	// and deeper grass, smaller clumps inside them, sun-bleached tips here and there, and a
 	// fine fleck over all of it. No lines: nothing here was mown.
-	float n5 = texture(noise, wp.xz * 0.085 + vec2(0.61, 0.27)).r;
 	vec3 field = mix(vec3(0.37, 0.55, 0.17), vec3(0.49, 0.65, 0.23), smoothstep(0.28, 0.72, n1));
 	field = mix(field, vec3(0.33, 0.52, 0.16), smoothstep(0.52, 0.74, n5) * 0.55);          // lusher, darker clumps
 	field = mix(field, vec3(0.6, 0.69, 0.28), smoothstep(0.56, 0.8, n1 * 0.45 + n2 * 0.55) * 0.4);   // bleached drifts
@@ -54,7 +61,6 @@ void fragment() {
 	// Banks of sand and gravel, then the darker bed under the water.
 	// The bank: grass thins to sand before the ground even drops, then sand and pebbles down
 	// to the waterline, so the meadow and the creek blend instead of meeting at a line.
-	float n4 = plain ? n3 : texture(noise, wp.xz * 2.3).r;
 	float near_water = 1.0 - smoothstep(1.25, 2.1 + (n2 - 0.5) * 0.7, abs(wp.z));
 	col = mix(col, vec3(0.74, 0.67, 0.47), near_water * 0.55);
 	float bank = smoothstep(-0.01, -0.2, wp.y);
@@ -65,15 +71,23 @@ void fragment() {
 	col = mix(col, vec3(0.3, 0.33, 0.27) * (0.8 + 0.4 * n3), smoothstep(-0.55, -1.05, wp.y));
 	// Slow cloud shadow across everything, and dappled sun where the woods overhang the edges.
 	if (!plain) {
-		float cloud = texture(noise, wp.xz * 0.011 + TIME * vec2(0.008, 0.004)).r;
+		float cloud = texture(pack_a, wp.xz * 0.011 + TIME * vec2(0.008, 0.004)).r;
 		col *= mix(0.9, 1.04, smoothstep(0.34, 0.66, cloud));
-		float dapple = texture(noise, wp.xz * 0.5 + TIME * vec2(0.012, 0.007)).r;
 		float shade_edge = clamp(smoothstep(6.6, 10.0, abs(wp.x)) + smoothstep(15.0, 19.0, abs(wp.z)), 0.0, 1.0);
-		col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
+		if (shade_edge > 0.0) {         // only the margins pay for the dappling
+			float dapple = texture(pack_b, wp.xz * 0.5 + TIME * vec2(0.012, 0.007)).r;
+			col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
+		}
 	}
 	// The woods' shadow, drawn once at the start (arena.gd begin_shade_bake): cool and soft.
 	float lit = texture(shade_tex, vec2(dot(vec4(wp, 1.0), shade_u), dot(vec4(wp, 1.0), shade_v))).r;
 	col *= mix(vec3(0.56, 0.62, 0.74), vec3(1.0), lit);
+	// Lamplight spilling from each farmhouse porch: painted here, because a real light would be
+	// worked out for every pixel of the field, lit by it or not.
+	for (int i = 0; i < 2; i++) {
+		float glow = 1.0 - smoothstep(0.3, 5.2, distance(wp.xz, lamp[i].xy));
+		col += vec3(0.34, 0.2, 0.06) * glow * glow * lamp[i].z;
+	}
 	// The colours above are written as seen on screen. Flat ground takes the full sun, the fill
 	// and the sky at once, so it is laid in a little under and the lighting brings it back up.
 	ALBEDO = pow(col, vec3(2.2)) * 0.66;

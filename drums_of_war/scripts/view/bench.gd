@@ -37,6 +37,8 @@ var _saved_vsync: int = 0
 var _base_tris: int = 0
 var _base_draws: int = 0
 var _base_script: float = 0.0
+var _script: float = 0.0
+var _base_msaa: int = 0
 
 
 func start(screen: Node) -> void:
@@ -48,11 +50,12 @@ func start(screen: Node) -> void:
 	var arena: Node = _world.arena
 	_steps = [
 		["Bloom", func(on: bool) -> void: _world._env.glow_enabled = on],
-		["Antialiasing (2x)", func(on: bool) -> void: _viewport.msaa_3d = Viewport.MSAA_2X if on else Viewport.MSAA_DISABLED],
+		["(test) add 2x antialiasing", func(on: bool) -> void: _viewport.msaa_3d = _base_msaa if on else (Viewport.MSAA_DISABLED if _base_msaa != Viewport.MSAA_DISABLED else Viewport.MSAA_2X)],
 		["Live shadows", func(on: bool) -> void: _world._sun.shadow_enabled = on],
-		["Fill and rim lights", func(on: bool) -> void:
-			_world._fill.visible = on
-			_world._rim.visible = on],
+		["Sky light (fill, rim)", func(on: bool) -> void:
+			_world._env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY if on else Environment.AMBIENT_SOURCE_COLOR],
+		["Soft shadow edges", func(on: bool) -> void: RenderingServer.directional_soft_shadow_filter_set_quality(
+				RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW if on else RenderingServer.SHADOW_QUALITY_HARD)],
 		["Trees and bushes", func(on: bool) -> void: arena.show_group("plants", on)],
 		["Grass and flowers", func(on: bool) -> void: arena.show_group("grass", on)],
 		["Fences, rocks, bridge", func(on: bool) -> void: arena.show_group("props", on)],
@@ -72,6 +75,7 @@ func start(screen: Node) -> void:
 	_saved_level = screen.quality.level
 	screen.quality.level = 0
 	screen.quality.apply(_world, _viewport)
+	_base_msaa = _viewport.msaa_3d
 	# Let frames come as fast as the device can make them, if it will allow that.
 	_saved_vsync = DisplayServer.window_get_vsync_mode()
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
@@ -88,6 +92,7 @@ func _begin_step() -> void:
 	_gpu = 0.0
 	_cpu = 0.0
 	_frame = 0.0
+	_script = 0.0
 	_count = 0
 	_last_usec = 0
 	progress = "Measuring %d of %d: %s" % [_index + 2, _steps.size() + 1, "everything on" if _index < 0 else String(_steps[_index][0])]
@@ -103,6 +108,7 @@ func tick() -> void:
 		_gpu += RenderingServer.viewport_get_measured_render_time_gpu(_rid)
 		_cpu += RenderingServer.viewport_get_measured_render_time_cpu(_rid) + RenderingServer.get_frame_setup_time_cpu()
 		_frame += (now - _last_usec) / 1000.0
+		_script += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
 		_count += 1
 	_last_usec = now
 	if _count < measure:
@@ -112,7 +118,7 @@ func tick() -> void:
 		_base = got
 		_base_tris = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 		_base_draws = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
-		_base_script = Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+		_base_script = _script / _count
 	else:
 		_found.append([_steps[_index][0], _base[0] - got[0], _base[1] - got[1], _base[2] - got[2]])
 		(_steps[_index][1] as Callable).call(true)
@@ -137,13 +143,16 @@ func _finish() -> void:
 	lines.append("%d x %d px, screen %s Hz, %s" % [size.x, size.y, str(int(hz)) if hz >= 1.0 and hz < 1000.0 else "?", String(RenderingServer.get_current_rendering_method())])
 	lines.append("Everything on:  frame %.1f ms (%d FPS)   GPU %.1f ms   CPU draw %.1f ms   scripts %.1f ms" % [
 			_base[2], int(round(1000.0 / maxf(_base[2], 0.1))), _base[0], _base[1], _base_script])
-	lines.append("%d triangles, %d draw calls per frame" % [_base_tris, _base_draws])
+	lines.append("%d triangles, %d draw calls per frame, antialiasing %s, level Q%d before the test" % [_base_tris, _base_draws,
+			"off" if _base_msaa == Viewport.MSAA_DISABLED else "2x", _saved_level])
 	lines.append("")
 	lines.append("What each part costs per frame, in ms (heaviest first):" + ("" if has_gpu else "  (no GPU timer here: frame time only)"))
 	var key := 1 if has_gpu else 3
 	_found.sort_custom(func(a: Array, b: Array) -> bool: return float(a[key]) > float(b[key]))
 	for f: Array in _found:
-		if has_gpu:
+		if String(f[0]).begins_with("(test) add"):
+			lines.append("%s:   would cost GPU %.1f   whole frame %.1f" % [f[0], -float(f[1]), -float(f[3])])
+		elif has_gpu:
 			lines.append("%s:   GPU %.1f   CPU %.1f   whole frame %.1f" % [f[0], float(f[1]), float(f[2]), float(f[3])])
 		else:
 			lines.append("%s:   whole frame %.1f   CPU %.1f" % [f[0], float(f[3]), float(f[2])])

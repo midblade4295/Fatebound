@@ -78,7 +78,6 @@ var plaque: Rect2 = Rect2(210, 8, 120, 56)     # the clock's plaque in its middl
 var _laid_out: bool = false
 var art_h: float = 78.0             # height of a card's picture; taller screens get a little more
 var card_size: Vector2 = Vector2(91.0, 126.0)
-var _vignette: GradientTexture2D
 var _bar_lag: Dictionary = {}       # id -> the strength a bar still shows as "just lost"
 var _bar_flash: Dictionary = {}     # id -> seconds of white flash left on a bar
 var _melee_clock: float = 0.0
@@ -548,7 +547,6 @@ func _word(pos: Vector2, text: String, colour: Color) -> void:
 func _draw() -> void:
 	if _hud_hidden:
 		return
-	_draw_vignette()
 	if selected >= 0:
 		_draw_deploy_zone()
 	for s: Sim.Structure in sim.structures:
@@ -729,22 +727,6 @@ func _draw_hud() -> void:
 	_text(Vector2(column, trough.position.y - 3.0), "POWDER", 11, COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
 	_text(Vector2(column, trough.end.y + 0.5), "%d" % int(have), 24, Color(0, 0, 0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
 	_text(Vector2(column, trough.end.y - 1.5), "%d" % int(have), 24, COL_AMBER if ready else COL_CREAM, HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
-
-
-## A soft darkening toward the corners of the screen, drawn under the HUD.
-func _draw_vignette() -> void:
-	if _vignette == null:
-		var g := Gradient.new()
-		g.offsets = PackedFloat32Array([0.0, 0.62, 1.0])
-		g.colors = PackedColorArray([Color(0.1, 0.05, 0.02, 0.0), Color(0.1, 0.05, 0.02, 0.0), Color(0.1, 0.05, 0.02, 0.3)])
-		_vignette = GradientTexture2D.new()
-		_vignette.gradient = g
-		_vignette.fill = GradientTexture2D.FILL_RADIAL
-		_vignette.fill_from = Vector2(0.5, 0.5)
-		_vignette.fill_to = Vector2(1.0, 1.0)
-		_vignette.width = 128
-		_vignette.height = 128
-	draw_texture_rect(_vignette, Rect2(Vector2.ZERO, screen), false)
 
 
 func _art(card_id: String) -> Texture2D:

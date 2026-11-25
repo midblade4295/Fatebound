@@ -224,18 +224,6 @@ func _leaf_colour() -> Color:
 	return LEAVES[_rng.range_i(0, LEAVES.size() - 1)]
 
 
-## A small leaf-shaped mask: white inside a pointed oval, clear outside.
-func _leaf_texture() -> ImageTexture:
-	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
-	for y in 16:
-		for x in 16:
-			var u := (x + 0.5) / 8.0 - 1.0
-			var v := (y + 0.5) / 8.0 - 1.0
-			var inside := (u * u) / 0.32 + (v * v) / 0.9 <= 1.0
-			img.set_pixel(x, y, Color(1, 1, 1, 1.0 if inside else 0.0))
-	return ImageTexture.create_from_image(img)
-
-
 func _noise(frequency: float, seed_value: int, normal_map: bool = false) -> NoiseTexture2D:
 	var n := FastNoiseLite.new()
 	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
@@ -251,6 +239,54 @@ func _noise(frequency: float, seed_value: int, normal_map: bool = false) -> Nois
 	t.as_normal_map = normal_map
 	t.bump_strength = 7.0
 	return t
+
+
+## Several noises in the channels of one texture, so a shader gets them all with one read.
+## frequencies are in cycles per pixel of a 256-pixel tile.
+func _noise_pack(frequencies: Array, seeds: Array) -> ImageTexture:
+	var side := 256
+	var channels: Array = []
+	for i in frequencies.size():
+		var n := FastNoiseLite.new()
+		n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		n.frequency = float(frequencies[i])
+		n.seed = int(seeds[i])
+		n.fractal_octaves = 3
+		var img := n.get_seamless_image(side, side)
+		img.convert(Image.FORMAT_L8)
+		channels.append(img.get_data())
+	var bytes := PackedByteArray()
+	bytes.resize(side * side * 4)
+	bytes.fill(255)
+	for c in channels.size():
+		var src: PackedByteArray = channels[c]
+		for p in side * side:
+			bytes[p * 4 + c] = src[p]
+	var out := Image.create_from_data(side, side, false, Image.FORMAT_RGBA8, bytes)
+	out.generate_mipmaps()
+	return ImageTexture.create_from_image(out)
+
+
+## Where a farmhouse's porch lamp throws its light on the ground, and how brightly (0 = out).
+func set_lamp(index: int, x: float, z: float, strength: float) -> void:
+	if _ground_mat == null or index < 0 or index > 1:
+		return
+	var lamps: PackedVector3Array = _ground_mat.get_shader_parameter("lamp")
+	lamps[index] = Vector3(x, z, strength)
+	_ground_mat.set_shader_parameter("lamp", lamps)
+
+
+## A leaf as a few solid triangles: a pointed oval lying flat (or standing, for the falling
+## ones). Solid, not a cut-out picture, so the graphics chip never has to test each pixel.
+func _leaf_mesh(standing: bool, size: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var ring: Array = [Vector2(0, -0.5), Vector2(0.27, -0.12), Vector2(0.22, 0.25), Vector2(0, 0.5), Vector2(-0.22, 0.25), Vector2(-0.27, -0.12)]
+	for i in ring.size():
+		for v: Vector2 in [Vector2.ZERO, ring[i], ring[(i + 1) % ring.size()]]:
+			st.set_normal(Vector3.BACK if standing else Vector3.UP)
+			st.add_vertex(Vector3(v.x, v.y, 0.0) * size if standing else Vector3(v.x, 0.0, v.y) * size)
+	return st.commit()
 
 
 func _build_ground() -> void:
@@ -281,7 +317,9 @@ func _build_ground() -> void:
 	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/ground.gdshader")
-	mat.set_shader_parameter("noise", _noise(0.02, 7))
+	mat.set_shader_parameter("pack_a", _noise_pack([0.02, 0.0486, 0.12], [7, 8, 9]))
+	mat.set_shader_parameter("pack_b", _noise_pack([0.02, 0.0512], [17, 18]))
+	mat.set_shader_parameter("lamp", PackedVector3Array([Vector3.ZERO, Vector3.ZERO]))
 	var worn := PackedVector2Array()
 	for i in 6:
 		worn.append(_structure_spots[i] if i < _structure_spots.size() else Vector2(999, 999))
@@ -481,7 +519,7 @@ func _build_grass() -> void:
 	mat.shader = Shader.new()
 	mat.shader.code = """
 shader_type spatial;
-render_mode cull_disabled, diffuse_lambert, specular_disabled;
+render_mode cull_disabled, diffuse_lambert, specular_disabled, shadows_disabled;
 varying float along;
 varying vec3 tint;
 void vertex() {
@@ -568,7 +606,7 @@ void fragment() {
 
 const FOLIAGE_SHADER := """
 shader_type spatial;
-render_mode diffuse_lambert, specular_disabled;
+render_mode diffuse_lambert, specular_disabled, shadows_disabled;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
 uniform float y_min;
 uniform float y_size;
@@ -782,16 +820,14 @@ func _build_harvest() -> void:
 # --- Leaves ----------------------------------------------------------------------------------
 
 func _build_leaves() -> void:
-	var leaf_tex := _leaf_texture()
 	# Fallen leaves: thick under the trees, a scattering blown onto the edges of the field.
 	var lying := StandardMaterial3D.new()
-	lying.albedo_texture = leaf_tex
 	lying.vertex_color_use_as_albedo = true
-	lying.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	lying.vertex_color_is_srgb = true
 	lying.cull_mode = BaseMaterial3D.CULL_DISABLED
+	lying.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 	lying.roughness = 0.9
-	var flat := PlaneMesh.new()
-	flat.size = Vector2(0.24, 0.24)
+	var flat := _leaf_mesh(false, 0.26)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
@@ -827,15 +863,14 @@ func _build_leaves() -> void:
 
 	# Falling leaves: a slow drift across the whole field, spinning as they come down.
 	var falling := StandardMaterial3D.new()
-	falling.albedo_texture = leaf_tex
 	falling.vertex_color_use_as_albedo = true
-	falling.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	falling.vertex_color_is_srgb = true
 	falling.cull_mode = BaseMaterial3D.CULL_DISABLED
 	falling.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	falling.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 	falling.roughness = 0.9
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.3, 0.3)
-	quad.material = falling
+	var quad := _leaf_mesh(true, 0.32)
+	quad.surface_set_material(0, falling)
 	var ramp := Gradient.new()
 	ramp.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75, 1.0])
 	ramp.colors = PackedColorArray([LEAVES[0], LEAVES[2], LEAVES[3], LEAVES[1], LEAVES[5]])
