@@ -1,3 +1,3 @@
 .godot/
-*.import
 captures/
+build/

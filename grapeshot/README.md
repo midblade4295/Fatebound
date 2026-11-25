@@ -22,6 +22,14 @@ xvfb-run -a $GODOT --rendering-method mobile --fixed-fps 30 --resolution 540x960
     --path grapeshot -s tools/capture.gd
 ```
 
+Android prototype APK (package `com.fatebound.grapeshot.proto`, arm64, signed with a debug key
+you supply; never the Fatebound preview key or the Play upload key):
+
+```bash
+GODOT=$GODOT ANDROID_HOME=/path/to/android-sdk KEYSTORE=/path/to/debug.keystore \
+    grapeshot/tools/build_preview.sh
+```
+
 Tests: `parse_all` (every script and scene loads), `rules_test` (73 checks of the rules below),
 `bot_match_test` (24 full bot-versus-bot matches; `SEEDS=60` for more), `app_smoke_test`
 (the real screen through real clicks: select, refused placement, deploy, a full match, rematch).
@@ -59,6 +67,7 @@ match goes to one minute of sudden-death overtime.
 ## Not in yet
 
 The other ten cards of the 18-card launch deck, smoke as a rule (it is a visual effect only for
-now), deck building, a menu, sound, any 3D art, an Android build, and online play. Balance is a
+now), deck building, a menu, sound, any 3D art, and online play. The Android APK builds and is signed,
+but has not yet been run on a physical phone. Balance is a
 first pass tuned on bot-versus-bot matches: sides come out even (31 to 29 over 60 seeds), about
 0.7 redoubts fall per match, and roughly a quarter of matches are decided in regular time.
