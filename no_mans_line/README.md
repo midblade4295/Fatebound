@@ -30,17 +30,25 @@ The APK is a debug-signed preview, not a store build.
 
 ## Rules as implemented
 
+The game is built around one loop: **garrison, bank Supply, barrage, then
+charge.** Supply is slow on purpose, an unprepared charge at even numbers fails,
+and the same charge behind a mortar or gas wins.
+
 | Thing | Behaviour |
 | --- | --- |
-| Supply | Both teams: +1 per second, max 10, start at 4. |
-| Riflemen (2) | 3 infantry. Walk to the nearest trench that has a free slot and no enemy inside, take cover (bullets x0.4, mortars x0.5) and shoot across No Man's Land. |
+| Supply | Both teams: +0.5 per second, max 10, start at 5. +0.1 per second for every sector held beyond your own bunker and home trench. Doubled in the last 45 seconds ("final push"). |
+| Riflemen (2) | 3 infantry. Walk to the forward-most trench their side owns that has a free slot, take cover (bullets x0.4, mortars x0.5) and shoot across No Man's Land. |
 | Trench Raiders (4) | 2 fast melee troops. x1.6 melee damage when fighting in a trench, x1.5 incoming damage on open ground. |
-| Mortar Strike (5) | Targeted. Shell lands after 1.6 s, 70 to 25 damage over a 150 px radius, hits both teams, leaves a crater (cover zone, bullets x0.65) on open ground. |
-| Mustard Gas (6) | Targeted, snaps onto a trench. 6 s cloud, 4 damage every 0.5 s to everyone inside, ignores cover. |
-| Whistle Charge | Every Blue unit stationed in a trench sprints at the next enemy trench, or the enemy Command Bunker if no enemy trench is left. 8 s cooldown. |
+| Mortar Strike (5) | Targeted. Shell lands after 1.6 s, 70 to 25 damage over a 150 px radius, hits both teams, leaves a crater (cover zone, bullets x0.65) on open ground. Survivors are **pinned** for 4.5 s. A shell on a bunker silences its machine gun for 4.5 s. |
+| Mustard Gas (6) | Targeted, snaps onto a trench. 6 s cloud, 4 damage every 0.5 s to everyone inside, ignores cover. Everyone inside is **pinned** while they stay in it. |
+| Pinned | A pinned soldier (yellow chevron overhead) cannot attack and moves at half speed. This is the window a charge needs. |
+| Whistle Charge | "Advance one line": every Blue unit stationed in a trench goes for the next trench ahead. It is assaulted if the enemy holds it, moved up into if it is yours and has room; otherwise the target is the enemy Command Bunker. 8 s cooldown. |
 | Bunkers | 1000 HP each, with a short-range machine gun. Switch to the damaged art at 40% health. Destroying one ends the match at once. |
 | Clock | 03:00. At 00:00 the side holding more of the 5 sectors wins. A sector tie goes to the healthier bunker, otherwise it is a stalemate. |
 | Sectors | Bunker: its owner while it stands. Trench: last team to station a soldier in it with no enemy inside. No Man's Land: whoever has more soldiers standing in it. |
+| Red AI | Garrisons up to 6 soldiers, then banks Supply. Attacks with gas-then-whistle or mortar-plus-whistle, or a bare whistle when it clearly outnumbers you. Shells your troops when they bunch up in the open. No attacks in the first 20 seconds. |
+
+Card cooldowns: Riflemen 3 s, Raiders 5 s, Mortar 8 s, Gas 12 s.
 
 Balance numbers live in three places: `GameManager.CARDS` and its exported
 properties, `Unit.STATS`, and the exported properties on Trench / Bunker /
@@ -224,6 +232,7 @@ Unit (CharacterBody2D)               Unit.gd, motion_mode = Floating, M none
 ├─ Muzzle (Marker2D)                 rifle tip; mirrored in code when the unit faces left
 │  ├─ MuzzleFlash (Sprite2D)         muzzle_flash
 │  └─ MuzzleSparks (GPUParticles2D, one_shot)
+├─ PinnedMark (Polygon2D)            yellow chevron, shown while the unit is pinned
 ├─ VisionArea (Area2D)               L none, M = enemy unit layer (set in code)
 │  └─ CollisionShape2D               CircleShape2D (radius set in code per unit type)
 └─ HealthBar (Node2D)
@@ -241,6 +250,7 @@ How `Unit.gd` drives the sprite:
 | `IN_COVER` | `cover` |
 | `ATTACKING` | `aim` between attacks, `walk` while a raider chases its target |
 | each shot or swing | `attack` once, then back to the state's animation |
+| pinned and standing | `cover` (head down), whatever the state |
 
 `state` has a setter, so every `state = ...` assignment switches animation
 immediately. The art faces right: `sprite.flip_h = _facing < 0`, which leaves Blue
@@ -376,6 +386,7 @@ them per instance.
 | Main | `Main` | `bunker_health_changed` | `HUD` | `_on_bunker_health_changed` |
 | Main | `Main` | `whistle_charge` | `HUD` | `_on_whistle_charge` |
 | Main | `Main` | `match_ended` | `HUD` | `_on_match_ended` |
+| Main | `Main` | `final_push_started` | `HUD` | `_on_final_push_started` |
 | HUD | each card `TextureButton` | `pressed` | `HUD` | `_on_card_pressed`, with one extra `int` argument: 0, 1, 2, 3 |
 | HUD | `WhistleButton` | `pressed` | `HUD` | `_on_whistle_button_pressed` |
 | HUD | `TargetingOverlay` | `gui_input` | `HUD` | `_on_targeting_overlay_gui_input` |

@@ -2,12 +2,15 @@ class_name MortarStrike
 extends Node2D
 ## MortarStrike.gd -- a delayed mortar shell.
 ## Shows a flare on the target, drops the shell after `delay`, deals area damage
-## through GameManager.apply_explosion() and leaves a crater behind.
+## and pins the survivors through GameManager.apply_explosion(), and leaves a
+## crater behind.
 
 @export var delay := 1.6
 @export var radius := 150.0
 @export var max_damage := 70.0
 @export var min_damage := 25.0
+## Seconds that survivors in the blast stay pinned (unable to attack).
+@export var pin_time := 4.5
 
 var game: GameManager
 var source_team := GameManager.TEAM_BLUE
@@ -53,7 +56,7 @@ func _on_fuse_timer_timeout() -> void:
 	target_marker.visible = false
 	shell.visible = false
 
-	game.apply_explosion(global_position, radius, max_damage, min_damage)
+	game.apply_explosion(global_position, radius, max_damage, min_damage, pin_time)
 	game.add_crater(global_position)
 	game.shake_camera(10.0)
 

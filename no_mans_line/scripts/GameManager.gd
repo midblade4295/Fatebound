@@ -19,6 +19,8 @@ signal whistle_charge(team: int)
 signal sector_control_changed(owners: Array[int])
 signal bunker_health_changed(team: int, health: float, max_health: float)
 signal card_played(team: int, card_id: int)
+## The last `final_push_seconds` have started: Supply income is multiplied.
+signal final_push_started()
 signal match_ended(winner: int, reason: String)
 
 # ----------------------------------------------------------------------------
@@ -38,10 +40,10 @@ enum Card { RIFLEMEN, RAIDERS, MORTAR, GAS }
 
 ## Card data. `targeted` cards need a battlefield position (HUD targeting mode).
 const CARDS := {
-	Card.RIFLEMEN: {"name": "Riflemen", "cost": 2, "cooldown": 1.5, "targeted": false},
-	Card.RAIDERS: {"name": "Trench Raiders", "cost": 4, "cooldown": 3.0, "targeted": false},
-	Card.MORTAR: {"name": "Mortar Strike", "cost": 5, "cooldown": 7.0, "targeted": true},
-	Card.GAS: {"name": "Mustard Gas", "cost": 6, "cooldown": 9.0, "targeted": true},
+	Card.RIFLEMEN: {"name": "Riflemen", "cost": 2, "cooldown": 3.0, "targeted": false},
+	Card.RAIDERS: {"name": "Trench Raiders", "cost": 4, "cooldown": 5.0, "targeted": false},
+	Card.MORTAR: {"name": "Mortar Strike", "cost": 5, "cooldown": 8.0, "targeted": true},
+	Card.GAS: {"name": "Mustard Gas", "cost": 6, "cooldown": 12.0, "targeted": true},
 }
 
 const UNIT_SCENE := preload("res://scenes/Unit.tscn")
@@ -57,8 +59,14 @@ const CRATER_SCENE := preload("res://scenes/Crater.tscn")
 @export var whistle_cooldown := 8.0
 @export_group("Supply")
 @export var supply_max := 10.0
-@export var supply_per_second := 1.0
-@export var supply_start := 4.0
+## Base income. Deliberately slow: every card should be a decision, not a reflex.
+@export var supply_per_second := 0.5
+@export var supply_start := 5.0
+## Extra income per sector held beyond your own bunker and home trench.
+@export var supply_per_extra_sector := 0.1
+## In the last `final_push_seconds` of the match income is multiplied.
+@export var final_push_seconds := 45.0
+@export var final_push_multiplier := 2.0
 @export_group("Cards")
 @export var riflemen_per_card := 3
 @export var raiders_per_card := 2
@@ -80,6 +88,7 @@ var sector_owners: Array[int] = [TEAM_BLUE, TEAM_BLUE, TEAM_NONE, TEAM_RED, TEAM
 var _card_cooldowns := [[0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]]
 var _whistle_cooldowns: Array[float] = [0.0, 0.0]
 var _last_seconds := -1
+var _final_push := false
 var _shake := 0.0
 
 @onready var camera: Camera2D = $Camera2D
@@ -125,10 +134,14 @@ func _process(delta: float) -> void:
 	if match_over:
 		return
 
+	if not _final_push and get_time_left() <= final_push_seconds:
+		_final_push = true
+		final_push_started.emit()
+
 	for team in [TEAM_BLUE, TEAM_RED]:
-		# Supply economy: +supply_per_second, capped at supply_max.
+		# Supply economy: see get_supply_rate(). Capped at supply_max.
 		if supply[team] < supply_max:
-			supply[team] = minf(supply_max, supply[team] + supply_per_second * delta)
+			supply[team] = minf(supply_max, supply[team] + get_supply_rate(team) * delta)
 			supply_changed.emit(team, supply[team])
 		_whistle_cooldowns[team] = maxf(0.0, _whistle_cooldowns[team] - delta)
 		for card_id in CARDS:
@@ -171,6 +184,20 @@ func get_units(team: int) -> Array[Unit]:
 	return result
 
 
+## Supply per second for `team` right now: base income, plus a bonus for every
+## sector held beyond the two you start with, doubled during the final push.
+func get_supply_rate(team: int) -> float:
+	var extra_sectors := maxi(0, count_sectors(team) - 2)
+	var rate := supply_per_second + supply_per_extra_sector * extra_sectors
+	if _final_push:
+		rate *= final_push_multiplier
+	return rate
+
+
+func is_final_push() -> bool:
+	return _final_push
+
+
 func count_stationed(team: int) -> int:
 	var total := 0
 	for unit in get_units(team):
@@ -195,21 +222,24 @@ func _trenches_from_home(team: int) -> Array[Trench]:
 	return ordered
 
 
-## Nearest trench that is friendly / unoccupied by the enemy and has a free
-## slot. Units cannot walk past an enemy-held trench, so the scan stops there.
-func find_cover_trench(team: int, from_position: Vector2) -> Trench:
-	var best: Trench = null
-	var best_distance := INF
+## Where fresh troops go: the forward-most trench their side owns that still has
+## a free slot, so reinforcements flow to the front line. If the home trench has
+## been lost but stands empty they walk back into it. Units cannot pass an
+## enemy-held trench, so the scan stops there. Capturing an enemy trench always
+## takes a Whistle Charge.
+func find_cover_trench(team: int, _from_position: Vector2) -> Trench:
+	var front: Trench = null
+	var fallback: Trench = null
 	for trench in _trenches_from_home(team):
 		if trench.has_enemies_of(team):
 			break
 		if not trench.can_accept(team):
 			continue
-		var distance := absf(trench.global_position.x - from_position.x)
-		if distance < best_distance:
-			best = trench
-			best_distance = distance
-	return best
+		if trench.owner_team == team:
+			front = trench  # Later in the loop = further forward.
+		elif trench == get_home_trench(team):
+			fallback = trench
+	return front if front != null else fallback
 
 
 ## First enemy-occupied trench on the way out from a team's bunker (or null).
@@ -220,15 +250,18 @@ func find_blocking_trench(team: int) -> Trench:
 	return null
 
 
-## Whistle Charge target: the next enemy trench ahead of `from_x`, or the enemy
-## Command Bunker when no enemy trench is left in front.
+## Whistle Charge target: "advance one line". The next trench ahead of
+## `from_x` is assaulted if the enemy holds it, or moved up into if it is ours
+## and has room. With no such trench ahead the target is the enemy Command Bunker.
 func find_charge_objective(team: int, from_x: float, ignore: Trench = null) -> Node2D:
 	var dir := advance_dir(team)
 	var best: Trench = null
 	var best_ahead := INF
 	for trench in trenches:
-		if trench == ignore or not trench.is_hostile_to(team):
+		if trench == ignore:
 			continue
+		if not trench.is_hostile_to(team) and trench.get_free_slot_count() == 0:
+			continue  # Ours and already full: run past it.
 		var ahead := (trench.global_position.x - from_x) * dir
 		if ahead < -60.0:
 			continue  # Behind us.
@@ -337,12 +370,17 @@ func trigger_whistle(team: int) -> bool:
 # Combat helpers (explosions, craters, tracers, camera shake)
 # ----------------------------------------------------------------------------
 ## Area damage with linear falloff. Shells do not care whose side you are on.
-func apply_explosion(center: Vector2, radius: float, max_damage: float, min_damage: float) -> void:
+## Everyone caught in (or just outside) the blast is also PINNED for `pin_time`
+## seconds, even in cover: this is what opens the window for a charge. A shell
+## landing on a bunker silences its machine gun for the same time.
+func apply_explosion(center: Vector2, radius: float, max_damage: float, min_damage: float, pin_time: float = 0.0) -> void:
 	for node in get_tree().get_nodes_in_group("units"):
 		var unit := node as Unit
 		if unit == null or not unit.is_alive():
 			continue
 		var distance := unit.global_position.distance_to(center)
+		if distance <= radius * 1.2 and pin_time > 0.0:
+			unit.pin(pin_time)
 		if distance <= radius:
 			var damage := lerpf(max_damage, min_damage, distance / radius)
 			unit.take_damage(damage, Unit.DamageKind.EXPLOSION, null)
@@ -350,6 +388,8 @@ func apply_explosion(center: Vector2, radius: float, max_damage: float, min_dama
 	for bunker: Bunker in [blue_bunker, red_bunker]:
 		if absf(bunker.global_position.x - center.x) <= bunker.half_width + radius * 0.5:
 			bunker.take_damage(max_damage * 0.8, Unit.DamageKind.EXPLOSION, null)
+			if pin_time > 0.0:
+				bunker.suppress(pin_time)
 
 
 ## Leaves a crater (cover zone) on open ground.

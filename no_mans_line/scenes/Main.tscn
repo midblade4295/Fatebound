@@ -137,6 +137,7 @@ script = ExtResource("4_ai")
 [node name="HUD" parent="." instance=ExtResource("5_hud")]
 
 [connection signal="bunker_health_changed" from="." to="HUD" method="_on_bunker_health_changed"]
+[connection signal="final_push_started" from="." to="HUD" method="_on_final_push_started"]
 [connection signal="match_ended" from="." to="HUD" method="_on_match_ended"]
 [connection signal="sector_control_changed" from="." to="HUD" method="_on_sector_control_changed"]
 [connection signal="supply_changed" from="." to="HUD" method="_on_supply_changed"]

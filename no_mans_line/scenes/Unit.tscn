@@ -73,6 +73,12 @@ monitorable = false
 [node name="CollisionShape2D" type="CollisionShape2D" parent="VisionArea"]
 shape = SubResource("vision_shape")
 
+[node name="PinnedMark" type="Polygon2D" parent="."]
+visible = false
+position = Vector2(0, -128)
+color = Color(1, 0.82, 0.25, 1)
+polygon = PackedVector2Array(-9, -8, 0, 1, 9, -8, 9, -3, 0, 6, -9, -3)
+
 [node name="HealthBar" type="Node2D" parent="."]
 visible = false
 position = Vector2(-17, -114)

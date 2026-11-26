@@ -26,6 +26,8 @@ signal destroyed(team: int)
 
 var game: GameManager
 var health := 0.0
+## Seconds the machine gun stays silent after a shell lands on the bunker.
+var _suppressed_time := 0.0
 
 @onready var visual: Node2D = $Visual
 @onready var sprite: Sprite2D = $Visual/Sprite
@@ -107,9 +109,21 @@ func _destroy() -> void:
 	destroyed.emit(team)
 
 
+## A mortar hit keeps the gun crew's heads down for `seconds`.
+func suppress(seconds: float) -> void:
+	_suppressed_time = maxf(_suppressed_time, seconds)
+
+
+func is_suppressed() -> bool:
+	return _suppressed_time > 0.0
+
+
 ## Machine gun: one burst at the nearest enemy inside GunRange.
 func _on_gun_timer_timeout() -> void:
 	if game == null or game.match_over or not is_alive():
+		return
+	if _suppressed_time > 0.0:
+		_suppressed_time -= gun_timer.wait_time
 		return
 	var victim: Unit = null
 	var best_distance := INF

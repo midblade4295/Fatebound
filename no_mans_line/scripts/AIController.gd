@@ -3,10 +3,11 @@ extends Node
 ##
 ## Every ThinkTimer tick the AI reads the battlefield, picks a Mode and takes
 ## at most one action:
-##   BUILD_UP : fill the trench, counter-picking what the enemy fields
+##   BUILD_UP : garrison the trench up to `garrison_target`, then bank Supply
 ##   DEFEND   : the enemy is coming over the top -- reinforce the trench
-##   ASSAULT  : we outnumber them -- (gas, then) blow the whistle
-## On top of that it drops a mortar on any tight cluster of enemy soldiers.
+##   ASSAULT  : set up a push -- barrage the objective, then blow the whistle
+## On top of that it drops a mortar on any tight group of enemies caught in the
+## open, which pins a charge in No Man's Land.
 ##
 ## It plays by exactly the same rules as the player: the same Supply, the same
 ## card costs / cooldowns and the same GameManager API (play_card, trigger_whistle).
@@ -17,18 +18,28 @@ enum Mode { BUILD_UP, DEFEND, ASSAULT }
 @export var enabled := true
 ## Seconds between decisions. Raise it for an easier opponent.
 @export var think_interval := 1.0
+@export_group("Garrison")
+## The AI stops buying troops at this many living soldiers and saves Supply
+## for mortars and gas instead.
+@export var garrison_target := 6
 @export_group("Charging")
+## No attacks during the first seconds of a match, so both sides can dig in.
+@export var opening_truce := 20.0
 ## Minimum stationed soldiers before the AI considers a charge.
 @export var min_charge_force := 4
-## The AI charges when its stationed force >= all enemy soldiers + this margin.
+## Without a barrage the AI only charges when its stationed force >= all
+## enemy soldiers + this margin.
 @export var outnumber_margin := 2
+## With a barrage it accepts being outnumbered by this many defenders.
+@export var barrage_deficit := 2
 ## With this little time left and fewer sectors, the AI gambles on a charge.
 @export var desperate_time := 30.0
 @export_group("Artillery")
-## Mortar fires when a cluster's score reaches this. A soldier in the open
-## scores 1, a soldier in trench cover only 0.5 (shells are weaker there).
-@export var mortar_cluster_size := 4.0
+## Enemies in the open, close together, needed for a defensive mortar.
+@export var mortar_cluster_size := 3
 @export var mortar_cluster_radius := 130.0
+## Defenders in a trench needed before gas is preferred over a mortar.
+@export var gas_garrison := 4
 ## Think ticks to wait between releasing gas and blowing the whistle, so the
 ## AI's own troops arrive as the cloud clears.
 @export var gas_to_charge_ticks := 3
@@ -76,16 +87,11 @@ func _on_think_timer_timeout() -> void:
 	mode = _choose_mode(my_stationed, enemy_units.size(), intruders, attackers)
 
 	# --- 3. Act (one action per tick) --------------------------------------
-	var cluster := _find_best_cluster(enemy_units, my_units)
+	# Enemies bunched up in the open: a shell pins them where our rifles can
+	# reach them. This is the answer to an enemy Whistle Charge.
+	var cluster := _find_exposed_cluster(enemy_units, my_units)
 	if not cluster.is_empty() and game.play_card(team, GameManager.Card.MORTAR, cluster["position"]):
 		return
-	# A juicy cluster exists but we cannot afford the shell yet: save up,
-	# as long as the trench has a basic garrison.
-	var saving_for_mortar := (
-		not cluster.is_empty()
-		and game.get_card_cooldown(team, GameManager.Card.MORTAR) <= 1.0
-		and my_stationed >= 3
-	)
 
 	match mode:
 		Mode.DEFEND:
@@ -93,8 +99,7 @@ func _on_think_timer_timeout() -> void:
 		Mode.ASSAULT:
 			_act_assault(my_stationed, enemy_units.size())
 		Mode.BUILD_UP:
-			if not saving_for_mortar:
-				_act_build_up(my_units, enemy_units)
+			_act_build_up(my_units, enemy_units)
 
 
 # ----------------------------------------------------------------------------
@@ -103,13 +108,14 @@ func _on_think_timer_timeout() -> void:
 func _choose_mode(my_stationed: int, enemy_total: int, intruders: int, attackers: int) -> Mode:
 	if intruders > 0 or attackers >= 2:
 		return Mode.DEFEND
-	# Outnumbering the enemy: go over the top.
-	if _outnumbers(my_stationed, enemy_total):
-		return Mode.ASSAULT
-	# Trench packed and nowhere left to put reinforcements: prepare a
-	# full-strength push (gas first, see _act_assault).
-	if my_stationed >= min_charge_force and not _has_room():
-		return Mode.ASSAULT
+	var elapsed := game.match_length - game.get_time_left()
+	if elapsed >= opening_truce and my_stationed >= min_charge_force:
+		# Clearly outnumbering the enemy: go over the top.
+		if _outnumbers(my_stationed, enemy_total):
+			return Mode.ASSAULT
+		# Otherwise a push needs a barrage to pin the defenders first.
+		if _barrage_ready() and my_stationed + barrage_deficit >= _objective_garrison():
+			return Mode.ASSAULT
 	# Behind on sectors with the clock running out: all in.
 	var behind := game.count_sectors(team) < game.count_sectors(_enemy_team)
 	if behind and game.get_time_left() <= desperate_time and my_stationed >= 2:
@@ -128,24 +134,39 @@ func _act_defend(intruders: int) -> void:
 	game.play_card(team, GameManager.Card.RIFLEMEN)
 
 
+## A push in three flavours, best first:
+##   gas    -> wait for the cloud to thin -> whistle
+##   mortar -> whistle at once (the shell lands while the men are crossing and
+##             the defenders stay pinned as they arrive)
+##   whistle alone, only with clear numbers
 func _act_assault(my_stationed: int, enemy_total: int) -> void:
 	if not game.can_whistle(team):
 		return
-	# Soften a garrisoned trench with gas first, then follow the cloud in.
-	var gas_target := _find_gas_target(3)
-	if gas_target != null and game.get_card_cooldown(team, GameManager.Card.GAS) <= 0.0:
-		if game.play_card(team, GameManager.Card.GAS, gas_target.global_position):
+	var objective := _get_objective()
+	var garrison := _objective_garrison()
+
+	if objective is Trench:
+		if garrison >= gas_garrison and game.play_card(team, GameManager.Card.GAS, objective.global_position):
 			_pending_charge_ticks = gas_to_charge_ticks
 			return
-		if gas_target.count_stationed(_enemy_team) >= 4:
-			return  # Strong garrison: bank Supply until the gas is affordable.
-	if _outnumbers(my_stationed, enemy_total):
+		if garrison >= 2 and game.play_card(team, GameManager.Card.MORTAR, objective.global_position):
+			game.trigger_whistle(team)
+			return
+	elif objective is Bunker:
+		# A shell on the bunker silences its machine gun for the run-in.
+		if game.play_card(team, GameManager.Card.MORTAR, objective.global_position):
+			game.trigger_whistle(team)
+			return
+
+	if _outnumbers(my_stationed, enemy_total) or garrison == 0:
 		game.trigger_whistle(team)
 
 
 func _act_build_up(my_units: Array[Unit], enemy_units: Array[Unit]) -> void:
 	if not _has_room():
 		return  # Nowhere to put more soldiers: bank the Supply.
+	if my_units.size() >= garrison_target:
+		return  # Garrison is strong enough: save up for a barrage.
 
 	# Counter-pick. Raiders beat an entrenched rifle line; riflemen beat
 	# raiders, who die quickly while crossing open ground.
@@ -154,7 +175,7 @@ func _act_build_up(my_units: Array[Unit], enemy_units: Array[Unit]) -> void:
 	var enemy_rifles := _count_type(enemy_units, Unit.Type.RIFLEMAN)
 	var enemy_raiders := _count_type(enemy_units, Unit.Type.RAIDER)
 
-	var want_raiders := my_rifles >= 3 and my_raiders < 4 and enemy_rifles >= enemy_raiders
+	var want_raiders := my_rifles >= 3 and my_raiders < 2 and enemy_rifles >= enemy_raiders
 	if want_raiders:
 		# Not enough Supply yet? Wait for it rather than spamming riflemen.
 		game.play_card(team, GameManager.Card.RAIDERS)
@@ -172,6 +193,32 @@ func _outnumbers(my_stationed: int, enemy_total: int) -> bool:
 ## Is there still a free trench slot our reinforcements could walk to?
 func _has_room() -> bool:
 	return game.find_cover_trench(team, game.get_home_trench(team).global_position) != null
+
+
+## What a Whistle Charge would go for right now: a Trench or the enemy Bunker.
+## Measured from our most advanced stationed soldier.
+func _get_objective() -> Node2D:
+	var dir := GameManager.advance_dir(team)
+	var front_x := game.get_home_trench(team).global_position.x
+	var front_trench: Trench = game.get_home_trench(team)
+	for trench in game.trenches:
+		if trench.count_stationed(team) > 0 and (trench.global_position.x - front_x) * dir > 0.0:
+			front_x = trench.global_position.x
+			front_trench = trench
+	return game.find_charge_objective(team, front_x, front_trench)
+
+
+## Enemy soldiers stationed in the trench we would assault (0 for a bunker).
+func _objective_garrison() -> int:
+	var objective := _get_objective()
+	if objective is Trench:
+		return (objective as Trench).count_stationed(_enemy_team)
+	return 0
+
+
+## Can we pay for a mortar or gas right now?
+func _barrage_ready() -> bool:
+	return game.can_play_card(team, GameManager.Card.MORTAR) or game.can_play_card(team, GameManager.Card.GAS)
 
 
 func _is_gassed(trench: Trench) -> bool:
@@ -210,23 +257,34 @@ func _count_attackers(enemy_units: Array[Unit]) -> int:
 	return total
 
 
-## Best mortar target: the enemy soldier with the most friends around them.
-## Returns {} or {"position": Vector2, "score": float}.
-func _find_best_cluster(enemy_units: Array[Unit], my_units: Array[Unit]) -> Dictionary:
+## Best defensive mortar target: the tightest group of enemies OUT of cover.
+## Returns {} or {"position": Vector2, "count": int}.
+func _find_exposed_cluster(enemy_units: Array[Unit], my_units: Array[Unit]) -> Dictionary:
+	if not game.can_play_card(team, GameManager.Card.MORTAR):
+		return {}
+	# Only troops that have left their own trench line count: shelling fresh
+	# squads next to the enemy bunker is a waste of Supply.
+	var enemy_dir := GameManager.advance_dir(_enemy_team)
+	var enemy_line := game.get_home_trench(_enemy_team).global_position.x
+	var exposed: Array[Unit] = []
+	for unit in enemy_units:
+		if unit.state == Unit.State.IN_COVER:
+			continue
+		if (unit.global_position.x - enemy_line) * enemy_dir > 120.0:
+			exposed.append(unit)
+
 	var best := {}
-	var best_score := mortar_cluster_size - 0.01
-	for center in enemy_units:
-		var score := 0.0
+	var best_count := mortar_cluster_size - 1
+	for center in exposed:
 		var count := 0
 		var sum := Vector2.ZERO
 		var drift := Vector2.ZERO
-		for other in enemy_units:
+		for other in exposed:
 			if other.global_position.distance_to(center.global_position) <= mortar_cluster_radius:
-				score += 0.5 if other.state == Unit.State.IN_COVER else 1.0
 				count += 1
 				sum += other.global_position
 				drift += other.velocity
-		if score <= best_score:
+		if count <= best_count:
 			continue
 		# Lead moving targets: the shell takes ~1.6 s to land.
 		var aim: Vector2 = sum / count + (drift / count) * 1.6
@@ -237,20 +295,6 @@ func _find_best_cluster(enemy_units: Array[Unit], my_units: Array[Unit]) -> Dict
 				friendly += 1
 		if friendly * 2 >= count:
 			continue
-		best_score = score
-		best = {"position": aim, "score": score}
-	return best
-
-
-## Trench holding at least `min_stationed` enemy soldiers and none of ours.
-func _find_gas_target(min_stationed: int) -> Trench:
-	var best: Trench = null
-	var best_count := min_stationed - 1
-	for trench in game.trenches:
-		if trench.count_inside(team) > 0:
-			continue
-		var count := trench.count_stationed(_enemy_team)
-		if count > best_count:
-			best = trench
-			best_count = count
+		best_count = count
+		best = {"position": aim, "count": count}
 	return best

@@ -21,6 +21,12 @@ const ARMED_TINT := Color(1.25, 1.15, 0.75)
 const PRESSED_DIM := Color(0.78, 0.78, 0.78)
 const BADGE_COLOR := Color(0.95, 0.9, 0.75)
 const BADGE_COOLDOWN_COLOR := Color(1.0, 0.65, 0.35)
+## Shown one after another when a match starts.
+const OPENING_TIPS: Array[String] = [
+	"Supply is slow. Spend it on a plan, not on reflex.",
+	"Mortars and gas PIN troops: pinned men cannot fight back.",
+	"Shell the enemy trench, THEN blow the whistle.",
+]
 const SECTOR_COLORS := {
 	GameManager.TEAM_NONE: Color(0.45, 0.43, 0.4),
 	GameManager.TEAM_BLUE: Color(0.3, 0.55, 0.85),
@@ -52,6 +58,7 @@ var _banner_tween: Tween
 @onready var sector_pips: HBoxContainer = $Root/TopBar/TugOfWar/SectorPips
 @onready var supply_label: Label = $Root/SupplyPanel/SupplyValue
 @onready var supply_bar: ProgressBar = $Root/SupplyPanel/SupplyBar
+@onready var rate_label: Label = $Root/SupplyPanel/RateLabel
 @onready var whistle_button: TextureButton = $Root/WhistleButton
 @onready var whistle_wipe: TextureProgressBar = $Root/WhistleButton/CooldownWipe
 @onready var targeting_overlay: Control = $Root/TargetingOverlay
@@ -89,6 +96,7 @@ func setup(p_game: GameManager) -> void:
 	game = p_game
 	supply_bar.max_value = game.supply_max
 	# Top-right badge: squad size for troop cards, "+" for tap-to-aim cards.
+	_show_opening_tips()
 	_info_text = {
 		GameManager.Card.RIFLEMEN: "x%d" % game.riflemen_per_card,
 		GameManager.Card.RAIDERS: "x%d" % game.raiders_per_card,
@@ -103,6 +111,7 @@ func _process(delta: float) -> void:
 	_update_cards()
 	_update_whistle()
 	_update_tug_of_war(delta)
+	_update_supply_rate()
 
 
 # ----------------------------------------------------------------------------
@@ -270,6 +279,34 @@ func _on_supply_changed(team: int, amount: float) -> void:
 	supply_label.text = "%d / %d" % [floori(amount), int(game.supply_max)]
 
 
+## Income readout under the Supply bar: turns green while territory is paying a
+## bonus and gold during the final push.
+func _update_supply_rate() -> void:
+	var rate := game.get_supply_rate(PLAYER_TEAM)
+	var text := "+%.1f per second" % rate
+	var color := Color(0.6, 0.56, 0.48)
+	if game.is_final_push():
+		text += "  (final push)"
+		color = Color(1.0, 0.82, 0.4)
+	elif rate > game.supply_per_second + 0.001:
+		text += "  (ground held)"
+		color = Color(0.6, 0.85, 0.55)
+	rate_label.text = text
+	rate_label.add_theme_color_override("font_color", color)
+
+
+## Connected from Main.final_push_started in Main.tscn.
+func _on_final_push_started() -> void:
+	show_banner("FINAL PUSH - SUPPLY DOUBLED", Color(1.0, 0.85, 0.35), 2.6)
+
+
+func _show_opening_tips() -> void:
+	var tween := create_tween()
+	for tip in OPENING_TIPS:
+		tween.tween_callback(show_banner.bind(tip, Color(0.95, 0.9, 0.8), 3.2))
+		tween.tween_interval(3.9)
+
+
 func _on_bunker_health_changed(team: int, health: float, _max_health: float) -> void:
 	var label := blue_score if team == GameManager.TEAM_BLUE else red_score
 	label.text = str(ceili(health))
@@ -288,13 +325,13 @@ func _on_whistle_charge(team: int) -> void:
 
 
 ## Short fading message under the tug-of-war bar.
-func show_banner(text: String, color: Color = Color(0.95, 0.9, 0.8)) -> void:
+func show_banner(text: String, color: Color = Color(0.95, 0.9, 0.8), hold: float = 1.4) -> void:
 	banner.text = text
 	banner.modulate = color
 	if _banner_tween != null and _banner_tween.is_valid():
 		_banner_tween.kill()
 	_banner_tween = create_tween()
-	_banner_tween.tween_interval(1.4)
+	_banner_tween.tween_interval(hold)
 	_banner_tween.tween_property(banner, "modulate:a", 0.0, 0.5)
 
 

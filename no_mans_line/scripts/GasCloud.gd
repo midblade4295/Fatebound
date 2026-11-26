@@ -39,6 +39,9 @@ func _on_tick_timer_timeout() -> void:
 	for body in get_overlapping_bodies():
 		var unit := body as Unit
 		if unit != null and unit.is_alive():
+			# Choking soldiers cannot fight: they stay pinned until just after
+			# they leave the cloud or it clears.
+			unit.pin(tick_interval + 0.4)
 			unit.take_damage(damage_per_tick, Unit.DamageKind.GAS, null)
 
 

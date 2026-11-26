@@ -61,6 +61,7 @@ const STATS := {
 }
 
 const CRATER_COVER_MULTIPLIER := 0.65
+const PINNED_SPEED_FACTOR := 0.5
 const ARRIVE_DISTANCE := 6.0
 const THINK_INTERVAL := 0.2
 
@@ -136,6 +137,9 @@ var crater_count := 0
 var objective: Node2D = null
 ## Current attack target: a Unit or a Bunker.
 var target: Node2D = null
+## Seconds left of being pinned (by a mortar blast or gas). A pinned soldier
+## cannot attack and moves at PINNED_SPEED_FACTOR.
+var pinned_time := 0.0
 
 # Stats copied from STATS in _ready().
 var max_health := 1.0
@@ -171,6 +175,7 @@ var _recolor_material: ShaderMaterial = null
 @onready var muzzle_sparks: GPUParticles2D = $Muzzle/MuzzleSparks
 @onready var vision_area: Area2D = $VisionArea
 @onready var vision_shape: CollisionShape2D = $VisionArea/CollisionShape2D
+@onready var pinned_mark: Polygon2D = $PinnedMark
 @onready var health_bar: Node2D = $HealthBar
 @onready var health_fill: ColorRect = $HealthBar/Fill
 
@@ -256,6 +261,16 @@ func is_alive() -> bool:
 	return state != State.DEAD
 
 
+## Keeps this soldier's head down for `seconds` (mortar blast, gas).
+func pin(seconds: float) -> void:
+	if state != State.DEAD:
+		pinned_time = maxf(pinned_time, seconds)
+
+
+func is_pinned() -> bool:
+	return pinned_time > 0.0
+
+
 # ----------------------------------------------------------------------------
 # State machine
 # ----------------------------------------------------------------------------
@@ -268,6 +283,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_attack_cooldown -= delta
+	pinned_time = maxf(0.0, pinned_time - delta)
 	match state:
 		State.MARCHING:
 			_state_marching()
@@ -316,7 +332,7 @@ func _state_marching() -> void:
 func _state_in_cover() -> void:
 	_moving = false
 	velocity = Vector2.ZERO
-	if _attack_cooldown > 0.0:
+	if _attack_cooldown > 0.0 or is_pinned():
 		return
 	var enemy := _find_target(cover_range)
 	if enemy == null:
@@ -383,7 +399,7 @@ func _state_attacking() -> void:
 	_moving = false
 	velocity = Vector2.ZERO
 	_face_toward(target_pos.x)
-	if _attack_cooldown <= 0.0:
+	if _attack_cooldown <= 0.0 and not is_pinned():
 		_perform_attack(target)
 
 
@@ -598,6 +614,8 @@ func _die() -> void:
 	collision_layer = 0
 	vision_area.set_deferred("monitoring", false)
 	health_bar.visible = false
+	pinned_mark.visible = false
+	pinned_time = 0.0
 	muzzle_flash.visible = false
 	died.emit(self)
 
@@ -626,6 +644,8 @@ func _move_toward(destination: Vector2, speed: float) -> bool:
 	var offset := destination - global_position
 	# Never overshoot: one physics step can cover more than ARRIVE_DISTANCE
 	# for fast units or when Engine.time_scale is raised.
+	if is_pinned():
+		speed *= PINNED_SPEED_FACTOR
 	var step := speed * get_physics_process_delta_time()
 	if offset.length() <= maxf(ARRIVE_DISTANCE, step):
 		velocity = Vector2.ZERO
@@ -649,6 +669,8 @@ func _animate(_delta: float) -> void:
 	# Red (advancing left) is mirrored. Units also turn to face their target.
 	sprite.flip_h = _facing < 0.0
 	muzzle.position = Vector2(_muzzle_offset.x * _facing, _muzzle_offset.y)
+	# Blinking marker over a pinned soldier.
+	pinned_mark.visible = is_pinned() and fmod(pinned_time, 0.4) > 0.12
 	_refresh_animation()
 
 
@@ -656,6 +678,7 @@ func _animate(_delta: float) -> void:
 ##   MARCHING / CHARGING -> "walk" (held on one frame while standing still)
 ##   IN_COVER            -> "cover"
 ##   ATTACKING           -> "aim" between attacks, "walk" while chasing a target
+##   pinned, standing    -> "cover" (head down) whatever the state
 ## The "attack" animation (the shot or swing itself) is started by
 ## _play_attack_animation() and is left to finish before this takes over again.
 func _refresh_animation() -> void:
@@ -663,11 +686,14 @@ func _refresh_animation() -> void:
 		return
 	var wanted := ANIM_WALK
 	if not _moving:
-		match state:
-			State.IN_COVER:
-				wanted = ANIM_COVER
-			State.ATTACKING:
-				wanted = ANIM_AIM
+		if is_pinned():
+			wanted = ANIM_COVER  # Head down.
+		else:
+			match state:
+				State.IN_COVER:
+					wanted = ANIM_COVER
+				State.ATTACKING:
+					wanted = ANIM_AIM
 
 	var mid_attack := sprite.animation == ANIM_ATTACK and sprite.is_playing()
 	if mid_attack and not _moving:
