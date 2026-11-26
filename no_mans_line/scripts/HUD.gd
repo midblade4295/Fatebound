@@ -1,8 +1,9 @@
 extends CanvasLayer
 ## HUD.gd -- everything the player touches.
 ##
-## * Card hand: shows cost, greys out unaffordable cards, draws the cooldown
-##   wipe and plays the card through GameManager.play_card().
+## * Card hand: four TextureButtons showing the sliced card art. The HUD draws
+##   the live cost badge, greys out unaffordable cards, runs the cooldown wipe
+##   and plays the card through GameManager.play_card().
 ## * Touch targeting: Mortar Strike / Mustard Gas arm the TargetingOverlay; the
 ##   next tap (or click) on the battlefield is converted to world coordinates
 ##   and sent with the card. Tapping the armed card again cancels.
@@ -16,6 +17,10 @@ const PLAYER_TEAM := GameManager.TEAM_BLUE
 const AFFORDABLE_TINT := Color(1.0, 1.0, 1.0)
 const UNAFFORDABLE_TINT := Color(0.55, 0.53, 0.5)
 const ARMED_TINT := Color(1.25, 1.15, 0.75)
+## TextureButtons have no "pressed" art, so a held button is simply darkened.
+const PRESSED_DIM := Color(0.78, 0.78, 0.78)
+const BADGE_COLOR := Color(0.95, 0.9, 0.75)
+const BADGE_COOLDOWN_COLOR := Color(1.0, 0.65, 0.35)
 const SECTOR_COLORS := {
 	GameManager.TEAM_NONE: Color(0.45, 0.43, 0.4),
 	GameManager.TEAM_BLUE: Color(0.3, 0.55, 0.85),
@@ -32,7 +37,10 @@ var game: GameManager
 ## Card id currently waiting for a battlefield tap, or -1.
 var _targeting_card := -1
 var _tug_display := 0.5
+## Card id -> TextureButton.
 var _cards := {}
+## Card id -> text shown in the top-right badge when the card is ready.
+var _info_text := {}
 var _banner_tween: Tween
 
 @onready var timer_label: Label = $Root/TopBar/TimerPlate/TimerLabel
@@ -44,8 +52,8 @@ var _banner_tween: Tween
 @onready var sector_pips: HBoxContainer = $Root/TopBar/TugOfWar/SectorPips
 @onready var supply_label: Label = $Root/SupplyPanel/SupplyValue
 @onready var supply_bar: ProgressBar = $Root/SupplyPanel/SupplyBar
-@onready var whistle_button: Button = $Root/WhistleButton
-@onready var whistle_shade: ColorRect = $Root/WhistleButton/CooldownShade
+@onready var whistle_button: TextureButton = $Root/WhistleButton
+@onready var whistle_wipe: TextureProgressBar = $Root/WhistleButton/CooldownWipe
 @onready var targeting_overlay: Control = $Root/TargetingOverlay
 @onready var targeting_hint: Label = $Root/TargetingOverlay/HintLabel
 @onready var reticle: Node2D = $Root/TargetingOverlay/Reticle
@@ -63,24 +71,30 @@ func _ready() -> void:
 		GameManager.Card.MORTAR: $Root/CardHand/MortarCard,
 		GameManager.Card.GAS: $Root/CardHand/GasCard,
 	}
-	# Fill in names and costs from the single source of truth in GameManager.
+	# The card art has a name and badge circles painted in. The live Supply
+	# cost is drawn over the left circle so it always matches GameManager.CARDS.
 	for card_id in _cards:
-		var button: Button = _cards[card_id]
-		button.get_node("NameLabel").text = GameManager.CARDS[card_id]["name"]
+		var button: TextureButton = _cards[card_id]
 		button.get_node("CostBadge").text = str(GameManager.CARDS[card_id]["cost"])
-		button.get_node("CooldownLabel").visible = false
-		button.get_node("CooldownShade").visible = false
+		(button.get_node("CooldownWipe") as TextureProgressBar).value = 0.0
 
 	targeting_overlay.visible = false
 	end_screen.visible = false
 	banner.modulate.a = 0.0
-	whistle_shade.visible = false
+	whistle_wipe.value = 0.0
 
 
 ## Called by GameManager._ready(). Match signals are connected in Main.tscn.
 func setup(p_game: GameManager) -> void:
 	game = p_game
 	supply_bar.max_value = game.supply_max
+	# Top-right badge: squad size for troop cards, "+" for tap-to-aim cards.
+	_info_text = {
+		GameManager.Card.RIFLEMEN: "x%d" % game.riflemen_per_card,
+		GameManager.Card.RAIDERS: "x%d" % game.raiders_per_card,
+		GameManager.Card.MORTAR: "+",
+		GameManager.Card.GAS: "+",
+	}
 
 
 func _process(delta: float) -> void:
@@ -96,26 +110,27 @@ func _process(delta: float) -> void:
 # ----------------------------------------------------------------------------
 func _update_cards() -> void:
 	for card_id in _cards:
-		var button: Button = _cards[card_id]
-		var shade: ColorRect = button.get_node("CooldownShade")
-		var cooldown_label: Label = button.get_node("CooldownLabel")
+		var button: TextureButton = _cards[card_id]
+		var wipe: TextureProgressBar = button.get_node("CooldownWipe")
+		var info: Label = button.get_node("InfoBadge")
 		var cooldown := game.get_card_cooldown(PLAYER_TEAM, card_id)
 		var total: float = GameManager.CARDS[card_id]["cooldown"]
 
-		# Cooldown wipe: a dark shade that drains from the top of the card.
-		var fraction := clampf(cooldown / total, 0.0, 1.0)
-		shade.visible = fraction > 0.0
-		shade.size = Vector2(button.size.x, button.size.y * fraction)
-		shade.position = Vector2(0.0, button.size.y - shade.size.y)
-		cooldown_label.visible = cooldown > 0.0
-		cooldown_label.text = "%d" % ceili(cooldown)
-
-		if card_id == _targeting_card:
-			button.modulate = ARMED_TINT
-		elif game.supply[PLAYER_TEAM] >= game.get_card_cost(card_id):
-			button.modulate = AFFORDABLE_TINT
+		# Cooldown wipe: a dark copy of the card art that drains downward.
+		wipe.value = clampf(cooldown / total, 0.0, 1.0)
+		if cooldown > 0.0:
+			info.text = "%d" % ceili(cooldown)
+			info.add_theme_color_override("font_color", BADGE_COOLDOWN_COLOR)
 		else:
-			button.modulate = UNAFFORDABLE_TINT
+			info.text = _info_text.get(card_id, "")
+			info.add_theme_color_override("font_color", BADGE_COLOR)
+
+		var tint := UNAFFORDABLE_TINT
+		if card_id == _targeting_card:
+			tint = ARMED_TINT
+		elif game.supply[PLAYER_TEAM] >= game.get_card_cost(card_id):
+			tint = AFFORDABLE_TINT
+		button.modulate = tint * PRESSED_DIM if button.is_pressed() else tint
 
 
 ## Connected from each card's `pressed` signal in HUD.tscn (card id is bound).
@@ -216,11 +231,9 @@ func _screen_to_world(screen_position: Vector2) -> Vector2:
 # ----------------------------------------------------------------------------
 func _update_whistle() -> void:
 	var cooldown := game.get_whistle_cooldown(PLAYER_TEAM)
-	var fraction := clampf(cooldown / game.whistle_cooldown, 0.0, 1.0)
-	whistle_shade.visible = fraction > 0.0
-	whistle_shade.size = Vector2(whistle_button.size.x, whistle_button.size.y * fraction)
-	whistle_shade.position = Vector2(0.0, whistle_button.size.y - whistle_shade.size.y)
-	whistle_button.modulate = AFFORDABLE_TINT if game.can_whistle(PLAYER_TEAM) else Color(0.7, 0.68, 0.62)
+	whistle_wipe.value = clampf(cooldown / game.whistle_cooldown, 0.0, 1.0)
+	var tint := AFFORDABLE_TINT if game.can_whistle(PLAYER_TEAM) else Color(0.7, 0.68, 0.62)
+	whistle_button.modulate = tint * PRESSED_DIM if whistle_button.is_pressed() else tint
 
 
 ## Connected from WhistleButton.pressed in HUD.tscn.

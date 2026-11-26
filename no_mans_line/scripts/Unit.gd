@@ -9,6 +9,10 @@ extends CharacterBody2D
 ##   ATTACKING -> stopped (rifle) or chasing (melee) to fight a specific target
 ##   DEAD      -> playing the death tween, about to be freed
 ##
+## Every state has a matching animation on the AnimatedSprite2D (see
+## _refresh_animation): "walk", "cover", "aim", plus "attack" for the shot or
+## swing itself. The art faces right, so Red is mirrored with flip_h.
+##
 ## Call setup() BEFORE add_child() so _ready() knows the team and type.
 
 signal died(unit: Unit)
@@ -59,11 +63,53 @@ const STATS := {
 const CRATER_COVER_MULTIPLIER := 0.65
 const ARRIVE_DISTANCE := 6.0
 const THINK_INTERVAL := 0.2
-const VISUAL_SCALE := 1.4
 
-const COAT_COLORS: Array[Color] = [Color(0.25, 0.4, 0.57), Color(0.5, 0.2, 0.17)]
-const DARK_COLORS: Array[Color] = [Color(0.14, 0.24, 0.36), Color(0.27, 0.11, 0.1)]
-const BRIGHT_COLORS: Array[Color] = [Color(0.45, 0.72, 0.95), Color(0.95, 0.36, 0.26)]
+const ANIM_WALK := &"walk"
+const ANIM_COVER := &"cover"
+const ANIM_AIM := &"aim"
+const ANIM_ATTACK := &"attack"
+
+const RECOLOR_SHADER := preload("res://shaders/team_recolor.gdshader")
+
+## Art per team and unit type.
+##   frames  : SpriteFrames with the animations walk / cover / aim / attack
+##   scale   : sheet pixels -> world pixels
+##   muzzle  : rifle tip in sheet pixels, measured from the feet, facing right
+##   recolor : animations that reuse Blue frames and need the Red repaint
+const LOOKS := {
+	GameManager.TEAM_BLUE: {
+		Type.RIFLEMAN: {
+			"frames": preload("res://assets/sprites/blue_rifleman.tres"),
+			"scale": 0.5,
+			"muzzle": Vector2(117, -151),
+			"recolor": [],
+		},
+		Type.RAIDER: {
+			"frames": preload("res://assets/sprites/blue_raider.tres"),
+			"scale": 0.52,
+			"muzzle": Vector2(100, -118),
+			"recolor": [],
+		},
+	},
+	GameManager.TEAM_RED: {
+		Type.RIFLEMAN: {
+			"frames": preload("res://assets/sprites/red_rifleman.tres"),
+			"scale": 0.5,
+			"muzzle": Vector2(126, -154),
+			# The sheet has no Red walk cycle: red_rifleman.tres reuses Blue's.
+			"recolor": [ANIM_WALK],
+		},
+		Type.RAIDER: {
+			# The sheet has no Red raiders at all: reuse Blue's, repainted.
+			"frames": preload("res://assets/sprites/blue_raider.tres"),
+			"scale": 0.52,
+			"muzzle": Vector2(100, -118),
+			"recolor": [ANIM_WALK, ANIM_COVER, ANIM_AIM, ANIM_ATTACK],
+		},
+	},
+}
+
+const BAR_COLORS: Array[Color] = [Color(0.45, 0.72, 0.95), Color(0.95, 0.36, 0.26)]
 
 # ----------------------------------------------------------------------------
 # Public state
@@ -71,7 +117,12 @@ const BRIGHT_COLORS: Array[Color] = [Color(0.45, 0.72, 0.95), Color(0.95, 0.36, 
 var game: GameManager
 var team := GameManager.TEAM_BLUE
 var unit_type: Type = Type.RIFLEMAN
-var state: State = State.MARCHING
+## Assigning a new state immediately switches to its animation.
+var state: State = State.MARCHING:
+	set(value):
+		state = value
+		if is_node_ready():
+			_refresh_animation()
 var health := 1.0
 
 ## Trench where this unit holds (or has reserved) a slot.
@@ -104,25 +155,20 @@ var bunker_damage_mult := 1.0
 var _resume_state: State = State.MARCHING
 var _attack_cooldown := 0.0
 var _think_cooldown := 0.0
-var _anim_time := 0.0
 var _moving := false
 var _facing := 1.0
 var _lane_offset := 0.0
 var _spread_x := 0.0
-var _visual_scale := VISUAL_SCALE
+## Rifle tip in world pixels for a unit facing right.
+var _muzzle_offset := Vector2.ZERO
+## Animations that need the Red repaint (see LOOKS).
+var _recolored: Array = []
+var _recolor_material: ShaderMaterial = null
 
-@onready var visual: Node2D = $Visual
-@onready var leg_back: Polygon2D = $Visual/LegBack
-@onready var leg_front: Polygon2D = $Visual/LegFront
-@onready var body_poly: Polygon2D = $Visual/Body
-@onready var pack_poly: Polygon2D = $Visual/Pack
-@onready var helmet_poly: Polygon2D = $Visual/Helmet
-@onready var armband_poly: Polygon2D = $Visual/Armband
-@onready var rifle_poly: Polygon2D = $Visual/Rifle
-@onready var club_poly: Polygon2D = $Visual/Club
-@onready var muzzle: Marker2D = $Visual/Muzzle
-@onready var muzzle_flash: Polygon2D = $Visual/Muzzle/MuzzleFlash
-@onready var muzzle_sparks: GPUParticles2D = $Visual/Muzzle/MuzzleSparks
+@onready var sprite: AnimatedSprite2D = $Sprite
+@onready var muzzle: Marker2D = $Muzzle
+@onready var muzzle_flash: Sprite2D = $Muzzle/MuzzleFlash
+@onready var muzzle_sparks: GPUParticles2D = $Muzzle/MuzzleSparks
 @onready var vision_area: Area2D = $VisionArea
 @onready var vision_shape: CollisionShape2D = $VisionArea/CollisionShape2D
 @onready var health_bar: Node2D = $HealthBar
@@ -177,23 +223,33 @@ func _ready() -> void:
 	_think_cooldown = randf_range(0.0, THINK_INTERVAL)
 	_apply_team_look()
 	_update_health_bar()
+	_refresh_animation()
 
 	game.whistle_charge.connect(_on_whistle_charge)
 
 
+## Picks the SpriteFrames for this team / type and sizes everything around it.
 func _apply_team_look() -> void:
-	body_poly.color = COAT_COLORS[team]
-	pack_poly.color = DARK_COLORS[team]
-	helmet_poly.color = DARK_COLORS[team]
-	leg_back.color = DARK_COLORS[team].darkened(0.25)
-	leg_front.color = DARK_COLORS[team]
-	armband_poly.color = BRIGHT_COLORS[team]
-	health_fill.color = BRIGHT_COLORS[team]
-	rifle_poly.visible = not is_melee
-	club_poly.visible = is_melee
+	var look: Dictionary = LOOKS[team][unit_type]
+	var look_scale: float = look["scale"]
+	sprite.sprite_frames = look["frames"]
+	sprite.scale = Vector2(look_scale, look_scale)
+	# Every frame of a SpriteFrames shares one cell size with the feet on the
+	# bottom edge, so lifting the sprite by half a cell puts the feet on the
+	# node's origin.
+	var cell := sprite.sprite_frames.get_frame_texture(ANIM_AIM, 0).get_size()
+	sprite.offset = Vector2(0.0, -cell.y * 0.5)
+	_muzzle_offset = Vector2(look["muzzle"]) * look_scale
 	muzzle.visible = not is_melee
-	# Raiders are a little bulkier than riflemen.
-	_visual_scale = VISUAL_SCALE * (1.08 if is_melee else 1.0)
+
+	_recolored = look["recolor"]
+	if not _recolored.is_empty():
+		# One material per unit: each soldier toggles the repaint on its own.
+		_recolor_material = ShaderMaterial.new()
+		_recolor_material.shader = RECOLOR_SHADER
+		sprite.material = _recolor_material
+
+	health_fill.color = BAR_COLORS[team]
 
 
 func is_alive() -> bool:
@@ -464,9 +520,11 @@ func _perform_attack(victim: Node2D) -> void:
 			damage *= trench_fight_bonus  # Close-quarters trench fighting.
 		if victim is Bunker:
 			damage *= bunker_damage_mult
-		_play_melee_swing()
+		_play_attack_animation()
 		_deal_damage(victim, damage, DamageKind.MELEE)
 		return
+
+	_play_attack_animation()
 
 	# Rifle shot: accuracy drops with distance, bunkers are too big to miss.
 	var aim := victim.global_position + Vector2(0.0, -50.0)
@@ -543,10 +601,11 @@ func _die() -> void:
 	muzzle_flash.visible = false
 	died.emit(self)
 
-	# Fall over, darken, then fade away.
+	# Fall over backwards, darken, then fade away.
+	sprite.pause()
 	var tween := create_tween()
-	tween.tween_property(visual, "rotation", -PI / 2.0, 0.3)
-	tween.parallel().tween_property(visual, "modulate", Color(0.2, 0.17, 0.15, 1.0), 0.3)
+	tween.tween_property(sprite, "rotation", -_facing * PI / 2.0, 0.3)
+	tween.parallel().tween_property(sprite, "modulate", Color(0.35, 0.3, 0.27, 1.0), 0.3)
 	tween.tween_interval(2.5)
 	tween.tween_property(self, "modulate:a", 0.0, 1.0)
 	tween.tween_callback(queue_free)
@@ -585,42 +644,84 @@ func _face_toward(x: float) -> void:
 		_facing = signf(x - global_position.x)
 
 
-func _animate(delta: float) -> void:
-	# The art is drawn facing right; flip it with a negative X scale.
-	visual.scale = Vector2(_facing * _visual_scale, _visual_scale)
-	if _moving:
-		_anim_time += delta * velocity.length() / 13.0
-		leg_front.rotation = sin(_anim_time) * 0.6
-		leg_back.rotation = -sin(_anim_time) * 0.6
-		visual.position.y = -absf(sin(_anim_time)) * 3.0
-	else:
-		leg_front.rotation = lerpf(leg_front.rotation, 0.0, minf(1.0, delta * 12.0))
-		leg_back.rotation = lerpf(leg_back.rotation, 0.0, minf(1.0, delta * 12.0))
-		visual.position.y = lerpf(visual.position.y, 0.0, minf(1.0, delta * 12.0))
+func _animate(_delta: float) -> void:
+	# The art is drawn facing right: Blue (advancing right) is shown as-is and
+	# Red (advancing left) is mirrored. Units also turn to face their target.
+	sprite.flip_h = _facing < 0.0
+	muzzle.position = Vector2(_muzzle_offset.x * _facing, _muzzle_offset.y)
+	_refresh_animation()
+
+
+## Plays the animation that matches the current state:
+##   MARCHING / CHARGING -> "walk" (held on one frame while standing still)
+##   IN_COVER            -> "cover"
+##   ATTACKING           -> "aim" between attacks, "walk" while chasing a target
+## The "attack" animation (the shot or swing itself) is started by
+## _play_attack_animation() and is left to finish before this takes over again.
+func _refresh_animation() -> void:
+	if state == State.DEAD:
+		return
+	var wanted := ANIM_WALK
+	if not _moving:
+		match state:
+			State.IN_COVER:
+				wanted = ANIM_COVER
+			State.ATTACKING:
+				wanted = ANIM_AIM
+
+	var mid_attack := sprite.animation == ANIM_ATTACK and sprite.is_playing()
+	if mid_attack and not _moving:
+		return
+	if sprite.animation != wanted:
+		_play(wanted)
+
+	if wanted == ANIM_WALK:
+		if _moving:
+			# Step faster when sprinting so the feet keep up with the ground.
+			sprite.speed_scale = clampf(velocity.length() / march_speed, 0.6, 2.0)
+			if not sprite.is_playing():
+				sprite.play(ANIM_WALK)
+		elif sprite.is_playing():
+			sprite.pause()
+
+
+func _play(animation: StringName) -> void:
+	if _recolor_material != null:
+		var amount := 1.0 if _recolored.has(animation) else 0.0
+		_recolor_material.set_shader_parameter("strength", amount)
+	sprite.speed_scale = 1.0
+	sprite.stop()  # Restart even if this animation is already the current one.
+	sprite.play(animation)
+
+
+## One shot (riflemen) or one swing (raiders).
+func _play_attack_animation() -> void:
+	_play(ANIM_ATTACK)
+
+
+## Connected from Sprite.animation_finished in Unit.tscn.
+func _on_sprite_animation_finished() -> void:
+	_refresh_animation()
 
 
 func _play_muzzle_flash() -> void:
+	muzzle_flash.flip_h = _facing < 0.0
+	muzzle_flash.position.x = _facing * 8.0
 	muzzle_flash.visible = true
-	muzzle_flash.rotation = randf_range(-0.3, 0.3)
+	muzzle_sparks.rotation = 0.0 if _facing > 0.0 else PI
 	muzzle_sparks.restart()
 	muzzle_sparks.emitting = true
 	var tween := create_tween()
-	tween.tween_interval(0.07)
+	tween.tween_interval(0.08)
 	tween.tween_callback(muzzle_flash.hide)
-
-
-func _play_melee_swing() -> void:
-	var tween := create_tween()
-	tween.tween_property(club_poly, "rotation", 1.3, 0.08)
-	tween.tween_property(club_poly, "rotation", 0.0, 0.2)
 
 
 func _flash_hit() -> void:
 	if state == State.DEAD:
 		return
-	visual.modulate = Color(1.8, 1.5, 1.3)
+	sprite.modulate = Color(1.7, 1.45, 1.3)
 	var tween := create_tween()
-	tween.tween_property(visual, "modulate", Color.WHITE, 0.15)
+	tween.tween_property(sprite, "modulate", Color.WHITE, 0.15)
 
 
 func _update_health_bar() -> void:

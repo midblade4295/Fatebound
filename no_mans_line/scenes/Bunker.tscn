@@ -1,6 +1,10 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/Bunker.gd" id="1_bunker"]
+[ext_resource type="Texture2D" path="res://assets/atlas/bunker_intact.tres" id="2_intact"]
+[ext_resource type="Texture2D" path="res://assets/atlas/bunker_damaged.tres" id="3_damaged"]
+[ext_resource type="Texture2D" path="res://assets/atlas/mortar_cannon.tres" id="4_mortar"]
+[ext_resource type="Texture2D" path="res://assets/atlas/muzzle_flash.tres" id="5_flash"]
 
 [sub_resource type="RectangleShape2D" id="footprint_shape"]
 size = Vector2(190, 130)
@@ -43,6 +47,8 @@ color_ramp = SubResource("smoke_ramp")
 collision_layer = 8
 collision_mask = 0
 script = ExtResource("1_bunker")
+intact_texture = ExtResource("2_intact")
+damaged_texture = ExtResource("3_damaged")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, -55)
@@ -50,64 +56,38 @@ shape = SubResource("footprint_shape")
 
 [node name="Visual" type="Node2D" parent="."]
 
-[node name="Mound" type="Polygon2D" parent="Visual"]
-color = Color(0.25, 0.2, 0.15, 1)
-polygon = PackedVector2Array(-190, 14, -150, -40, -96, -78, -20, -60, 60, -30, 150, 14)
+[node name="MortarProp" type="Sprite2D" parent="Visual"]
+position = Vector2(-96, -18)
+scale = Vector2(0.6, 0.6)
+texture = ExtResource("4_mortar")
 
-[node name="Wall" type="Polygon2D" parent="Visual"]
-color = Color(0.43, 0.41, 0.37, 1)
-polygon = PackedVector2Array(-92, 14, -80, -98, 80, -98, 94, 14)
-
-[node name="WallShade" type="Polygon2D" parent="Visual"]
-color = Color(0.33, 0.31, 0.28, 1)
-polygon = PackedVector2Array(-92, 14, -80, -98, -30, -98, -36, 14)
-
-[node name="Roof" type="Polygon2D" parent="Visual"]
-color = Color(0.28, 0.26, 0.24, 1)
-polygon = PackedVector2Array(-96, -98, 94, -98, 84, -120, -84, -120)
-
-[node name="Slit" type="Polygon2D" parent="Visual"]
-color = Color(0.06, 0.05, 0.05, 1)
-polygon = PackedVector2Array(26, -72, 88, -72, 89, -56, 26, -56)
-
-[node name="Door" type="Polygon2D" parent="Visual"]
-color = Color(0.1, 0.08, 0.07, 1)
-polygon = PackedVector2Array(-70, 14, -70, -46, -40, -46, -40, 14)
-
-[node name="GunBarrel" type="Polygon2D" parent="Visual"]
-color = Color(0.08, 0.07, 0.07, 1)
-polygon = PackedVector2Array(70, -66, 100, -65, 100, -62, 70, -61)
-
-[node name="Sandbags" type="Polygon2D" parent="Visual"]
-color = Color(0.45, 0.39, 0.29, 1)
-polygon = PackedVector2Array(76, 16, 82, -14, 100, -28, 124, -24, 138, -6, 144, 16)
-
-[node name="SandbagSeams" type="Line2D" parent="Visual"]
-points = PackedVector2Array(80, 0, 140, 0, 110, 0, 110, -14, 88, -14, 130, -14)
-width = 2.0
-default_color = Color(0.27, 0.23, 0.17, 1)
+[node name="Sprite" type="Sprite2D" parent="Visual"]
+position = Vector2(4, -68)
+scale = Vector2(0.8, 0.8)
+texture = ExtResource("2_intact")
 
 [node name="Flag" type="Node2D" parent="Visual"]
-position = Vector2(-50, -120)
+position = Vector2(-42, -150)
 
 [node name="Pole" type="Polygon2D" parent="Visual/Flag"]
 color = Color(0.12, 0.1, 0.08, 1)
-polygon = PackedVector2Array(-2, 0, 2, 0, 2, -86, -2, -86)
+polygon = PackedVector2Array(-2, 0, 2, 0, 2, -78, -2, -78)
 
 [node name="Cloth" type="Polygon2D" parent="Visual/Flag"]
 color = Color(0.3, 0.55, 0.85, 1)
-polygon = PackedVector2Array(2, -86, 52, -78, 44, -68, 52, -56, 2, -52)
+polygon = PackedVector2Array(2, -78, 52, -70, 44, -60, 52, -48, 2, -44)
 
 [node name="Muzzle" type="Marker2D" parent="Visual"]
-position = Vector2(102, -63.5)
+position = Vector2(86, -66)
 
-[node name="MuzzleFlash" type="Polygon2D" parent="Visual/Muzzle"]
+[node name="MuzzleFlash" type="Sprite2D" parent="Visual/Muzzle"]
 visible = false
-color = Color(1, 0.72, 0.25, 1)
-polygon = PackedVector2Array(0, -4, 12, -13, 9, -3, 30, 0, 9, 3, 12, 13, 0, 4)
+position = Vector2(10, 0)
+scale = Vector2(0.8, 0.8)
+texture = ExtResource("5_flash")
 
 [node name="SpawnPoint" type="Marker2D" parent="Visual"]
-position = Vector2(150, 0)
+position = Vector2(160, 0)
 
 [node name="GunRange" type="Area2D" parent="."]
 position = Vector2(0, -40)
@@ -123,7 +103,7 @@ wait_time = 0.3
 autostart = true
 
 [node name="HealthBar" type="Node2D" parent="."]
-position = Vector2(-75, -236)
+position = Vector2(-75, -250)
 
 [node name="Back" type="ColorRect" parent="HealthBar"]
 offset_left = -2.0

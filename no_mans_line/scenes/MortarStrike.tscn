@@ -1,6 +1,8 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/MortarStrike.gd" id="1_mortar"]
+[ext_resource type="Texture2D" path="res://assets/atlas/flare.tres" id="2_flare"]
+[ext_resource type="Texture2D" path="res://assets/atlas/mortar_shell.tres" id="3_shell"]
 
 [sub_resource type="Gradient" id="debris_gradient"]
 offsets = PackedFloat32Array(0, 0.25, 1)
@@ -61,24 +63,20 @@ script = ExtResource("1_mortar")
 width = 3.0
 default_color = Color(1, 0.3, 0.2, 0.9)
 
-[node name="FlareStick" type="Polygon2D" parent="TargetMarker"]
-color = Color(0.12, 0.1, 0.09, 1)
-polygon = PackedVector2Array(-2, 4, 2, 4, 2, -34, -2, -34)
+[node name="Flare" type="Sprite2D" parent="TargetMarker"]
+position = Vector2(24, -30)
+scale = Vector2(0.52, 0.52)
+texture = ExtResource("2_flare")
 
-[node name="Flare" type="Polygon2D" parent="TargetMarker"]
-position = Vector2(0, -40)
-color = Color(1, 0.3, 0.2, 1)
-polygon = PackedVector2Array(0, -18, 5, -5, 16, 0, 5, 5, 0, 14, -5, 5, -16, 0, -5, -5)
-
-[node name="Shell" type="Polygon2D" parent="."]
-color = Color(0.08, 0.07, 0.07, 1)
-polygon = PackedVector2Array(-6, -34, 6, -34, 8, -22, 7, -4, 0, 10, -7, -4, -8, -22)
+[node name="Shell" type="Sprite2D" parent="."]
+scale = Vector2(0.7, 0.7)
+texture = ExtResource("3_shell")
 
 [node name="Blast" type="Polygon2D" parent="."]
 visible = false
 position = Vector2(0, -30)
-color = Color(1, 0.72, 0.28, 0.9)
-polygon = PackedVector2Array(0, -120, 28, -46, 96, -70, 58, -12, 130, 20, 44, 26, 0, 50, -44, 26, -130, 20, -58, -12, -96, -70, -28, -46)
+color = Color(1, 0.74, 0.3, 0.85)
+polygon = PackedVector2Array(0, -96, 22, -38, 76, -56, 46, -10, 104, 16, 36, 20, 0, 40, -36, 20, -104, 16, -46, -10, -76, -56, -22, -38)
 
 [node name="Debris" type="GPUParticles2D" parent="."]
 emitting = false

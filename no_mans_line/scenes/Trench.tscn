@@ -1,6 +1,9 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/Trench.gd" id="1_trench"]
+[ext_resource type="Texture2D" path="res://assets/atlas/trench_bay.tres" id="2_bay"]
+[ext_resource type="Texture2D" path="res://assets/atlas/trench_parapet.tres" id="3_parapet"]
+[ext_resource type="Texture2D" path="res://assets/atlas/barbed_wire.tres" id="4_wire"]
 
 [sub_resource type="RectangleShape2D" id="zone_shape"]
 size = Vector2(330, 220)
@@ -15,113 +18,66 @@ script = ExtResource("1_trench")
 position = Vector2(0, -40)
 shape = SubResource("zone_shape")
 
-[node name="Visual" type="Node2D" parent="."]
-
-[node name="Pit" type="Polygon2D" parent="Visual"]
-color = Color(0.13, 0.1, 0.08, 1)
-polygon = PackedVector2Array(-162, -8, 162, -8, 162, 30, -162, 30)
-
-[node name="BackPlanks" type="Polygon2D" parent="Visual"]
-color = Color(0.3, 0.23, 0.16, 1)
-polygon = PackedVector2Array(-156, -8, 156, -8, 151, 16, -151, 16)
-
-[node name="PlankGaps" type="Line2D" parent="Visual"]
-points = PackedVector2Array(-152, 4, 152, 4)
-width = 2.0
-default_color = Color(0.16, 0.12, 0.09, 1)
-
-[node name="PostLeft" type="Polygon2D" parent="Visual"]
-color = Color(0.2, 0.15, 0.11, 1)
-polygon = PackedVector2Array(-86, -14, -78, -14, -78, 22, -86, 22)
-
-[node name="PostMid" type="Polygon2D" parent="Visual"]
-color = Color(0.2, 0.15, 0.11, 1)
-polygon = PackedVector2Array(-4, -14, 4, -14, 4, 22, -4, 22)
-
-[node name="PostRight" type="Polygon2D" parent="Visual"]
-color = Color(0.2, 0.15, 0.11, 1)
-polygon = PackedVector2Array(78, -14, 86, -14, 86, 22, 78, 22)
-
-[node name="Duckboards" type="Polygon2D" parent="Visual"]
-color = Color(0.27, 0.21, 0.15, 1)
-polygon = PackedVector2Array(-158, 14, 158, 14, 158, 24, -158, 24)
+[node name="Bay" type="Sprite2D" parent="."]
+position = Vector2(0, -28)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("2_bay")
 
 [node name="Flag" type="Node2D" parent="."]
-position = Vector2(-168, -14)
+position = Vector2(-150, -84)
 
 [node name="Pole" type="Polygon2D" parent="Flag"]
 color = Color(0.14, 0.11, 0.09, 1)
-polygon = PackedVector2Array(-2, 0, 2, 0, 2, -100, -2, -100)
+polygon = PackedVector2Array(-2, 0, 2, 0, 2, -86, -2, -86)
 
 [node name="Cloth" type="Polygon2D" parent="Flag"]
 color = Color(0.55, 0.52, 0.46, 1)
-polygon = PackedVector2Array(2, -100, 46, -92, 40, -84, 46, -74, 2, -70)
+polygon = PackedVector2Array(2, -86, 46, -78, 40, -70, 46, -60, 2, -56)
 
 [node name="Slots" type="Node2D" parent="."]
 
 [node name="Slot0" type="Marker2D" parent="Slots"]
-position = Vector2(-112, 44)
+position = Vector2(-112, 20)
 
 [node name="Slot1" type="Marker2D" parent="Slots"]
-position = Vector2(-80, 48)
+position = Vector2(-80, 26)
 
 [node name="Slot2" type="Marker2D" parent="Slots"]
-position = Vector2(-48, 44)
+position = Vector2(-48, 20)
 
 [node name="Slot3" type="Marker2D" parent="Slots"]
-position = Vector2(-16, 48)
+position = Vector2(-16, 26)
 
 [node name="Slot4" type="Marker2D" parent="Slots"]
-position = Vector2(16, 44)
+position = Vector2(16, 20)
 
 [node name="Slot5" type="Marker2D" parent="Slots"]
-position = Vector2(48, 48)
+position = Vector2(48, 26)
 
 [node name="Slot6" type="Marker2D" parent="Slots"]
-position = Vector2(80, 44)
+position = Vector2(80, 20)
 
 [node name="Slot7" type="Marker2D" parent="Slots"]
-position = Vector2(112, 48)
+position = Vector2(112, 26)
 
 [node name="Parapet" type="Node2D" parent="."]
 z_index = 5
 
-[node name="FrontLip" type="Polygon2D" parent="Parapet"]
-polygon = PackedVector2Array(-162, 22, 162, 22, 162, 74, -162, 74)
-vertex_colors = PackedColorArray(0.34, 0.283, 0.208, 1, 0.34, 0.283, 0.208, 1, 0.322, 0.268, 0.198, 1, 0.322, 0.268, 0.198, 1)
+[node name="Sandbags" type="Sprite2D" parent="Parapet"]
+position = Vector2(0, 14)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("3_parapet")
 
-[node name="LipHighlight" type="Line2D" parent="Parapet"]
-points = PackedVector2Array(-162, 22, 162, 22)
-width = 4.0
-default_color = Color(0.43, 0.36, 0.26, 1)
+[node name="WireLeft" type="Sprite2D" parent="Parapet"]
+position = Vector2(-206, 4)
+scale = Vector2(0.36, 0.36)
+texture = ExtResource("4_wire")
 
-[node name="SandbagsLeft" type="Polygon2D" parent="Parapet"]
-color = Color(0.45, 0.39, 0.29, 1)
-polygon = PackedVector2Array(-200, 26, -190, 0, -172, -14, -150, -16, -136, -2, -130, 26)
-
-[node name="SandbagSeamsLeft" type="Line2D" parent="Parapet"]
-points = PackedVector2Array(-194, 12, -134, 12, -150, 12, -150, -2, -182, -2)
-width = 2.0
-default_color = Color(0.27, 0.23, 0.17, 1)
-
-[node name="SandbagsRight" type="Polygon2D" parent="Parapet"]
-color = Color(0.45, 0.39, 0.29, 1)
-polygon = PackedVector2Array(130, 26, 136, -2, 150, -16, 172, -14, 190, 0, 200, 26)
-
-[node name="SandbagSeamsRight" type="Line2D" parent="Parapet"]
-points = PackedVector2Array(134, 12, 194, 12, 150, 12, 150, -2, 182, -2)
-width = 2.0
-default_color = Color(0.27, 0.23, 0.17, 1)
-
-[node name="WireLeft" type="Line2D" parent="Parapet"]
-points = PackedVector2Array(-262, 30, -250, 2, -238, 30, -226, 2, -214, 30)
-width = 2.0
-default_color = Color(0.1, 0.09, 0.08, 1)
-
-[node name="WireRight" type="Line2D" parent="Parapet"]
-points = PackedVector2Array(214, 30, 226, 2, 238, 30, 250, 2, 262, 30)
-width = 2.0
-default_color = Color(0.1, 0.09, 0.08, 1)
+[node name="WireRight" type="Sprite2D" parent="Parapet"]
+position = Vector2(206, 4)
+scale = Vector2(0.36, 0.36)
+texture = ExtResource("4_wire")
+flip_h = true
 
 [connection signal="body_entered" from="." to="." method="_on_body_entered"]
 [connection signal="body_exited" from="." to="." method="_on_body_exited"]

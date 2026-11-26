@@ -297,6 +297,7 @@ func launch_mortar(team: int, target: Vector2) -> void:
 	strike.setup(self, team)
 	strike.position = Vector2(clampf(target.x, FIELD_MIN_X, FIELD_MAX_X), GROUND_Y)
 	effects_root.add_child(strike)
+	get_bunker(team).play_mortar_recoil()
 
 
 func release_gas(team: int, target: Vector2) -> void:

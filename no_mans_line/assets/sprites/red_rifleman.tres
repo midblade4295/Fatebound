@@ -1,0 +1,95 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/units_sheet.png" id="1_sheet"]
+
+[sub_resource type="AtlasTexture" id="walk_0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(37, 29, 141, 197)
+margin = Rect2(111, 9, 191, 9)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="walk_1"]
+atlas = ExtResource("1_sheet")
+region = Rect2(183, 28, 93, 197)
+margin = Rect2(115, 9, 239, 9)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="walk_2"]
+atlas = ExtResource("1_sheet")
+region = Rect2(317, 29, 115, 197)
+margin = Rect2(104, 9, 217, 9)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="walk_3"]
+atlas = ExtResource("1_sheet")
+region = Rect2(460, 29, 143, 197)
+margin = Rect2(113, 9, 189, 9)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="aim_0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(56, 533, 179, 204)
+margin = Rect2(114, 2, 153, 2)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="fire_0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(474, 533, 216, 204)
+margin = Rect2(114, 2, 116, 2)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="aim2_0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(277, 533, 179, 204)
+margin = Rect2(114, 2, 153, 2)
+filter_clip = true
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("aim_0")
+}],
+"loop": true,
+"name": &"aim",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("fire_0")
+}, {
+"duration": 1.0,
+"texture": SubResource("aim2_0")
+}, {
+"duration": 1.0,
+"texture": SubResource("aim_0")
+}],
+"loop": false,
+"name": &"attack",
+"speed": 7.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("aim_0")
+}],
+"loop": true,
+"name": &"cover",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("walk_0")
+}, {
+"duration": 1.0,
+"texture": SubResource("walk_1")
+}, {
+"duration": 1.0,
+"texture": SubResource("walk_2")
+}, {
+"duration": 1.0,
+"texture": SubResource("walk_3")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 7.0
+}]

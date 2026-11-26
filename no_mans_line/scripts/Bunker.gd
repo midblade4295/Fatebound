@@ -11,6 +11,11 @@ signal destroyed(team: int)
 
 @export_enum("Blue:0", "Red:1") var team: int = 0
 @export var max_health := 1000.0
+@export_group("Art")
+@export var intact_texture: Texture2D
+@export var damaged_texture: Texture2D
+## The bunker switches to damaged_texture at or below this health fraction.
+@export_range(0.0, 1.0, 0.05) var damaged_below := 0.4
 @export_group("Machine Gun")
 @export var gun_damage := 7.0
 @export var gun_interval := 0.3
@@ -23,9 +28,11 @@ var game: GameManager
 var health := 0.0
 
 @onready var visual: Node2D = $Visual
+@onready var sprite: Sprite2D = $Visual/Sprite
+@onready var mortar_prop: Sprite2D = $Visual/MortarProp
 @onready var flag_cloth: Polygon2D = $Visual/Flag/Cloth
 @onready var muzzle: Marker2D = $Visual/Muzzle
-@onready var muzzle_flash: Polygon2D = $Visual/Muzzle/MuzzleFlash
+@onready var muzzle_flash: Sprite2D = $Visual/Muzzle/MuzzleFlash
 @onready var spawn_point: Marker2D = $Visual/SpawnPoint
 @onready var gun_area: Area2D = $GunRange
 @onready var gun_shape: CollisionShape2D = $GunRange/CollisionShape2D
@@ -36,7 +43,9 @@ var health := 0.0
 
 func _ready() -> void:
 	health = max_health
-	# The art is drawn facing right; Red's bunker is mirrored.
+	sprite.texture = intact_texture
+	# The art is drawn facing right; Red's bunker is mirrored. Mirroring the
+	# parent also mirrors the Muzzle and SpawnPoint markers.
 	visual.scale.x = GameManager.advance_dir(team)
 	var blue := team == GameManager.TEAM_BLUE
 	flag_cloth.color = Color(0.3, 0.55, 0.85) if blue else Color(0.82, 0.25, 0.2)
@@ -76,6 +85,10 @@ func take_damage(amount: float, kind: Unit.DamageKind, _attacker: Unit) -> void:
 	health_fill.size.x = 150.0 * get_health_fraction()
 	health_changed.emit(team, health, max_health)
 
+	if get_health_fraction() <= damaged_below and sprite.texture != damaged_texture:
+		sprite.texture = damaged_texture
+		wreck_smoke.emitting = true
+
 	visual.modulate = Color(1.5, 1.3, 1.2)
 	var tween := create_tween()
 	tween.tween_property(visual, "modulate", Color.WHITE, 0.12)
@@ -87,9 +100,10 @@ func take_damage(amount: float, kind: Unit.DamageKind, _attacker: Unit) -> void:
 func _destroy() -> void:
 	gun_timer.stop()
 	muzzle_flash.visible = false
+	sprite.texture = damaged_texture
 	wreck_smoke.emitting = true
 	var tween := create_tween()
-	tween.tween_property(visual, "modulate", Color(0.25, 0.22, 0.2), 0.6)
+	tween.tween_property(visual, "modulate", Color(0.45, 0.4, 0.37), 0.6)
 	destroyed.emit(team)
 
 
@@ -116,9 +130,17 @@ func _on_gun_timer_timeout() -> void:
 		aim += Vector2(randf_range(-50.0, 50.0), randf_range(-60.0, 10.0))
 	game.spawn_tracer(muzzle.global_position, aim)
 	muzzle_flash.visible = true
-	muzzle_flash.rotation = randf_range(-0.3, 0.3)
+	muzzle_flash.rotation = randf_range(-0.15, 0.15)
 	var tween := create_tween()
 	tween.tween_interval(0.06)
 	tween.tween_callback(muzzle_flash.hide)
 	if hit:
 		victim.take_damage(gun_damage, Unit.DamageKind.BULLET, null)
+
+
+## Small kick on the mortar beside the bunker when this team fires a shell.
+func play_mortar_recoil() -> void:
+	var rest := Vector2(0.6, 0.6)
+	mortar_prop.scale = rest * Vector2(1.0, 0.82)
+	var tween := create_tween()
+	tween.tween_property(mortar_prop, "scale", rest, 0.25)

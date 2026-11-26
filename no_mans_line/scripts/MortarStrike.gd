@@ -14,7 +14,7 @@ var source_team := GameManager.TEAM_BLUE
 
 @onready var target_marker: Node2D = $TargetMarker
 @onready var ring: Line2D = $TargetMarker/Ring
-@onready var shell: Polygon2D = $Shell
+@onready var shell: Sprite2D = $Shell
 @onready var blast: Polygon2D = $Blast
 @onready var debris: GPUParticles2D = $Debris
 @onready var smoke: GPUParticles2D = $Smoke
@@ -40,7 +40,8 @@ func _ready() -> void:
 	# The shell arcs in from the firing side's rear.
 	var dir := GameManager.advance_dir(source_team)
 	shell.position = Vector2(-dir * 320.0, -1100.0)
-	shell.rotation = Vector2(dir * 320.0, 1100.0).angle() - PI / 2.0
+	# The shell art points up; turn its nose along the line of fall.
+	shell.rotation = Vector2(dir * 320.0, 1100.0).angle() + PI / 2.0
 	var fall := create_tween()
 	fall.tween_property(shell, "position", Vector2.ZERO, delay).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 

@@ -1,6 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/GasCloud.gd" id="1_gas"]
+[ext_resource type="Texture2D" path="res://assets/atlas/gas_cloud.tres" id="2_cloud"]
 
 [sub_resource type="RectangleShape2D" id="cloud_shape"]
 size = Vector2(340, 220)
@@ -47,9 +48,24 @@ script = ExtResource("1_gas")
 position = Vector2(0, -40)
 shape = SubResource("cloud_shape")
 
-[node name="Haze" type="Polygon2D" parent="."]
-color = Color(0.7, 0.66, 0.2, 0.16)
-polygon = PackedVector2Array(-180, 60, -196, 0, -160, -70, -90, -120, -10, -140, 80, -118, 158, -74, 196, -6, 178, 60)
+[node name="Clouds" type="Node2D" parent="."]
+modulate = Color(1, 1, 1, 0.6)
+
+[node name="CloudLeft" type="Sprite2D" parent="Clouds"]
+position = Vector2(-104, -44)
+scale = Vector2(0.9, 0.9)
+texture = ExtResource("2_cloud")
+
+[node name="CloudRight" type="Sprite2D" parent="Clouds"]
+position = Vector2(106, -42)
+scale = Vector2(0.86, 0.86)
+texture = ExtResource("2_cloud")
+flip_h = true
+
+[node name="CloudMid" type="Sprite2D" parent="Clouds"]
+position = Vector2(0, -62)
+scale = Vector2(1.15, 1.15)
+texture = ExtResource("2_cloud")
 
 [node name="Puffs" type="GPUParticles2D" parent="."]
 position = Vector2(0, -20)

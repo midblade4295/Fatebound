@@ -12,7 +12,7 @@ extends Area2D
 
 var source_team := GameManager.TEAM_BLUE
 
-@onready var haze: Polygon2D = $Haze
+@onready var clouds: Node2D = $Clouds
 @onready var puffs: GPUParticles2D = $Puffs
 @onready var tick_timer: Timer = $TickTimer
 @onready var life_timer: Timer = $LifeTimer
@@ -20,9 +20,12 @@ var source_team := GameManager.TEAM_BLUE
 
 func _ready() -> void:
 	add_to_group("gas_clouds")
-	haze.modulate.a = 0.0
+	# Billow in: the three cloud sprites fade up and swell slightly.
+	clouds.modulate.a = 0.0
+	clouds.scale = Vector2(0.7, 0.7)
 	var tween := create_tween()
-	tween.tween_property(haze, "modulate:a", 1.0, 0.8)
+	tween.tween_property(clouds, "modulate:a", 0.6, 0.8)
+	tween.parallel().tween_property(clouds, "scale", Vector2.ONE, 1.2)
 	tick_timer.start(tick_interval)
 	life_timer.start(lifetime)
 
@@ -44,6 +47,6 @@ func _on_life_timer_timeout() -> void:
 	set_deferred("monitoring", false)
 	puffs.emitting = false
 	var tween := create_tween()
-	tween.tween_property(haze, "modulate:a", 0.0, 1.5)
+	tween.tween_property(clouds, "modulate:a", 0.0, 1.5)
 	tween.tween_interval(1.5)
 	tween.tween_callback(queue_free)
