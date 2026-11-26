@@ -94,13 +94,15 @@ const SHADE_LAYER := 1 << 9       # render layer seen only by the shade bake's c
 ## keeps that picture as a texture, which the ground shader darkens itself with, and throws
 ## the copies away. The sun's live shadow map is then left with only what moves or matters up
 ## close: the troops, the buildings and the bridge.
-func begin_shade_bake(sun_dir: Vector3) -> void:
+func begin_shade_bake(sun_dir: Vector3, also: Array = []) -> void:
 	if DisplayServer.get_name() == "headless" or _bake_view != null:
 		return
+	var casters: Array = _shade_casters.duplicate()
+	casters.append_array(also)          # the buildings, wherever and however tall they stand now
 	var black := StandardMaterial3D.new()
 	black.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	black.albedo_color = Color.BLACK
-	for mi: MeshInstance3D in _shade_casters:
+	for mi: MeshInstance3D in casters:
 		if not is_instance_valid(mi) or mi.mesh == null:
 			continue
 		var proxy := MeshInstance3D.new()
@@ -327,6 +329,11 @@ func _build_ground() -> void:
 	mat.set_shader_parameter("worn", worn)
 	ground.material_override = mat
 	_ground_mat = mat
+	# Solid things are drawn nearest first, judged by the middle of each one's bounding box, so
+	# that what is hidden behind them is never shaded. The ground is behind everything, but its
+	# own box is centred in the thick of the scene; a box reaching far below puts it last, and
+	# the pixels under trees, buildings and troops (a third of the screen) skip its shader.
+	ground.custom_aabb = AABB(Vector3(-48.0, -400.0, -60.0), Vector3(96.0, 402.0, 120.0))
 	add_child(ground)
 
 
@@ -368,6 +375,8 @@ func _build_bridge_and_stones() -> void:
 		Models.fit_footprint(bridge, BRIDGE_HALF_W * 2.0 + 0.5, BRIDGE_HALF_L * 2.0)
 		add_child(bridge)
 		_group("props", bridge)
+		for mi: MeshInstance3D in bridge.find_children("*", "MeshInstance3D", true, false):
+			_shade_casters.append(mi)
 	else:
 		var deck := MeshInstance3D.new()
 		var box := BoxMesh.new()
@@ -520,20 +529,33 @@ func _build_grass() -> void:
 	mat.shader = Shader.new()
 	mat.shader.code = """
 shader_type spatial;
-render_mode cull_disabled, diffuse_lambert, specular_disabled, shadows_disabled;
+render_mode cull_disabled, unshaded;      // lights itself: see shaders/ground.gdshader
+// The battlefield's fixed light, worked out by the game once (battle_world.gd) and shared by
+// every shader that lights itself: the sun, the sky's cool fill, and two broad glows.
+global uniform vec3 dow_to_sun;       // unit vector toward the sun
+global uniform vec3 dow_sun;          // sun colour x energy
+global uniform vec3 dow_sky;          // sky colour x energy
+global uniform vec3 dow_fill;         // warm glow from the camera's side
+global uniform vec3 dow_rim;          // cool glow from beyond the far end
+global uniform vec3 dow_fill_from;
+global uniform vec3 dow_rim_from;
+vec3 sky_light(vec3 n) {
+	return dow_sky + dow_fill * max(dot(n, dow_fill_from), 0.0) + dow_rim * max(dot(n, dow_rim_from), 0.0);
+}
 varying float along;
 varying vec3 tint;
+varying vec3 light;
 void vertex() {
 	along = COLOR.r;
 	tint = INSTANCE_CUSTOM.rgb;
+	light = sky_light(vec3(0.0, 1.0, 0.0)) + dow_sun * dow_to_sun.y;
 	vec3 w = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float gust = sin(TIME * 1.7 + w.x * 0.8 + w.z * 1.1) * 0.5 + sin(TIME * 3.3 + w.x * 2.1 - w.z * 0.7) * 0.2;
 	VERTEX.x += gust * 0.12 * along * along;
 	VERTEX.z += gust * 0.06 * along * along;
 }
 void fragment() {
-	ALBEDO = pow(tint * mix(0.72, 1.12, along), vec3(2.2));
-	ROUGHNESS = 0.9;
+	ALBEDO = pow(tint * mix(0.72, 1.12, along), vec3(2.2)) * light;
 }
 """
 	var blade := _blade_mesh()
@@ -607,7 +629,22 @@ void fragment() {
 
 const FOLIAGE_SHADER := """
 shader_type spatial;
-render_mode diffuse_lambert, specular_disabled, shadows_disabled;
+// Trees light themselves, once per corner of the mesh rather than once per pixel: a canopy is
+// a smooth blob, and the two are indistinguishable on it. See shaders/ground.gdshader.
+render_mode unshaded;
+// The battlefield's fixed light, worked out by the game once (battle_world.gd) and shared by
+// every shader that lights itself: the sun, the sky's cool fill, and two broad glows.
+global uniform vec3 dow_to_sun;       // unit vector toward the sun
+global uniform vec3 dow_sun;          // sun colour x energy
+global uniform vec3 dow_sky;          // sky colour x energy
+global uniform vec3 dow_fill;         // warm glow from the camera's side
+global uniform vec3 dow_rim;          // cool glow from beyond the far end
+global uniform vec3 dow_fill_from;
+global uniform vec3 dow_rim_from;
+vec3 sky_light(vec3 n) {
+	return dow_sky + dow_fill * max(dot(n, dow_fill_from), 0.0) + dow_rim * max(dot(n, dow_rim_from), 0.0);
+}
+varying vec3 light;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
 uniform float y_min;
 uniform float y_size;
@@ -619,6 +656,8 @@ void vertex() {
 	float t = TIME * 1.25 + sway;
 	VERTEX.x += sin(t + VERTEX.y * 3.0 / y_size) * 0.018 * y_size * w;
 	VERTEX.z += cos(t * 0.8 + VERTEX.x * 2.0 / y_size) * 0.014 * y_size * w;
+	vec3 n = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	light = sky_light(n) + dow_sun * max(dot(n, dow_to_sun), 0.0);
 }
 void fragment() {
 	vec3 tex = texture(albedo_tex, UV).rgb;
@@ -632,8 +671,7 @@ void fragment() {
 	float unpainted = 1.0 - smoothstep(0.02, 0.07, max(tex.r, max(tex.g, tex.b)));
 	leafy = max(leafy, unpainted);
 	lum = mix(lum, 0.32, unpainted);
-	ALBEDO = mix(tex, leaf_col * (0.3 + lum * 1.7), leafy);
-	ROUGHNESS = 0.9;
+	ALBEDO = mix(tex, leaf_col * (0.3 + lum * 1.7), leafy) * light;
 }
 """
 

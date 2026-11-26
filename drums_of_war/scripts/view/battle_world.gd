@@ -48,6 +48,7 @@ var _lights: Array = []            # a small pool of glow discs for muzzle flash
 var _glow_material: ShaderMaterial
 var script_usec: int = 0           # time spent in _process since the battle screen last read it
 var frame_no: int = 0
+var _rebake_at: float = -1.0       # when to draw the baked shade again (a building fell or was rebuilt)
 var anim_stride: int = 1           # every man's clip is stepped once in this many frames
 var _chunks: Array = []            # flung clods and splinters: {node, vel, age, life}
 var _jolts: Dictionary = {}        # structure id -> how hard it is still shuddering
@@ -113,7 +114,8 @@ func _ready() -> void:
 	_build_contact_shadows()
 	get_viewport().size_changed.connect(fit_camera)
 	fit_camera()
-	arena.begin_shade_bake(-_sun.global_basis.z)
+	RenderingServer.global_shader_parameter_set("dow_to_sun", _sun.global_basis.z)
+	_bake_shade()
 
 
 func _mat(colour: Color, roughness: float = 0.85, unshaded: bool = false) -> StandardMaterial3D:
@@ -231,6 +233,19 @@ void sky() {
 
 	var sun := DirectionalLight3D.new()             # warm golden-hour key light
 	_sun = sun
+	# The same light, as plain numbers, for the shaders that light themselves (the ground, the
+	# grass and the trees: nearly every pixel on screen). See shaders/ground.gdshader.
+	var lin := func(c: Color, k: float) -> Vector3:
+		var l := c.srgb_to_linear()
+		return Vector3(l.r, l.g, l.b) * k
+	var fill_from: Vector3 = Basis.from_euler(Vector3(deg_to_rad(-42.0), deg_to_rad(12.0), 0.0)).z
+	var rim_from: Vector3 = Basis.from_euler(Vector3(deg_to_rad(-30.0), deg_to_rad(168.0), 0.0)).z
+	RenderingServer.global_shader_parameter_set("dow_sky", lin.call(Color("8ba8d6"), 0.62))
+	RenderingServer.global_shader_parameter_set("dow_fill", lin.call(Color("ffe9c8"), 0.34))
+	RenderingServer.global_shader_parameter_set("dow_rim", lin.call(Color("cfe6ff"), 0.42))
+	RenderingServer.global_shader_parameter_set("dow_fill_from", fill_from)
+	RenderingServer.global_shader_parameter_set("dow_rim_from", rim_from)
+	RenderingServer.global_shader_parameter_set("dow_sun", lin.call(Color("ffd9a3"), 1.25))
 	sun.light_color = Color("ffd9a3")
 	sun.light_energy = 1.25
 	# Low in the east: long shadows fall across the field from the right-hand woods, and the
@@ -465,22 +480,30 @@ func _build_contact_shadows() -> void:
 	add_child(_contact)
 
 
+## The ground lights itself and takes no live shadows (see shaders/ground.gdshader), so each
+## figure's patch is drawn out long, away from the sun: it reads as the shadow the man casts.
 func _update_contact_shadows() -> void:
 	var mm := _contact.multimesh
 	var n := 0
+	var away := Vector3(-_sun.global_basis.z.x, 0.0, -_sun.global_basis.z.z).normalized() if _sun != null else Vector3.LEFT
+	var across := Vector3(-away.z, 0.0, away.x)
 	for id in _regiments:
 		var rv: RegimentView = _regiments[id]
-		var size := 2.3 if rv.arm == "cavalry" else 1.25
+		var mounted := rv.arm == "cavalry"
+		var long := 4.2 if mounted else 3.0
+		var wide := 2.0 if mounted else 1.15
+		var patch := Basis(away * long, Vector3.UP, across * wide)
+		var lead := away * (long * 0.3)
 		var y: float = rv.root.position.y + 0.045
 		for s: Node3D in rv.soldiers:
 			if n >= mm.instance_count:
 				break
 			var at := s.global_position
-			mm.set_instance_transform(n, Transform3D(Basis().scaled(Vector3(size, 1.0, size)), Vector3(at.x, y, at.z)))
+			mm.set_instance_transform(n, Transform3D(patch, Vector3(at.x, y, at.z) + lead))
 			n += 1
 		if rv.gun != null and n < mm.instance_count:
 			var g := rv.gun.global_position
-			mm.set_instance_transform(n, Transform3D(Basis().scaled(Vector3(2.6, 1.0, 2.6)), Vector3(g.x, y, g.z)))
+			mm.set_instance_transform(n, Transform3D(Basis(away * 3.6, Vector3.UP, across * 2.4), Vector3(g.x, y, g.z) + away * 0.8))
 			n += 1
 	mm.visible_instance_count = n
 
@@ -614,8 +637,18 @@ func _exit_tree() -> void:
 	Models.clear_stock()
 
 
+## Draws the shade on the ground afresh: the woods, the bridge, and the buildings as they stand.
+func _bake_shade() -> void:
+	var also: Array = []
+	for id in _structures:
+		also.append_array((_structures[id] as Node3D).find_children("*", "MeshInstance3D", true, false).filter(
+				func(m: Node) -> bool: return (m as MeshInstance3D).cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF))
+	arena.begin_shade_bake(-_sun.global_basis.z, also)
+
+
 func reset(new_sim: Sim) -> void:
 	sim = new_sim
+	_rebake_at = _time + 0.15          # buildings knocked down in the last battle stand again
 	for id in _regiments.keys():
 		_regiments[id].root.queue_free()
 	_regiments.clear()
@@ -653,6 +686,9 @@ func _step(delta: float) -> void:
 		return
 	_time += delta
 	frame_no += 1
+	if _rebake_at >= 0.0 and _time >= _rebake_at:
+		_rebake_at = -1.0
+		_bake_shade()
 	# Animating a skeleton is the dearest thing the processor does here. A small fight gets
 	# every frame; as the field fills, each man is stepped every second, then every third,
 	# frame (by a correspondingly longer step), staggered so the work is spread evenly.
@@ -681,6 +717,7 @@ func _step(delta: float) -> void:
 	for s: Sim.Structure in sim.structures:
 		if s.dead and not _structure_dead.get(s.id, false):
 			_structure_dead[s.id] = true
+			_rebake_at = _time + 1.0       # once it has settled into rubble, its shadow goes too
 		if _structure_dead.get(s.id, false):
 			var node: Node3D = _structures[s.id]
 			node.scale.y = lerpf(node.scale.y, 0.22, 1.0 - exp(-6.0 * delta))

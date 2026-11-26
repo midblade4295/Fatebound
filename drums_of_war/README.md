@@ -99,6 +99,10 @@ match goes to one minute of sudden-death overtime.
   The processor side is rationed too: the HUD's fixed furniture and its readouts are separate
   nodes redrawn only when they change, cards redraw only while they move, and in a crowded
   battle each soldier's skeleton is stepped every second or third frame, staggered.
+  The ground, the grass and the trees (nearly every pixel) light themselves from the same
+  fixed sun and sky, worked out per vertex, with shade from the baked texture, instead of
+  running the engine's per-pixel lighting and shadow lookup. The baked shade includes the
+  buildings and is redrawn when one falls; troops' long shadows are drawn-out blob patches.
 - `scripts/view/bench.gd`: a cost meter that runs on the device. Tap the FPS readout: it turns
   each part of the picture off in turn, reads the engine's GPU and CPU render timers with and
   without it, and lists what each part costs per frame, heaviest first.

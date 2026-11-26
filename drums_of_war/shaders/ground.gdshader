@@ -8,7 +8,23 @@
 // This shader runs on most of the screen's pixels, so texture reads are rationed: the five
 // noises live in the channels of two small textures (arena.gd _noise_pack), read once each.
 shader_type spatial;
-render_mode diffuse_lambert, specular_disabled;      // rough ground: none of the highlight maths is worth its cost
+// The ground lights itself. The sun never moves and the ground never changes, so the engine's
+// lighting (worked out afresh for each of several million pixels, with a shadow-map lookup)
+// is replaced by the same sum done once per corner of the ground mesh, and shade comes from
+// the texture baked at the start (trees, buildings, bridge and fences).
+render_mode unshaded;
+// The battlefield's fixed light, worked out by the game once (battle_world.gd) and shared by
+// every shader that lights itself: the sun, the sky's cool fill, and two broad glows.
+global uniform vec3 dow_to_sun;       // unit vector toward the sun
+global uniform vec3 dow_sun;          // sun colour x energy
+global uniform vec3 dow_sky;          // sky colour x energy
+global uniform vec3 dow_fill;         // warm glow from the camera's side
+global uniform vec3 dow_rim;          // cool glow from beyond the far end
+global uniform vec3 dow_fill_from;
+global uniform vec3 dow_rim_from;
+vec3 sky_light(vec3 n) {
+	return dow_sky + dow_fill * max(dot(n, dow_fill_from), 0.0) + dow_rim * max(dot(n, dow_rim_from), 0.0);
+}
 uniform sampler2D pack_a : filter_linear_mipmap, repeat_enable;     // r macro, g clumps (2.4x finer), b mottling (6x finer)
 uniform sampler2D pack_b : filter_linear_mipmap, repeat_enable;     // r fine speckle, g pebbles (2.6x finer)
 uniform vec3 lamp[2];               // each farmhouse's porch lamp: x, z, brightness
@@ -18,7 +34,14 @@ uniform vec4 shade_u = vec4(0.0);
 uniform vec4 shade_v = vec4(0.0);
 uniform bool plain = false;         // slow devices: skip the cloud shadow and dappled light
 varying vec3 wp;
-void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+varying vec3 sky_part;
+varying vec3 sun_part;
+void vertex() {
+	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 n = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	sky_part = sky_light(n);
+	sun_part = dow_sun * max(dot(n, dow_to_sun), 0.0);
+}
 void fragment() {
 	vec3 a = texture(pack_a, wp.xz * 0.035).rgb;
 	vec2 b = texture(pack_b, wp.xz * 0.9).rg;
@@ -79,9 +102,8 @@ void fragment() {
 			col *= mix(1.0, mix(0.72, 1.16, smoothstep(0.42, 0.6, dapple)), shade_edge);
 		}
 	}
-	// The woods' shadow, drawn once at the start (arena.gd begin_shade_bake): cool and soft.
+	// Shade, drawn once at the start (arena.gd begin_shade_bake): 1 in the sun, 0 in shadow.
 	float lit = texture(shade_tex, vec2(dot(vec4(wp, 1.0), shade_u), dot(vec4(wp, 1.0), shade_v))).r;
-	col *= mix(vec3(0.56, 0.62, 0.74), vec3(1.0), lit);
 	// Lamplight spilling from each farmhouse porch: painted here, because a real light would be
 	// worked out for every pixel of the field, lit by it or not.
 	for (int i = 0; i < 2; i++) {
@@ -90,6 +112,7 @@ void fragment() {
 	}
 	// The colours above are written as seen on screen. Flat ground takes the full sun, the fill
 	// and the sky at once, so it is laid in a little under and the lighting brings it back up.
-	ALBEDO = pow(col, vec3(2.2)) * 0.66;
-	ROUGHNESS = 0.95;
+	// In shadow the sun is gone and the sky's light is a little hemmed in; the cool cast of a
+	// shadow is simply the sky's colour, with nothing warm to balance it.
+	ALBEDO = pow(col, vec3(2.2)) * 0.66 * (sky_part * mix(0.72, 1.0, lit) + sun_part * lit);
 }
