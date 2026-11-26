@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"air_clipped"
+display_name = "Clipped Wingtips"
+description = "Shorter wings snap into a roll and shorten the evade cooldown."
+category = 2
+rarity = 0
+glyph = "ROLL"
+turn_rate_bonus = 0.02
+roll_rate_bonus = 0.08

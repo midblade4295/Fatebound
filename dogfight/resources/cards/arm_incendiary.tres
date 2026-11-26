@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"arm_incendiary"
+display_name = "Incendiary Rounds"
+description = "Every hit keeps burning after the trigger is released."
+category = 1
+rarity = 2
+glyph = "FIRE"
+damage_bonus = 0.02
+burn_dps = 20.0
+burn_duration = 3.0

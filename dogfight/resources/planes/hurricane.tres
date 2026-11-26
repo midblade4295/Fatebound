@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="PlaneData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/plane_data.gd" id="1_plane"]
+
+[resource]
+script = ExtResource("1_plane")
+id = &"hurricane"
+display_name = "Hurricane"
+description = "Sturdy, forgiving and always available. The squadron workhorse."
+unlock_commander_level = 1
+base_max_hp = 1000.0
+base_top_speed = 82.0
+base_acceleration = 0.6
+base_climb_rate = 1.0
+base_turn_rate_deg = 60.0
+base_pitch_rate_deg = 54.0
+base_roll_rate = 1.0
+base_fire_rate = 10.0
+base_bullet_damage = 48.0
+body_color = Color(0.4196, 0.5608, 0.3059, 1)
+camo_color = Color(0.5412, 0.4157, 0.2667, 1)
+belly_color = Color(0.749, 0.8902, 0.949, 1)
+nose_color = Color(1, 0.8235, 0.2471, 1)
+wing_span = 10.6
+wing_chord = 2.9
+fuselage_length = 7.6
+fuselage_radius = 1.05
+prop_blades = 3
+bubble_canopy = false

@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="PlaneData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/plane_data.gd" id="1_plane"]
+
+[resource]
+script = ExtResource("1_plane")
+id = &"mustang"
+display_name = "P-51 Mustang"
+description = "Fast, tough and long-legged. Dives on a fight and leaves when it likes."
+unlock_commander_level = 6
+base_max_hp = 1100.0
+base_top_speed = 100.0
+base_acceleration = 0.7
+base_climb_rate = 1.15
+base_turn_rate_deg = 58.0
+base_pitch_rate_deg = 54.0
+base_roll_rate = 1.05
+base_fire_rate = 12.0
+base_bullet_damage = 50.0
+body_color = Color(0.8118, 0.8392, 0.8667, 1)
+camo_color = Color(0.6039, 0.6549, 0.702, 1)
+belly_color = Color(0.9098, 0.9333, 0.9529, 1)
+nose_color = Color(0.9412, 0.2627, 0.2275, 1)
+wing_span = 10.4
+wing_chord = 2.8
+fuselage_length = 8.2
+fuselage_radius = 1.0
+prop_blades = 4
+bubble_canopy = true

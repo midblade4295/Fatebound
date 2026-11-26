@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="PlaneData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/plane_data.gd" id="1_plane"]
+
+[resource]
+script = ExtResource("1_plane")
+id = &"spitfire"
+display_name = "Spitfire"
+description = "Light on the stick and deadly in a turning fight."
+unlock_commander_level = 3
+base_max_hp = 950.0
+base_top_speed = 90.0
+base_acceleration = 0.65
+base_climb_rate = 1.1
+base_turn_rate_deg = 66.0
+base_pitch_rate_deg = 58.0
+base_roll_rate = 1.15
+base_fire_rate = 11.0
+base_bullet_damage = 46.0
+body_color = Color(0.3725, 0.6039, 0.3882, 1)
+camo_color = Color(0.4902, 0.5608, 0.5882, 1)
+belly_color = Color(0.8118, 0.9176, 0.9608, 1)
+nose_color = Color(1, 0.8235, 0.2471, 1)
+wing_span = 10.0
+wing_chord = 3.1
+fuselage_length = 7.9
+fuselage_radius = 0.95
+prop_blades = 3
+bubble_canopy = false

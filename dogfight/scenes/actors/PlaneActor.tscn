@@ -1,0 +1,82 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/actors/plane_actor.gd" id="1_actor"]
+[ext_resource type="Script" path="res://scripts/actors/plane_visual.gd" id="2_visual"]
+[ext_resource type="Script" path="res://scripts/actors/plane_input.gd" id="3_input"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_hit"]
+radius = 4.5
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_input"]
+properties/0/path = NodePath(".:steer")
+properties/0/spawn = false
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:firing")
+properties/1/spawn = false
+properties/1/replication_mode = 1
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_state"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:speed")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:hp")
+properties/3/spawn = true
+properties/3/replication_mode = 2
+properties/4/path = NodePath(".:alive")
+properties/4/spawn = true
+properties/4/replication_mode = 2
+properties/5/path = NodePath(".:status_flags")
+properties/5/spawn = true
+properties/5/replication_mode = 2
+properties/6/path = NodePath(".:visual_roll")
+properties/6/spawn = false
+properties/6/replication_mode = 1
+properties/7/path = NodePath(".:team")
+properties/7/spawn = true
+properties/7/replication_mode = 0
+properties/8/path = NodePath(".:pilot_name")
+properties/8/spawn = true
+properties/8/replication_mode = 2
+properties/9/path = NodePath(".:plane_id")
+properties/9/spawn = true
+properties/9/replication_mode = 0
+properties/10/path = NodePath(".:owner_peer_id")
+properties/10/spawn = true
+properties/10/replication_mode = 2
+properties/11/path = NodePath(".:is_human")
+properties/11/spawn = true
+properties/11/replication_mode = 2
+
+[node name="PlaneActor" type="CharacterBody3D"]
+collision_layer = 2
+motion_mode = 1
+script = ExtResource("1_actor")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_hit")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+script = ExtResource("2_visual")
+
+[node name="Muzzles" type="Node3D" parent="."]
+
+[node name="MuzzleL" type="Marker3D" parent="Muzzles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.8, -0.5, -3)
+
+[node name="MuzzleR" type="Marker3D" parent="Muzzles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.8, -0.5, -3)
+
+[node name="PlaneInput" type="Node" parent="."]
+script = ExtResource("3_input")
+
+[node name="InputSync" type="MultiplayerSynchronizer" parent="PlaneInput"]
+replication_config = SubResource("SceneReplicationConfig_input")
+
+[node name="StateSync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_state")

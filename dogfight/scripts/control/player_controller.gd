@@ -1,0 +1,87 @@
+class_name PlayerController
+extends Node
+## Drives one PlaneActor from the local player's input.
+##
+## It only reads Input *actions* (see GameSession for the names). The touch HUD
+## presses those same actions, so keyboard, gamepad and touch all arrive here
+## the same way and this script never references a HUD widget.
+##
+## It also picks the player's current target (the enemy nearest the nose) and
+## feeds a small aim-assist point to the plane. The HUD reads `plane.current_target`
+## to draw the lead reticle, so what you see is exactly what the assist uses.
+
+## Enemies further than this are never auto-targeted (metres).
+const TARGET_RANGE: float = 900.0
+## Half-angle of the cone in front of the nose that is searched for a target.
+const TARGET_CONE: float = deg_to_rad(32.0)
+## Keeps the current target unless another is clearly better (prevents flicker).
+const TARGET_STICKINESS: float = deg_to_rad(5.0)
+const RETARGET_INTERVAL: float = 0.15
+
+var plane: PlaneActor
+## Supplies the list of planes to pick targets from.
+var match_manager: MatchManager5v5
+var aim_assist_enabled: bool = true
+
+var _retarget_timer: float = 0.0
+
+
+func _physics_process(delta: float) -> void:
+	if plane == null or not is_instance_valid(plane):
+		return
+	if not plane.alive:
+		plane.input.clear()
+		plane.current_target = null
+		return
+
+	var steer: Vector2 = Vector2(
+			Input.get_axis(GameSession.ACTION_STEER_LEFT, GameSession.ACTION_STEER_RIGHT),
+			Input.get_axis(GameSession.ACTION_PITCH_DOWN, GameSession.ACTION_PITCH_UP))
+	if Profile.invert_pitch:
+		steer.y = -steer.y
+	plane.input.steer = steer
+	plane.input.firing = Input.is_action_pressed(GameSession.ACTION_FIRE)
+	if Input.is_action_just_pressed(GameSession.ACTION_EVADE):
+		plane.input.press_evade()
+	if Input.is_action_just_pressed(GameSession.ACTION_GADGET):
+		plane.input.press_gadget()
+
+	_retarget_timer -= delta
+	if _retarget_timer <= 0.0:
+		_retarget_timer = RETARGET_INTERVAL
+		plane.current_target = _pick_target()
+	_update_aim_assist()
+
+
+## The enemy closest to the gun line, within range and the targeting cone.
+func _pick_target() -> PlaneActor:
+	if match_manager == null:
+		return null
+	var origin: Vector3 = plane.global_position
+	var nose: Vector3 = plane.forward()
+	var best: PlaneActor = null
+	var best_angle: float = TARGET_CONE
+	for other: PlaneActor in match_manager.get_planes():
+		if not other.alive or not plane.is_hostile_to(other) or other.is_concealed():
+			continue
+		var distance: float = origin.distance_to(other.global_position)
+		if distance > TARGET_RANGE:
+			continue
+		var angle: float = Ballistics.angle_off_nose(origin, nose, other.global_position)
+		if other == plane.current_target:
+			angle -= TARGET_STICKINESS
+		if angle < best_angle:
+			best_angle = angle
+			best = other
+	return best
+
+
+func _update_aim_assist() -> void:
+	var enemy: PlaneActor = plane.current_target
+	var usable: bool = aim_assist_enabled and enemy != null and is_instance_valid(enemy) and enemy.alive and not enemy.is_concealed()
+	if not usable:
+		plane.input.assist_active = false
+		return
+	plane.input.assist_point = Ballistics.lead_point(plane.global_position, plane.velocity,
+			enemy.global_position, enemy.velocity, plane.stats.bullet_speed)
+	plane.input.assist_active = true

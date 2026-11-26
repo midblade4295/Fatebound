@@ -1,0 +1,306 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu/main_menu.gd" id="1_menu"]
+[ext_resource type="Environment" path="res://resources/env/arena_environment.tres" id="2_env"]
+
+[node name="MainMenu" type="Node3D"]
+script = ExtResource("1_menu")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("2_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8192, 0.4394, -0.3687, 0, 0.6428, 0.766, 0.5736, -0.6275, 0.5266, 0, 30, 0)
+light_color = Color(1, 0.96, 0.86, 1)
+light_energy = 0.9
+shadow_enabled = true
+directional_shadow_mode = 0
+directional_shadow_max_distance = 80.0
+
+[node name="RimLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866, -0.1545, 0.4755, 0, 0.9511, 0.309, -0.5, 0.2676, -0.8237, 0, 30, 0)
+light_color = Color(0.6, 0.85, 1, 1)
+light_energy = 0.4
+
+[node name="Stage" type="Node3D" parent="."]
+
+[node name="Turntable" type="Node3D" parent="Stage"]
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, -0, -0, 0.9678, 0.2516, 0, -0.2516, 0.9678, 3, 7, 40)
+fov = 38.0
+near = 0.5
+far = 6000.0
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Root" type="Control" parent="UI"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="CommanderPanel" type="PanelContainer" parent="UI/Root"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 0
+anchor_bottom = 0
+offset_left = 28.0
+offset_top = 22.0
+offset_right = 600.0
+offset_bottom = 152.0
+
+[node name="Row" type="HBoxContainer" parent="UI/Root/CommanderPanel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="LevelBadge" type="PanelContainer" parent="UI/Root/CommanderPanel/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(96, 0)
+
+[node name="LevelLabel" type="Label" parent="UI/Root/CommanderPanel/Row/LevelBadge"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Info" type="VBoxContainer" parent="UI/Root/CommanderPanel/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+theme_override_constants/separation = 4
+
+[node name="CommanderTitle" type="Label" parent="UI/Root/CommanderPanel/Row/Info"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "COMMANDER LEVEL"
+
+[node name="XpBar" type="ProgressBar" parent="UI/Root/CommanderPanel/Row/Info"]
+unique_name_in_owner = true
+layout_mode = 2
+value = 30.0
+
+[node name="XpLabel" type="Label" parent="UI/Root/CommanderPanel/Row/Info"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "HANGAR XP 0 / 20"
+
+[node name="CoinPanel" type="PanelContainer" parent="UI/Root"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 0
+offset_left = -640.0
+offset_top = 22.0
+offset_right = -28.0
+offset_bottom = 112.0
+grow_horizontal = 0
+
+[node name="Row" type="HBoxContainer" parent="UI/Root/CoinPanel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="CoinLabel" type="Label" parent="UI/Root/CoinPanel/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "COINS 300"
+vertical_alignment = 1
+
+[node name="CrateButton" type="Button" parent="UI/Root/CoinPanel/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "+ FREE CRATE (DEV)"
+
+[node name="PlanePanel" type="PanelContainer" parent="UI/Root"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0
+anchor_top = 0
+anchor_right = 0
+anchor_bottom = 0
+offset_left = 28.0
+offset_top = 172.0
+offset_right = 500.0
+offset_bottom = 600.0
+
+[node name="Column" type="VBoxContainer" parent="UI/Root/PlanePanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PlaneName" type="Label" parent="UI/Root/PlanePanel/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "HURRICANE"
+horizontal_alignment = 1
+
+[node name="PlaneInfo" type="Label" parent="UI/Root/PlanePanel/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+autowrap_mode = 3
+text = ""
+
+[node name="Buttons" type="HBoxContainer" parent="UI/Root/PlanePanel/Column"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PrevPlane" type="Button" parent="UI/Root/PlanePanel/Column/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(84, 84)
+text = "<"
+
+[node name="SelectPlane" type="Button" parent="UI/Root/PlanePanel/Column/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "SELECT"
+
+[node name="NextPlane" type="Button" parent="UI/Root/PlanePanel/Column/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(84, 84)
+text = ">"
+
+[node name="LoadoutPanel" type="PanelContainer" parent="UI/Root"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0
+anchor_top = 1
+anchor_right = 0
+anchor_bottom = 1
+offset_left = 28.0
+offset_top = -368.0
+offset_right = 1166.0
+offset_bottom = -22.0
+grow_vertical = 0
+
+[node name="Column" type="VBoxContainer" parent="UI/Root/LoadoutPanel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LoadoutTitle" type="Label" parent="UI/Root/LoadoutPanel/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "LOADOUT  -  slots open with Commander Level"
+
+[node name="Slots" type="HBoxContainer" parent="UI/Root/LoadoutPanel/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CollectionPanel" type="PanelContainer" parent="UI/Root"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1
+anchor_top = 0
+anchor_right = 1
+anchor_bottom = 1
+offset_left = -736.0
+offset_top = 130.0
+offset_right = -28.0
+offset_bottom = -330.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="Column" type="VBoxContainer" parent="UI/Root/CollectionPanel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CollectionTitle" type="Label" parent="UI/Root/CollectionPanel/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "COMPONENT CARDS"
+
+[node name="Scroll" type="ScrollContainer" parent="UI/Root/CollectionPanel/Column"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Grid" type="GridContainer" parent="UI/Root/CollectionPanel/Column/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="DetailPanel" type="PanelContainer" parent="UI/Root"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1
+anchor_top = 1
+anchor_right = 1
+anchor_bottom = 1
+offset_left = -736.0
+offset_top = -320.0
+offset_right = -28.0
+offset_bottom = -136.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Column" type="VBoxContainer" parent="UI/Root/DetailPanel"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="DetailName" type="Label" parent="UI/Root/DetailPanel/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "TAP A CARD"
+clip_text = true
+
+[node name="DetailStats" type="Label" parent="UI/Root/DetailPanel/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+autowrap_mode = 3
+clip_text = true
+text = ""
+
+[node name="ActionRow" type="HBoxContainer" parent="UI/Root"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1
+anchor_top = 1
+anchor_right = 1
+anchor_bottom = 1
+offset_left = -736.0
+offset_top = -126.0
+offset_right = -28.0
+offset_bottom = -22.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_constants/separation = 10
+
+[node name="UpgradeButton" type="Button" parent="UI/Root/ActionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(216, 0)
+text = "UPGRADE"
+
+[node name="EquipButton" type="Button" parent="UI/Root/ActionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(150, 0)
+text = "EQUIP"
+
+[node name="BattleButton" type="Button" parent="UI/Root/ActionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "BATTLE"

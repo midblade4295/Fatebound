@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"arm_hispano"
+display_name = "Hispano Cannons"
+description = "Slow, heavy 20mm shells that hit like a hammer."
+category = 1
+rarity = 1
+glyph = "DMG"
+fire_rate_bonus = -0.02
+damage_bonus = 0.09

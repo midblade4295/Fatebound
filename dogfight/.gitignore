@@ -1,0 +1,4 @@
+.godot/
+override.cfg
+*.tmp
+shots/

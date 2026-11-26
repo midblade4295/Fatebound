@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"arm_brownings"
+display_name = "Browning Belt Feed"
+description = "Faster belts for the wing guns. More lead in the air."
+category = 1
+rarity = 0
+glyph = "ROF"
+fire_rate_bonus = 0.06

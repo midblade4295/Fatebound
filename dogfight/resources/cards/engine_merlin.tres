@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"engine_merlin"
+display_name = "Merlin Supercharger"
+description = "A dependable supercharger. A little more of everything the engine does."
+category = 0
+rarity = 0
+glyph = "SPD"
+top_speed_bonus = 0.03
+climb_rate_bonus = 0.04

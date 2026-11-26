@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"air_laminar"
+display_name = "Laminar Wing"
+description = "A slippery wing that turns tighter without bleeding speed."
+category = 2
+rarity = 2
+glyph = "TURN"
+turn_rate_bonus = 0.035
+roll_rate_bonus = 0.04
+max_hp_bonus = 0.02

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"engine_turbo"
+display_name = "Turbo Intake"
+description = "Rams extra air into the cylinders. Climbs hard and recovers speed fast."
+category = 0
+rarity = 1
+glyph = "CLB"
+top_speed_bonus = 0.015
+climb_rate_bonus = 0.07
+acceleration_bonus = 0.08
