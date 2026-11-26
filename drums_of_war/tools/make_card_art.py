@@ -10,7 +10,9 @@ Usage: make_card_art.py            (run from the drums_of_war folder; needs Pill
 import os
 from PIL import Image
 
-CARDS = ["line_infantry", "skirmishers", "militia", "scouts", "heavy_cavalry", "field_gun", "fire", "rally"]
+CARDS = ["line_infantry", "skirmishers", "militia", "sharpshooters", "zouaves", "scouts", "dragoons", "heavy_cavalry",
+         "field_gun", "horse_artillery", "gatling_gun", "howitzer", "fire", "rally", "grand_battery", "earthworks",
+         "balloon", "general"]
 SIZE = (320, 400)
 
 
