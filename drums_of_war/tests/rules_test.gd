@@ -3,6 +3,7 @@ extends SceneTree
 
 const Sim = preload("res://scripts/sim/battle_sim.gd")
 const Bot = preload("res://scripts/sim/bot.gd")
+const Profile = preload("res://scripts/app/profile.gd")
 
 const DECK := ["line_infantry", "skirmishers", "militia", "scouts", "heavy_cavalry", "field_gun", "fire", "rally"]
 
@@ -47,13 +48,17 @@ func has_event(sim: Sim, type: String) -> bool:
 
 func _init() -> void:
 	cards = Sim.load_cards()
-	check(cards.size() == 18, "eighteen cards load from data/cards.json")
+	check(cards.size() == 48, "forty-eight cards load from data/cards.json")
 	var tiers := {}
 	for id: String in cards:
 		tiers[cards[id].get("rarity", "")] = int(tiers.get(cards[id].get("rarity", ""), 0)) + 1
 	check(tiers.keys().all(func(t): return t in ["common", "rare", "epic", "legendary"]), "every card has a rarity")
-	check(int(tiers.get("common", 0)) == 7 and int(tiers.get("rare", 0)) == 6 and int(tiers.get("epic", 0)) == 4 and int(tiers.get("legendary", 0)) == 1,
-			"seven common, six rare, four epic and one legendary")
+	check(int(tiers.get("common", 0)) == 18 and int(tiers.get("rare", 0)) == 15 and int(tiers.get("epic", 0)) == 10 and int(tiers.get("legendary", 0)) == 5,
+			"eighteen common, fifteen rare, ten epic and five legendary")
+	for id: String in cards:
+		var d: Dictionary = cards[id]
+		if d["type"] != "unit" and String(d.get("effect", "")) == "":
+			check(false, "%s says what it does (an effect)" % id)
 	test_powder()
 	test_deploy_and_hand()
 	test_first_volley_and_reload()
@@ -77,6 +82,12 @@ func _init() -> void:
 	test_balloon()
 	test_general()
 	test_levels()
+	test_later_infantry()
+	test_later_cavalry()
+	test_later_guns()
+	test_later_orders()
+	test_later_works()
+	test_leaders()
 	test_any_deck_plays()
 	test_determinism()
 	print("%d checks, %d failures" % [checks, failures])
@@ -233,9 +244,10 @@ func test_field_gun() -> void:
 	front.reload = 99.0
 	behind.reload = 99.0
 	sim.tick()
-	# 150 roundshot, x1.5 against a column; half of that again for the regiment behind.
-	check(near(front.hp, 360.0 - 225.0), "roundshot hits a column for 225 (%.1f left)" % front.hp)
-	check(near(behind.hp, 360.0 - 112.5), "and ploughs on into the regiment behind (%.1f left)" % behind.hp)
+	# Roundshot x1.5 against a column; half of that again for the regiment behind.
+	var shot := float(cards["field_gun"]["shot_dmg"])
+	check(near(front.hp, 360.0 - shot * 1.5), "roundshot hits a column half again as hard (%.1f left)" % front.hp)
+	check(near(behind.hp, 360.0 - shot * 0.75), "and ploughs on into the regiment behind (%.1f left)" % behind.hp)
 	check(near(gun.reload, 4.0), "the gun reloads for 4 s")
 	var sim2 := quiet(new_sim())
 	sim2.spawn(0, "field_gun", Vector2(9, 4))
@@ -248,7 +260,7 @@ func test_field_gun() -> void:
 	var loose := sim3.spawn(1, "skirmishers", Vector2(9, 12))
 	loose.reload = 99.0
 	sim3.tick()
-	check(near(loose.hp, 160.0 - 60.0), "roundshot does little to loose order (%.1f left)" % loose.hp)
+	check(near(loose.hp, 160.0 - shot * Sim.LOOSE_SHOT_MULT), "roundshot does little to loose order (%.1f left)" % loose.hp)
 	var sim4 := quiet(new_sim())
 	sim4.spawn(0, "field_gun", Vector2(4, 4))
 	run(sim4, 35.1)
@@ -547,7 +559,7 @@ func test_earthworks() -> void:
 	shelled.reload = 99.0
 	sim2.spawn(1, "field_gun", Vector2(13, 20))
 	sim2.tick()
-	check(near(360.0 - shelled.hp, 225.0), "they do nothing against cannon (%.1f, the full 150 x1.5 on a column)" % (360.0 - shelled.hp))
+	check(near(360.0 - shelled.hp, float(cards["field_gun"]["shot_dmg"]) * 1.5), "they do nothing against cannon (%.1f, a full shot on a column)" % (360.0 - shelled.hp))
 	run(sim2, 60.0)
 	check(sim2.works.is_empty(), "and they crumble after a minute")
 
@@ -589,7 +601,7 @@ func test_general() -> void:
 	sim.spawn(1, "line_infantry", Vector2(13, 15.5))
 	sim.tick()
 	sim.tick()
-	check(near(led.morale_max - led.morale, plain_loss * Sim.GENERAL_NERVE, 0.2), "troops near the General lose less nerve (%.1f against %.1f)" % [led.morale_max - led.morale, plain_loss])
+	check(near(led.morale_max - led.morale, plain_loss * float(cards["general"]["aura_nerve"]), 0.2), "troops near the General lose less nerve (%.1f against %.1f)" % [led.morale_max - led.morale, plain_loss])
 	var sim2 := quiet(new_sim())
 	var loader := sim2.spawn(0, "line_infantry", Vector2(13, 10))
 	sim2.spawn(0, "general", Vector2(13, 7.6))
@@ -637,7 +649,7 @@ func test_levels() -> void:
 func test_any_deck_plays() -> void:
 	var ids: Array = cards.keys()
 	var seen := {}
-	for trial in 6:
+	for trial in 16:
 		var rng := Sim.GsRng.new(100 + trial)
 		var deck0: Array = ids.duplicate()
 		var deck1: Array = ids.duplicate()
@@ -657,4 +669,234 @@ func test_any_deck_plays() -> void:
 			seen[c["card"]] = true
 		check(sim.phase == Sim.PHASE_OVER, "a match with random decks finishes (trial %d)" % trial)
 		check(sim.command_log.size() >= 12, "and the bots find things to play from them (%d deploys)" % sim.command_log.size())
-	check(seen.size() >= 16, "nearly every card gets played across the trials (%d of 18)" % seen.size())
+	check(seen.size() >= 40, "nearly every card gets played across the trials (%d of 48)" % seen.size())
+	var never: Array = cards.keys().filter(func(id): return not seen.has(id))
+	if not never.is_empty():
+		print("    never played: ", never)
+
+
+# --- The thirty cards of the second set ---------------------------------------------------------
+
+## A regiment that stands still and does not shoot back, for being shot at in tests.
+func target(sim: Sim, side: int, id: String, at: Vector2) -> Sim.Regiment:
+	var r := sim.spawn(side, id, at)
+	r.reload = 9999.0
+	r.def = r.def.duplicate()
+	r.def["speed"] = 0.0
+	return r
+
+
+func test_later_infantry() -> void:
+	var sim := quiet(new_sim())
+	var a := target(sim, 1, "line_infantry", Vector2(13, 14))
+	var b := target(sim, 1, "line_infantry", Vector2(14.4, 14.2))
+	var far := target(sim, 1, "line_infantry", Vector2(17, 14))
+	var g := sim.spawn(0, "grenadiers", Vector2(13, 9.5))
+	sim.tick()
+	# 5 men, half again for the first volley; the regiment beside it takes half.
+	var volley := 5.0 * float(cards["grenadiers"]["volley_dmg"]) * 1.5
+	check(near(360.0 - a.hp, volley) and near(360.0 - b.hp, volley * 0.5), "grenadiers' grenades burst among the regiment beside their mark (%.1f, %.1f)" % [360.0 - a.hp, 360.0 - b.hp])
+	check(near(far.hp, 360.0), "but not on one further off")
+	var guard_sim := quiet(new_sim())
+	var guard := guard_sim.spawn(0, "old_guard", Vector2(13, 10))
+	guard.reload = 9999.0
+	guard_sim._morale_hit(guard, 500.0)
+	check(guard.state != Sim.ST_ROUT and near(guard.morale, 1.0), "the Old Guard never runs")
+	var p_sim := quiet(new_sim())
+	var work := p_sim.redoubt(1, 1)
+	var pio := p_sim.spawn(0, "pioneers", Vector2(14.5, 20.5))
+	var blocker := target(p_sim, 1, "militia", Vector2(14.5, 22.5))
+	run(p_sim, 8.0)
+	check(has_event(p_sim, "demolish") or near(work.hp, Sim.REDOUBT_HP - 160.0), "pioneers walk past the enemy to a battery and blow it up")
+	check(near(work.hp, Sim.REDOUBT_HP - 160.0) and pio.dead, "for 160, and are gone (%.0f)" % (Sim.REDOUBT_HP - work.hp))
+	check(blocker.hp > 0.0, "having ignored the regiment in their way")
+	check(cards["conscripts"]["cost"] == 1 and cards["riflemen"]["range"] > cards["line_infantry"]["range"], "conscripts cost 1; riflemen outrange muskets")
+
+
+func test_later_cavalry() -> void:
+	var sim := quiet(new_sim())
+	var runner := sim.spawn(1, "line_infantry", Vector2(13, 14))
+	sim._start_rout(runner)
+	var hp := runner.hp
+	var h := sim.spawn(0, "hussars", Vector2(13, 13.0))
+	h.runup = 0.0
+	sim.tick()
+	var plain := quiet(new_sim())
+	var runner2 := plain.spawn(1, "line_infantry", Vector2(13, 14))
+	plain._start_rout(runner2)
+	var h2 := plain.spawn(0, "lancers", Vector2(13, 13.0))
+	h2.runup = 0.0
+	plain.tick()
+	# Both sword 3 men; hussars 32 x 2.5 for the chase, lancers 28 without, and both x1.5 on the running.
+	check(near(hp - runner.hp, 3 * 32 * 2.5 * 1.5 * Sim.DT, 0.05), "hussars cut down a running regiment at 2.5 times the rate (%.2f)" % (hp - runner.hp))
+	var sq_sim := quiet(new_sim())
+	var square := sq_sim.spawn(1, "line_infantry", Vector2(13, 14))
+	square.state = Sim.ST_SQUARE
+	square.formation = "square"
+	square.release_timer = 999.0
+	square.reload = 999.0
+	var lance := sq_sim.spawn(0, "lancers", Vector2(13, 12.9))
+	lance.runup = 9.0
+	sq_sim.tick()
+	check(has_event(sq_sim, "repelled") and near(360.0 - square.hp, 3 * float(cards["lancers"]["charge_dmg"]) * 0.5), "lancers still put half a charge into a square (%.1f)" % (360.0 - square.hp))
+	check(300.0 - lance.hp < Sim.SQUARE_REPEL_DMG * 0.5 + 6.0, "and take half the usual hurt from it (%.1f)" % (300.0 - lance.hp))
+	var cav_sim := quiet(new_sim())
+	var cuir := target(cav_sim, 1, "cuirassiers", Vector2(13, 15))
+	var hus := target(cav_sim, 1, "hussars", Vector2(5, 15))
+	cav_sim.spawn(0, "riflemen", Vector2(13, 8.0))
+	cav_sim.spawn(0, "riflemen", Vector2(5, 8.0))
+	cav_sim.tick()
+	var cut := hus.max_hp - hus.hp
+	check(cut > 0.0 and near(cuir.max_hp - cuir.hp, cut * 0.5), "a cuirass turns half of every musket ball (%.1f against %.1f)" % [cuir.max_hp - cuir.hp, cut])
+
+
+func test_later_guns() -> void:
+	var sim := quiet(new_sim())
+	var rk := sim.spawn(0, "rocket_troop", Vector2(9, 4))
+	var mark := target(sim, 1, "scouts", Vector2(9, 13))
+	sim.tick()
+	var flight: Dictionary = sim.shells[0] if not sim.shells.is_empty() else {}
+	check(not flight.is_empty() and flight["kind"] == "rocket", "rocket troops fire rockets")
+	check(not flight.is_empty() and Vector2(flight["pos"]).distance_to(mark.pos) <= 2.2 * 1.42, "which land somewhere near the mark")
+	var sim2 := quiet(new_sim())
+	sim2.spawn(0, "siege_gun", Vector2(3.5, 12.0))
+	var nearer := target(sim2, 1, "line_infantry", Vector2(3.5, 16.0))
+	var work := sim2.redoubt(1, 0)
+	sim2.tick()
+	var siege: Dictionary = cards["siege_gun"]
+	check(near(nearer.hp, 360.0) and near(Sim.REDOUBT_HP - work.hp, float(siege["shot_dmg"]) * Sim.STRUCT_SHOT_MULT * float(siege["struct_mult"])),
+			"a siege gun shoots at the battery before the regiment in front of it, and hits it hard (%.0f)" % (Sim.REDOUBT_HP - work.hp))
+	var sim3 := quiet(new_sim())
+	sim3.spawn(0, "rifled_gun", Vector2(9, 4))
+	var far := target(sim3, 1, "line_infantry", Vector2(9, 17.5))
+	sim3.tick()
+	check(far.hp < 360.0, "a rifled gun reaches 13.5 paces")
+	var sim4 := quiet(new_sim())
+	var mh := sim4.spawn(0, "mountain_howitzer", Vector2(13, 4))
+	run(sim4, 3.0)
+	check(mh.limbered and mh.pos.y > 4.5, "a mountain howitzer limbers up and follows the advance")
+	var sim5 := quiet(new_sim())
+	sim5.spawn(0, "great_mortar", Vector2(3.5, 9.0))
+	var far_work := sim5.redoubt(1, 0)
+	run(sim5, 2.4)
+	check(near(Sim.REDOUBT_HP - far_work.hp, 300.0 * Sim.STRUCT_SHOT_MULT), "the Great Mortar reaches a battery 18.5 paces off, from behind your own (%.0f)" % (Sim.REDOUBT_HP - far_work.hp))
+
+
+func test_later_orders() -> void:
+	var sim := quiet(new_sim())
+	var a := sim.spawn(0, "line_infantry", Vector2(12, 10))
+	var b := sim.spawn(0, "line_infantry", Vector2(14, 10))
+	a.reload = 3.0
+	b.reload = 3.0
+	a.fired_first = true
+	b.fired_first = true
+	sim.decks[0] = ["volley_fire", "forced_march", "hold_the_line", "cut_supply", "militia"]
+	sim.powder = [10.0, 10.0]
+	check(sim.deploy_error(0, 0, Vector2(2, 30)) != "", "Volley Fire! needs regiments under it")
+	check(sim.deploy(0, 0, Vector2(13, 10)), "Volley Fire! is accepted on two regiments")
+	check(near(a.reload, 0.0) and near(b.reload, 0.0) and not a.fired_first and not b.fired_first, "both fire at once, as hard as a first volley")
+	var idx: int = sim.hand(0).find("forced_march")
+	check(sim.deploy(0, idx, Vector2(13, 10)), "Forced March is accepted")
+	var start := a.pos
+	sim.tick()
+	check(near(a.pos.distance_to(start), 1.4 * 1.5 * Sim.DT, 0.002), "and they march half again as fast (%.3f)" % a.pos.distance_to(start))
+	idx = sim.hand(0).find("hold_the_line")
+	sim.deploy(0, idx, Vector2(13, 10))
+	sim._morale_hit(a, 500.0)
+	check(a.state != Sim.ST_ROUT, "under Hold the Line! nothing makes them run")
+	run(sim, float(cards["hold_the_line"]["duration"]) + 0.1)
+	sim._morale_hit(a, 500.0)
+	check(a.state == Sim.ST_ROUT, "until it wears off")
+	sim.powder = [10.0, 8.0]
+	idx = sim.hand(0).find("cut_supply")
+	check(sim.deploy(0, idx, Vector2(9, 3)), "Cut the Supply Line can be played anywhere")
+	check(near(sim.powder[1], 5.0), "and the enemy loses 3 Powder")
+	var bsim := quiet(new_sim())
+	var cav := bsim.spawn(0, "scouts", Vector2(9, 8))
+	bsim.decks[0] = ["bugle_call", "fire", "militia", "rally", "scouts"]
+	bsim.powder[0] = 10.0
+	check(bsim.deploy(0, 0, cav.pos) and cav.runup >= Sim.CHARGE_RUNUP, "Bugle Call makes cavalry ready to charge at once")
+	var asim := quiet(new_sim())
+	asim.decks[0] = ["ambush", "fire", "militia", "rally", "scouts"]
+	asim.powder[0] = 10.0
+	check(asim.deploy_error(0, 0, asim.redoubt(1, 0).pos + Vector2(0, -2.0)) != "", "an ambush cannot be laid right beside an enemy work")
+	check(asim.deploy(0, 0, Vector2(9, 22)), "but can be laid deep in enemy ground")
+	check(asim.regiments.size() == 1 and asim.regiments[0].card_id == "riflemen", "where riflemen appear")
+
+
+func test_later_works() -> void:
+	var sim := quiet(new_sim())
+	sim.powder = [2.0, 2.0]
+	sim.place_work(0, "supply_wagon", Vector2(5, 3))
+	var every := float(cards["supply_wagon"]["every"])
+	run(sim, every - 0.1)
+	var before: float = sim.powder[0]
+	run(sim, 0.2)
+	check(near(sim.powder[0] - before, 1.0 + 4.0 * Sim.DT / Sim.POWDER_PERIOD, 0.01), "a supply wagon brings a point of Powder at a time")
+	run(sim, float(cards["supply_wagon"]["life"]) - every + 0.2)
+	check(sim.works.is_empty(), "four times, and then it is gone")
+	var hsim := quiet(new_sim())
+	var hurt := target(hsim, 0, "line_infantry", Vector2(9, 6))
+	hsim._damage(hurt, 150.0, Vector2(9, 20))
+	var men_before := hurt.men
+	hsim.place_work(0, "field_hospital", Vector2(9, 5))
+	run(hsim, 10.0)
+	check(near(hurt.hp, minf(360.0, 210.0 + 10.0 * float(cards["field_hospital"]["heal"])), 1.0) and hurt.men > men_before,
+			"a field hospital gives men back (%.0f hp, %d men)" % [hurt.hp, hurt.men])
+	var msim := quiet(new_sim())
+	msim.place_work(0, "torpedo", Vector2(13, 14.6))
+	var walker := msim.spawn(1, "line_infantry", Vector2(13, 16.2))
+	var beside := target(msim, 1, "militia", Vector2(14.6, 15.6))
+	run(msim, 1.5)
+	check(has_event(msim, "mine") or walker.hp < 360.0, "a torpedo goes off under the first regiment to walk over it")
+	check(walker.hp <= 360.0 - float(cards["torpedo"]["dmg"]) + 0.1 and beside.hp < 320.0 and msim.works.is_empty(), "hurting everyone near it, once")
+	var asim := quiet(new_sim())
+	asim.place_work(0, "abatis", Vector2(9, 10))
+	var horse := asim.spawn(1, "heavy_cavalry", Vector2(9, 10.5))
+	horse.runup = 9.0
+	asim.tick()
+	check(near(horse.runup, 0.0) and horse.hp < 525.0, "an abatis stops a charge and cuts up the horses")
+	var dsim := quiet(new_sim())
+	dsim.place_work(0, "recruiting_depot", Vector2(9, 5))
+	run(dsim, 0.1)
+	check(dsim.regiments.size() == 1 and dsim.regiments[0].card_id == "conscripts", "a recruiting depot sends out conscripts at once")
+	var raised := 1
+	dsim.events.clear()
+	for i in 40 * Sim.TICK_RATE:
+		dsim.tick()
+		for e: Dictionary in dsim.events:
+			if e["type"] == "deploy" and e["card"] == "conscripts":
+				raised += 1
+		dsim.events.clear()
+	check(raised == 4 and dsim.works.is_empty(), "four companies in all, and then it is gone (%d)" % raised)
+
+
+func test_leaders() -> void:
+	var plain := quiet(new_sim())
+	var slow := plain.spawn(0, "line_infantry", Vector2(13, 5))
+	slow.def = slow.def.duplicate()
+	var s0 := slow.pos.y
+	plain.tick()
+	var sim := quiet(new_sim())
+	var quick := sim.spawn(0, "line_infantry", Vector2(13, 5))
+	sim.spawn(0, "drummer_boy", Vector2(13, 3))
+	var q0 := quick.pos.y
+	sim.tick()
+	sim.tick()
+	check(near((quick.pos.y - q0) / 2.0, (slow.pos.y - s0) * 1.25, 0.003), "regiments near a drummer march a quarter faster")
+	var psim := quiet(new_sim())
+	var piped := psim.spawn(0, "line_infantry", Vector2(13, 10))
+	piped.reload = 9999.0
+	psim.spawn(0, "highland_piper", Vector2(13, 8))
+	psim.tick()
+	piped.morale = 50.0
+	piped.since_hit = 99.0
+	psim.tick()
+	check(near(piped.morale, 50.0 + Sim.MORALE_REGEN * 3.0 * Sim.DT), "a piper brings nerve back three times as fast")
+	var msim := quiet(new_sim())
+	msim.decks[0] = ["marshal", "general", "militia", "scouts", "fire"]
+	msim.powder[0] = 10.0
+	check(msim.deploy(0, 0, Vector2(9, 6)), "a Marshal can be deployed")
+	check(msim.deploy_error(0, msim.hand(0).find("general"), Vector2(9, 6)) != "", "but not a General beside him: one commander at a time")
+	check(not Profile.is_valid_deck(["general", "marshal", "militia", "scouts", "fire", "rally", "line_infantry", "zouaves"], cards),
+			"and a deck may hold only one of them")

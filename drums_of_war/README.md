@@ -75,7 +75,8 @@ match goes to one minute of sudden-death overtime.
   the deck builder (pick eight of the eighteen cards; tap a card to read what it does).
 - `scripts/app/profile.gd`: what is remembered between launches, in `user://profile.cfg`.
 
-- `data/cards.json`: every card's numbers, its rarity and the words that describe it. Balancing
+- `data/cards.json`: all 48 cards (18 common, 15 rare, 10 epic, 5 legendary), drawn from the
+  1861 and 1805 sets of the design. Every card's numbers, its rarity and the words that describe it. Balancing
   is editing this file. Rarity (common, rare, epic, legendary) is a label and a look: the colour
   of the card's frame (green, blue, purple) and the stone on its corner; a legendary card has a
   shape of its own and a frame that runs through every colour. It changes nothing in a battle.
@@ -168,8 +169,9 @@ is pinned to the top and bottom, clear of a notch or gesture bar, and the camera
 
 ## Not in yet
 
-Models for the ten later cards (every card has its painting, but on the field the later ones
-still borrow the nearest existing figure, tinted), smoke as a rule (it is a visual effect only), a
+Paintings for the thirty cards of the second set (their cards say what they are in words), and
+models for everything after the first eight cards (on the field they borrow the nearest
+existing figure, tinted; the new works are built from simple shapes), smoke as a rule (it is a visual effect only), a
 tutorial, and online play. Known rough edges: none of the sounds has been checked by ear; the
 cavalry crash sound is a stand-in mixed from other takes, and the later cards reuse the first
 eight's sounds; the flinch and thrust clips start from a side-on stance, so bodies swivel

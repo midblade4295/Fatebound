@@ -650,6 +650,21 @@ func _take_events() -> void:
 				_sfx("charge", -4.0, 0.6)
 			"dismount":
 				_word(pos, "DISMOUNT", COL_PAPER)
+			"mine":
+				_word(pos, "TORPEDO!", Color("ff8a1f"))
+				_sfx("cannon_big" if _stream("cannon_big") != null else "cannon", 1.0, 0.2)
+				_buzz(80)
+			"demolish":
+				_word(pos, "BLOWN UP!", Color("ff8a1f"))
+				_sfx("destroyed", 0.0, 0.3)
+				_buzz(90)
+			"supply":
+				if int(e["side"]) == local_side:
+					_word(pos, "+1 POWDER", COL_AMBER)
+			"raid":
+				notice = "Supply line cut: the enemy loses Powder" if int(e["side"]) == local_side else "Your supply line is cut: Powder lost"
+				notice_time = 1.8
+				_sfx("order")
 			"general_down":
 				_word(pos, "THE GENERAL IS DOWN", Color("ff5a4d"))
 				_sfx("rout", 0.0, 0.5)

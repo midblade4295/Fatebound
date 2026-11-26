@@ -2,8 +2,8 @@ extends RefCounted
 ## A simple computer opponent. It plays through the same deploy() call a player uses and
 ## sees nothing a player could not see. Seeded, so bot-versus-bot matches are repeatable.
 ##
-## It does not know cards by name (except the two orders that need a particular target): it
-## sorts whatever is in its hand into roles from the card data, so it can play any deck.
+## It does not know cards by name: it sorts whatever is in its hand into roles (for regiments)
+## and effects (for orders and works) from the card data, so it can play any deck.
 ## Three levels differ in how quickly it thinks, how much Powder it saves before attacking,
 ## how readily it answers a threat and how often it remembers its orders.
 
@@ -23,8 +23,8 @@ const LEVELS := [
 			"about": "Quick to react, and his Powder comes a tenth faster."},
 ]
 # The order in which roles go into an attack.
-const ATTACK_RANK := {"line": 0.0, "horse": 1.0, "gun": 2.0, "horse_gun": 2.5, "mob": 3.0, "light": 4.0, "dragoons": 4.5,
-		"general": 5.0, "light_horse": 5.5}
+const ATTACK_RANK := {"line": 0.0, "horse": 1.0, "gun": 2.0, "horse_gun": 2.5, "mob": 3.0, "sapper": 3.5, "light": 4.0,
+		"dragoons": 4.5, "general": 5.0, "light_horse": 5.5, "short_gun": 6.0}
 
 var side: int
 var rng: GsRng
@@ -50,6 +50,8 @@ static func role(def: Dictionary) -> String:
 		return "order"
 	if def["type"] == "work":
 		return "work"
+	if def.has("demolish"):
+		return "sapper"
 	match String(def.get("arm", "")):
 		"command":
 			return "general"
@@ -89,7 +91,15 @@ static func pick_deck(cards: Dictionary, seed_value: int) -> Array:
 	rest.append_array(lines.slice(1))
 	rest.append_array(movers.slice(3))
 	pick_rng.shuffle(rest)
-	deck.append_array(rest.slice(0, 8 - deck.size()))
+	var commanders := 0
+	for id: String in rest:
+		if deck.size() >= 8:
+			break
+		if bool(cards[id].get("unique", false)):
+			if commanders > 0:
+				continue                  # one commander to a deck
+			commanders += 1
+		deck.append(id)
 	return deck
 
 
@@ -136,41 +146,96 @@ func _play_role(sim: Sim, roles: Array, local_pos: Vector2) -> bool:
 	return false
 
 
+## The first card in hand whose order or work has that effect, or "".
+func _with_effect(sim: Sim, effect: String) -> String:
+	for id: String in sim.hand(side):
+		if String(sim.cards[id].get("effect", "")) == effect:
+			return id
+	return ""
+
+
+## The most advanced enemy regiment on our half of the field, and how far from our baseline.
+func _intruder(sim: Sim) -> Array:
+	var threat: Sim.Regiment = null
+	var threat_y := Sim.FIELD_H * 0.5 + 0.5
+	for o: Sim.Regiment in sim.regiments:
+		if o.side == side or o.dead or o.state == Sim.ST_ROUT:
+			continue
+		var ly := Sim.local_y(side, o.pos.y)
+		if ly < threat_y:
+			threat_y = ly
+			threat = o
+	return [threat, threat_y]
+
+
 func _try_orders(sim: Sim) -> bool:
 	if rng.next_f() > float(cfg["orders"]):
 		return false
-	var hand: Array = sim.hand(side)
+	var rally := _with_effect(sim, "rally")
+	var fire := _with_effect(sim, "fire")
 	for r: Sim.Regiment in sim.regiments:
 		if r.side != side or r.dead:
 			continue
 		# Rally is for a regiment worth saving that is still a long run from home, where it
 		# would rally by itself: not for one about to reach the farmhouse anyway.
-		if r.state == Sim.ST_ROUT and r.men * 2 >= r.men_max and int(r.def["cost"]) >= 3 \
+		if rally != "" and r.state == Sim.ST_ROUT and r.men * 2 >= r.men_max and int(r.def["cost"]) >= 3 \
 				and Sim.local_y(side, r.pos.y) > 11.0:
-			if _play(sim, "rally", Sim.from_local(side, r.pos)):
+			if _play(sim, rally, Sim.from_local(side, r.pos)):
 				return true
 		var reach := float(r.def.get("range", 0.0))
-		if reach > 0.0 and r.arm == "infantry" and r.men >= 4 and r.reload > 1.6 and r.state == Sim.ST_MARCH and rng.next_f() < 0.5:
+		if fire != "" and reach > 0.0 and r.arm == "infantry" and r.men >= 4 and r.reload > 1.6 and r.state == Sim.ST_MARCH and rng.next_f() < 0.5:
 			for o: Sim.Regiment in sim.regiments:
 				if o.side != side and not o.dead and o.state != Sim.ST_ROUT and r.pos.distance_to(o.pos) <= reach:
-					if _play(sim, "fire", Sim.from_local(side, r.pos)):
+					if _play(sim, fire, Sim.from_local(side, r.pos)):
 						return true
 					break
-	if hand.has("grand_battery") and _try_bombard(sim):
-		return true
-	if hand.has("earthworks") and _try_dig(sim):
-		return true
-	if hand.has("balloon") and _try_balloon(sim, false):
-		return true
+	for id: String in sim.hand(side):
+		var def: Dictionary = sim.cards[id]
+		var done := false
+		match String(def.get("effect", "")):
+			"barrage":
+				done = _try_bombard(sim, id)
+			"cover":
+				done = _try_dig(sim, id)
+			"spotter":
+				done = _try_balloon(sim, id, false)
+			"volley":
+				done = _try_volley(sim, id)
+			"steady":
+				done = _try_steady(sim, id)
+			"haste":
+				done = _try_haste(sim, id)
+			"bugle":
+				done = _try_bugle(sim, id)
+			"raid":
+				done = sim.powder[1 - side] >= 7.0 and _play(sim, id, Vector2(9.0, 3.0))
+			"ambush":
+				done = sim.powder[side] >= float(def["cost"]) + 1.0 and _try_ambush(sim, id)
+			"supply":
+				done = sim.powder[side] >= 7.0 and _intruder(sim)[0] == null and _play(sim, id, Vector2(5.0, 3.0))
+			"depot":
+				done = sim.powder[side] >= 8.0 and _intruder(sim)[0] == null and _play(sim, id, Vector2(9.0 + rng.range_f(-3.0, 3.0), 7.0))
+			"abatis":
+				done = _try_abatis(sim, id)
+			"hospital":
+				done = _try_hospital(sim, id)
+			"mine":
+				done = _try_mine(sim, id)
+		if done:
+			return true
 	if _try_general(sim):
 		return true
 	return false
 
 
-## The General goes where two or more of our regiments are fighting together and he is not
-## already on the field: a little behind the foremost of them.
+## Leaders go where two or more of our regiments are fighting together: a little behind the
+## foremost of them. Only one commander (General or Marshal) at a time.
 func _try_general(sim: Sim) -> bool:
-	if _in_hand(sim, ["general"]).is_empty() or sim.general(side) != null:
+	var leaders: Array = []
+	for id: String in _in_hand(sim, ["general"]):
+		if not bool(sim.cards[id].get("unique", false)) or sim.general(side) == null:
+			leaders.append(id)
+	if leaders.is_empty():
 		return false
 	var lead: Sim.Regiment = null
 	for r: Sim.Regiment in sim.regiments:
@@ -186,13 +251,16 @@ func _try_general(sim: Sim) -> bool:
 		return false
 	var behind := Sim.from_local(side, lead.pos)
 	behind.y = clampf(behind.y - 2.5, 1.5, sim.deploy_depth(side, lead.pos.x))
-	return _play_role(sim, ["general"], behind)
+	for id: String in leaders:
+		if _play(sim, id, behind):
+			return true
+	return false
 
 
-## The Grand Battery lands two seconds after it is called, so it goes on things that will
-## still be there: squares, guns, a knot of regiments, or a battery that is nearly done for.
-func _try_bombard(sim: Sim) -> bool:
-	var radius := float(sim.cards["grand_battery"]["radius"])
+## A bombardment lands seconds after it is called, so it goes on things that will still be
+## there: squares, guns, a knot of regiments, or a battery that is nearly done for.
+func _try_bombard(sim: Sim, id: String) -> bool:
+	var radius := float(sim.cards[id]["radius"])
 	var best_pos := Vector2.ZERO
 	var best := 1.9
 	for o: Sim.Regiment in sim.regiments:
@@ -209,15 +277,15 @@ func _try_bombard(sim: Sim) -> bool:
 			best = score
 			best_pos = o.pos
 	if best > 1.9:
-		return _play(sim, "grand_battery", Sim.from_local(side, best_pos))
+		return _play(sim, id, Sim.from_local(side, best_pos))
 	for st: Sim.Structure in sim.structures:
 		if st.side != side and not st.dead and (st.hp <= 300.0 or sim.phase == Sim.PHASE_OVERTIME):
-			return _play(sim, "grand_battery", Sim.from_local(side, st.pos))
+			return _play(sim, id, Sim.from_local(side, st.pos))
 	return false
 
 
 ## Earthworks go in front of something of ours that is standing and being shot at.
-func _try_dig(sim: Sim) -> bool:
+func _try_dig(sim: Sim, id: String) -> bool:
 	for r: Sim.Regiment in sim.regiments:
 		if r.side != side or r.dead or r.state == Sim.ST_ROUT or r.arm == "cavalry" or r.arm == "command":
 			continue
@@ -230,13 +298,13 @@ func _try_dig(sim: Sim) -> bool:
 		var front := r.pos + Vector2(0.0, Sim.fwd(side) * 0.6)
 		if sim.cover_mult(r, r.pos + Vector2(0.0, Sim.fwd(side) * 6.0)) < 1.0:
 			continue
-		if _play(sim, "earthworks", Sim.from_local(side, front)):
+		if _play(sim, id, Sim.from_local(side, front)):
 			return true
 	return false
 
 
 ## A balloon goes up over a flank where we have a gun, or (to use the card) over either.
-func _try_balloon(sim: Sim, anywhere: bool) -> bool:
+func _try_balloon(sim: Sim, id: String, anywhere: bool) -> bool:
 	for flank in 2:
 		var x := 3.5 if flank == 0 else 14.5
 		if sim.balloon_over(side, x):
@@ -245,9 +313,124 @@ func _try_balloon(sim: Sim, anywhere: bool) -> bool:
 		for r: Sim.Regiment in sim.regiments:
 			if r.side == side and not r.dead and r.arm == "artillery" and (r.pos.x < Sim.FIELD_W * 0.5) == (flank == 0):
 				guns = true
-		if guns and _play(sim, "balloon", Vector2(x, 6.0)):
+		if guns and _play(sim, id, Vector2(x, 6.0)):
 			return true
 	return false
+
+
+## Volley Fire! is worth its Powder where two or more of ours are reloading with targets in reach.
+func _try_volley(sim: Sim, id: String) -> bool:
+	for r: Sim.Regiment in sim.regiments:
+		if r.side != side or r.dead or r.state == Sim.ST_ROUT or float(r.def.get("range", 0.0)) <= 0.0 or r.reload < 1.0:
+			continue
+		var busy := 0
+		for o: Sim.Regiment in sim.regiments:
+			if o.side == side and not o.dead and o.reload >= 1.0 and float(o.def.get("range", 0.0)) > 0.0 and o.pos.distance_to(r.pos) <= 3.5:
+				for e: Sim.Regiment in sim.regiments:
+					if e.side != side and not e.dead and e.pos.distance_to(o.pos) <= float(o.def["range"]):
+						busy += 1
+						break
+		if busy >= 2:
+			return _play(sim, id, Sim.from_local(side, r.pos))
+	return false
+
+
+## Hold the Line! for a regiment of some worth that is fighting hard and wavering.
+func _try_steady(sim: Sim, id: String) -> bool:
+	for r: Sim.Regiment in sim.regiments:
+		if r.side != side or r.dead or r.state == Sim.ST_ROUT or r.arm == "command" or int(r.def["cost"]) < 3:
+			continue
+		if (r.in_melee or r.since_hit < 1.0) and r.morale < r.morale_max * 0.45 and r.hp > r.max_hp * 0.4:
+			return _play(sim, id, Sim.from_local(side, r.pos))
+	return false
+
+
+## Forced March for two or more regiments going forward with nobody yet in front of them.
+func _try_haste(sim: Sim, id: String) -> bool:
+	if rng.next_f() > 0.25:
+		return false
+	for r: Sim.Regiment in sim.regiments:
+		if r.side != side or r.dead or r.state == Sim.ST_ROUT or r.arm == "artillery" or r.arm == "command":
+			continue
+		var ly := Sim.local_y(side, r.pos.y)
+		if ly < Sim.DEPLOY_DEPTH - 4.0 or ly > 28.0 or r.in_melee:
+			continue
+		var clear := true
+		for o: Sim.Regiment in sim.regiments:
+			if o.side != side and not o.dead and o.pos.distance_to(r.pos) <= 7.0:
+				clear = false
+				break
+		var company := 0
+		for o: Sim.Regiment in sim.regiments:
+			if o != r and o.side == side and not o.dead and o.arm != "artillery" and o.pos.distance_to(r.pos) <= 4.0:
+				company += 1
+		if clear and company >= 1:
+			return _play(sim, id, Sim.from_local(side, r.pos))
+	return false
+
+
+## Bugle Call for horsemen with something worth charging close by.
+func _try_bugle(sim: Sim, id: String) -> bool:
+	for r: Sim.Regiment in sim.regiments:
+		if r.side != side or r.dead or r.state == Sim.ST_ROUT or r.arm != "cavalry" or r.runup >= Sim.CHARGE_RUNUP or r.recoil > 0.0:
+			continue
+		for o: Sim.Regiment in sim.regiments:
+			if o.side != side and not o.dead and o.state != Sim.ST_SQUARE and o.state != Sim.ST_FORMING and o.pos.distance_to(r.pos) <= 6.0:
+				return _play(sim, id, Sim.from_local(side, r.pos))
+	return false
+
+
+## An ambush behind an enemy gun that stands well clear of the enemy's own works (whose guns
+## would make short work of four riflemen).
+func _try_ambush(sim: Sim, id: String) -> bool:
+	for o: Sim.Regiment in sim.regiments:
+		if o.side == side or o.dead or o.arm != "artillery":
+			continue
+		var spot := Sim._fix_pos(o.pos + Vector2(0.0, -Sim.fwd(side) * 2.0))
+		var exposed := false
+		for st: Sim.Structure in sim.structures:
+			if st.side != side and not st.dead and st.pos.distance_to(spot) <= st.gun_range + 0.5:
+				exposed = true
+				break
+		if not exposed and _play(sim, id, Sim.from_local(side, spot)):
+			return true
+	return false
+
+
+## Felled trees across the path of enemy horse on our half.
+func _try_abatis(sim: Sim, id: String) -> bool:
+	var found := _intruder(sim)
+	var threat: Sim.Regiment = found[0]
+	if threat == null or threat.arm != "cavalry":
+		return false
+	var depth := sim.deploy_depth(side, threat.pos.x)
+	return _play(sim, id, Vector2(threat.pos.x, clampf(float(found[1]) - 2.5, 1.5, depth)))
+
+
+## A field hospital beside a hurt regiment that is out of the fighting, if none is up yet.
+func _try_hospital(sim: Sim, id: String) -> bool:
+	for w: Sim.Work in sim.works:
+		if w.side == side and w.effect == "hospital":
+			return false
+	for r: Sim.Regiment in sim.regiments:
+		if r.side != side or r.dead or r.in_melee or r.hp > r.max_hp * 0.6 or int(r.def["cost"]) < 3 or r.arm == "artillery":
+			continue
+		if _play(sim, id, Sim.from_local(side, r.pos)):
+			return true
+	return false
+
+
+## A torpedo in the path of an enemy regiment coming across our half, if none is laid yet.
+func _try_mine(sim: Sim, id: String) -> bool:
+	for w: Sim.Work in sim.works:
+		if w.side == side and w.effect == "mine":
+			return false
+	var found := _intruder(sim)
+	var threat: Sim.Regiment = found[0]
+	if threat == null or float(threat.def.get("speed", 0.0)) <= 0.0 or float(found[1]) > 14.0:
+		return false
+	var depth := sim.deploy_depth(side, threat.pos.x)
+	return _play(sim, id, Vector2(threat.pos.x, clampf(float(found[1]) - 2.2, 1.5, depth)))
 
 
 func _try_defend(sim: Sim) -> bool:
@@ -347,7 +530,7 @@ func _try_attack(sim: Sim) -> bool:
 	var base_x := 3.0 if attack_flank == 0 else 15.0
 	var depth := sim.deploy_depth(side, base_x)
 	var front_y := depth - 1.0
-	var choices: Array = _in_hand(sim, ["line", "horse", "gun", "horse_gun", "mob", "light", "dragoons", "general", "light_horse"])
+	var choices: Array = _in_hand(sim, ["line", "horse", "gun", "horse_gun", "mob", "sapper", "light", "dragoons", "general", "light_horse"])
 	choices.sort_custom(func(a: String, b: String) -> bool:
 		var ra := float(ATTACK_RANK[role(sim.cards[a])])
 		var rb := float(ATTACK_RANK[role(sim.cards[b])])
@@ -374,23 +557,32 @@ func _try_attack(sim: Sim) -> bool:
 func _try_spend(sim: Sim) -> bool:
 	if sim.powder[side] < Sim.POWDER_MAX - 0.3:
 		return false
-	var hand: Array = sim.hand(side)
-	if hand.has("balloon") and _try_balloon(sim, true):
-		return true
-	if hand.has("earthworks"):
-		var x := 3.5 if attack_flank == 0 else 14.5
-		if _play(sim, "earthworks", Vector2(x, 10.6)):
+	var flank_x := 3.5 if attack_flank == 0 else 14.5
+	for id: String in sim.hand(side):
+		var def: Dictionary = sim.cards[id]
+		var done := false
+		match String(def.get("effect", "")):
+			"spotter":
+				done = _try_balloon(sim, id, true)
+			"cover":
+				done = _play(sim, id, Vector2(flank_x, 10.6))
+			"barrage":
+				var mark: Sim.Structure = null
+				for st: Sim.Structure in sim.structures:
+					if st.side != side and not st.dead and st.kind == "redoubt" and (mark == null or st.hp < mark.hp):
+						mark = st
+				if mark == null:
+					mark = sim.hq(1 - side)
+				done = _play(sim, id, Sim.from_local(side, mark.pos))
+			"raid":
+				done = _play(sim, id, Vector2(9.0, 3.0))
+			"ambush":
+				done = _try_ambush(sim, id)
+			"supply", "depot":
+				done = _play(sim, id, Vector2(flank_x, 6.0))
+		if done:
 			return true
-	if hand.has("grand_battery"):
-		var mark: Sim.Structure = null
-		for st: Sim.Structure in sim.structures:
-			if st.side != side and not st.dead and st.kind == "redoubt" and (mark == null or st.hp < mark.hp):
-				mark = st
-		if mark == null:
-			mark = sim.hq(1 - side)
-		if _play(sim, "grand_battery", Sim.from_local(side, mark.pos)):
-			return true
-	if _play_role(sim, ["general"], Vector2(9.0, 7.5)):
+	if _try_general(sim):
 		return true
-	return _play_role(sim, ["line", "mob", "light", "dragoons", "horse", "light_horse", "horse_gun", "gun", "short_gun"],
+	return _play_role(sim, ["line", "mob", "light", "sapper", "dragoons", "horse", "light_horse", "horse_gun", "gun", "short_gun"],
 			Vector2(3.0 if attack_flank == 0 else 15.0, sim.deploy_depth(side, 3.0 if attack_flank == 0 else 15.0) - 1.5))

@@ -46,7 +46,8 @@ func save() -> void:
 	file.save(PATH)
 
 
-## A deck is eight different cards that all exist, with at most one General.
+## A deck is eight different cards that all exist, with at most one commander (the General
+## or the Marshal).
 static func is_valid_deck(candidate: Array, cards: Dictionary) -> bool:
 	if candidate.size() != DECK_SIZE:
 		return false
@@ -56,6 +57,6 @@ static func is_valid_deck(candidate: Array, cards: Dictionary) -> bool:
 		if not (id is String) or not cards.has(id) or seen.has(id):
 			return false
 		seen[id] = true
-		if cards[id].get("arm", "") == "command":
+		if bool(cards[id].get("unique", false)):
 			generals += 1
 	return generals <= 1

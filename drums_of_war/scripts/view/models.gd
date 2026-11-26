@@ -26,14 +26,47 @@ const SOLDIER_MODELS := {
 	"horse_artillery": ["u_line", "c_line"],
 	"gatling_gun": ["u_line", "c_line"],
 	"howitzer": ["u_line", "c_line"],
+	# The second set: borrowed figures too, until they have models of their own.
+	"conscripts": ["u_militia", "c_militia"],
+	"voltigeurs": ["u_skirm", "c_skirm"],
+	"riflemen": ["u_skirm", "c_skirm"],
+	"pioneers": ["u_militia", "c_militia"],
+	"grenadiers": ["u_line", "c_line"],
+	"old_guard": ["u_line", "c_line"],
+	"cossacks": ["u_cav", "c_cav"],
+	"hussars": ["u_cav", "c_cav"],
+	"lancers": ["u_cav", "c_cav"],
+	"cuirassiers": ["u_cav", "c_cav"],
+	"drummer_boy": ["u_militia", "c_militia"],
+	"highland_piper": ["u_line", "c_line"],
+	"marshal": ["u_cav", "c_cav"],
+	"coehorn_mortar": ["u_line", "c_line"],
+	"mountain_howitzer": ["u_line", "c_line"],
+	"rifled_gun": ["u_line", "c_line"],
+	"rocket_troop": ["u_skirm", "c_skirm"],
+	"siege_gun": ["u_line", "c_line"],
+	"great_mortar": ["u_line", "c_line"],
 }
+# Leaders who go on foot; every other leader is mounted.
+const FOOT_LEADERS := ["drummer_boy", "highland_piper"]
 const ON_FOOT_MODELS := {"dragoons": ["u_skirm", "c_skirm"]}      # what a mounted card looks like dismounted
 const HEIGHTS := {"infantry": 2.1, "artillery": 2.1, "skirmishers": 2.2, "militia": 2.0, "scouts": 2.8, "heavy_cavalry": 3.2,
-		"sharpshooters": 2.3, "zouaves": 2.25, "dragoons": 2.9, "general": 3.5}
+		"sharpshooters": 2.3, "zouaves": 2.25, "dragoons": 2.9, "general": 3.5,
+		"conscripts": 1.9, "voltigeurs": 2.0, "riflemen": 2.2, "pioneers": 2.1, "grenadiers": 2.45, "old_guard": 2.5,
+		"cossacks": 2.6, "hussars": 2.85, "lancers": 2.95, "cuirassiers": 3.35, "drummer_boy": 1.7, "highland_piper": 2.2, "marshal": 3.7}
 const CARD_TINT := {"sharpshooters": Color(0.78, 0.95, 0.78), "zouaves": Color(1.32, 0.7, 0.64), "dragoons": Color(1.18, 1.06, 0.55),
-		"general": Color(1.3, 1.14, 0.58), "gatling_gun": Color(0.5, 0.52, 0.58), "howitzer": Color(0.78, 0.7, 0.58)}
+		"general": Color(1.3, 1.14, 0.58), "gatling_gun": Color(0.5, 0.52, 0.58), "howitzer": Color(0.78, 0.7, 0.58),
+		"conscripts": Color(0.88, 0.86, 0.8), "voltigeurs": Color(0.85, 1.05, 1.2), "riflemen": Color(0.6, 0.85, 0.6),
+		"pioneers": Color(0.9, 0.78, 0.62), "grenadiers": Color(0.72, 0.72, 0.95), "old_guard": Color(0.55, 0.58, 0.9),
+		"cossacks": Color(1.1, 0.85, 0.7), "hussars": Color(1.25, 0.8, 1.05), "lancers": Color(0.85, 1.2, 1.05),
+		"cuirassiers": Color(1.18, 1.2, 1.3), "drummer_boy": Color(1.1, 1.0, 0.9), "highland_piper": Color(0.8, 1.15, 0.85),
+		"marshal": Color(1.35, 1.2, 1.25), "coehorn_mortar": Color(0.8, 0.72, 0.6), "mountain_howitzer": Color(0.9, 0.8, 0.65),
+		"rifled_gun": Color(0.55, 0.57, 0.62), "rocket_troop": Color(1.2, 0.8, 0.7), "siege_gun": Color(0.6, 0.62, 0.66),
+		"great_mortar": Color(0.55, 0.55, 0.6)}
 # Each gun card's piece: height, and how much of the barrel's length it keeps.
-const GUNS := {"field_gun": [1.8, 1.0], "horse_artillery": [1.45, 1.0], "gatling_gun": [1.5, 0.85], "howitzer": [1.75, 0.62]}
+const GUNS := {"field_gun": [1.8, 1.0], "horse_artillery": [1.45, 1.0], "gatling_gun": [1.5, 0.85], "howitzer": [1.75, 0.62],
+		"coehorn_mortar": [1.05, 0.5], "mountain_howitzer": [1.3, 0.62], "rifled_gun": [1.75, 1.3], "rocket_troop": [1.2, 1.4],
+		"siege_gun": [2.4, 1.25], "great_mortar": [2.7, 0.55]}
 const SHARED_CLIPS := "u_line"     # rigged characters without clips of their own borrow this one's
 # Degrees to turn each generated model about the vertical so that it faces "forward" (-Z):
 # characters and riders come facing +Z, gun muzzles along -X, bridge and fence run along X.
@@ -418,7 +451,7 @@ static func make_soldier(card_id: String, arm: String, team: int, world: Node3D)
 static func _build_soldier(card_id: String, arm: String, team: int, world: Node3D) -> Node3D:
 	var names: Array = SOLDIER_MODELS.get(card_id, [])
 	var height: float = HEIGHTS.get(card_id, HEIGHTS.get(arm, 0.98))
-	var mounted := arm == "cavalry" or arm == "command"
+	var mounted := arm == "cavalry" or (arm == "command" and not card_id in FOOT_LEADERS)
 	if not mounted and ON_FOOT_MODELS.has(card_id):
 		names = ON_FOOT_MODELS[card_id]
 		height = float(HEIGHTS["skirmishers"])
@@ -708,7 +741,7 @@ static func _man_parts(card_id: String, team: int, lift: float, mounted: bool) -
 
 
 static func _stand_in_soldier(card_id: String, arm: String, team: int, height: float) -> Node3D:
-	var mounted := arm == "cavalry" or arm == "command"
+	var mounted := arm == "cavalry" or (arm == "command" and not card_id in FOOT_LEADERS)
 	var key := "%s|%s|%d" % [card_id, "m" if mounted else "f", team]
 	if not _meshes.has(key):
 		var parts: Array = []

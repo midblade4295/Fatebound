@@ -566,7 +566,7 @@ func warm_up(cards: Dictionary) -> void:
 	add_child(_warm)
 	for id: String in cards:
 		var def: Dictionary = cards[id]
-		if def.get("type", "unit") == "order":
+		if def.get("type", "unit") != "unit":
 			continue
 		var arm := String(def.get("arm", "infantry"))
 		Models.preload_card(id, arm)
@@ -787,7 +787,9 @@ func _sync_works(_delta: float) -> void:
 			add_child(node)
 			_works[w.id] = node
 			dust(w.pos, 4, 0.8)
-		if w.kind == "balloon":
+		if w.effect == "mine" and w.side != local_side:
+			_works[w.id].visible = false          # the enemy's torpedoes are hidden
+		if w.effect == "spotter":
 			var craft: Node3D = _works[w.id].get_node("Craft")
 			craft.position.x = sin(_time * 0.7 + w.id) * 0.25
 			craft.position.y = 5.2 + sin(_time * 1.1 + w.id) * 0.12
@@ -800,7 +802,72 @@ func _sync_works(_delta: float) -> void:
 func _build_work(w: Sim.Work) -> Node3D:
 	var node := Node3D.new()
 	var team := team_colour(w.side)
-	if w.kind == "balloon":
+	var front := -1.0 if w.side == local_side else 1.0          # world z toward the enemy
+	match w.effect:
+		"supply":
+			# A covered wagon: a box on four wheels under a canvas hood.
+			_box(node, Vector3(1.0, 0.45, 1.7), Vector3(0, 0.7, 0), COL_WOOD)
+			for sx: float in [-0.55, 0.55]:
+				for sz: float in [-0.6, 0.6]:
+					var wheel := _cyl(node, 0.36, 0.08, Vector3(sx, 0.36, sz), COL_WOOD.darkened(0.35))
+					wheel.rotation.z = PI * 0.5
+			var hood := _cyl(node, 0.55, 1.6, Vector3(0, 1.0, 0), Color("efe2c0"))
+			hood.rotation.x = PI * 0.5
+			for k in 3:
+				_box(node, Vector3(0.3, 0.3, 0.3), Vector3(0.6 + k * 0.32, 0.15, 0.95), Color("6a4a2a"))       # kegs
+			_box(node, Vector3(0.04, 0.3, 0.45), Vector3(-0.52, 1.25, 0.2), team)
+			_add_blob(node, 2.6, 0.35)
+			return node
+		"abatis":
+			# Felled trees with their sharpened branches pointing at the enemy.
+			var half := w.half_width
+			var count := int(round(half * 2.0 / 0.55))
+			for i in count:
+				var x := (i - (count - 1) * 0.5) * 0.55
+				var stake := _cyl(node, 0.07, 1.3, Vector3(x, 0.45, front * 0.2), COL_WOOD.darkened(0.15 + 0.1 * (i % 2)), 0.01)
+				stake.rotation.x = front * 0.95
+				var stake2 := _cyl(node, 0.06, 1.1, Vector3(x + 0.27, 0.35, front * 0.05), COL_WOOD.darkened(0.25), 0.01)
+				stake2.rotation = Vector3(front * 0.75, 0.0, 0.4 * (1 if i % 2 == 0 else -1))
+			var trunk := _cyl(node, 0.2, half * 2.0, Vector3(0, 0.2, -front * 0.2), COL_WOOD.darkened(0.3))
+			trunk.rotation.z = PI * 0.5
+			_add_blob(node, half * 2.3, 0.25)
+			return node
+		"hospital":
+			# A white wall tent and a plain yellow hospital flag.
+			var tent := MeshInstance3D.new()
+			var prism := PrismMesh.new()
+			prism.size = Vector3(1.9, 1.3, 2.2)
+			tent.mesh = prism
+			tent.position = Vector3(0, 0.65, 0)
+			tent.material_override = _mat(Color("f2ecdc"), 0.9)
+			node.add_child(tent)
+			_cyl(node, 0.03, 2.2, Vector3(1.2, 1.1, 0.0), COL_WOOD.darkened(0.3))
+			_box(node, Vector3(0.6, 0.38, 0.03), Vector3(1.5, 1.95, 0.0), Color("f2c230"))
+			_add_blob(node, 3.0, 0.3)
+			return node
+		"mine":
+			# A low mound of fresh earth with a fuse poking out: only its owner sees it.
+			var mound := MeshInstance3D.new()
+			var dome := SphereMesh.new()
+			dome.radius = 0.55
+			dome.height = 0.4
+			mound.mesh = dome
+			mound.position.y = 0.05
+			mound.material_override = _mat(Color("6b5233"), 0.95)
+			node.add_child(mound)
+			_cyl(node, 0.03, 0.35, Vector3(0.15, 0.3, 0.0), Color("2a1a0f"))
+			return node
+		"depot":
+			# A bell tent, a drum on a table, and the owner's flag.
+			var bell := _cyl(node, 1.0, 1.2, Vector3(0, 0.6, 0), Color("efe2c0"), 0.12)
+			bell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			_cyl(node, 0.04, 2.6, Vector3(0, 1.3, 0), COL_WOOD.darkened(0.3))
+			_box(node, Vector3(0.7, 0.45, 0.03), Vector3(0.37, 2.4, 0), team)
+			_box(node, Vector3(0.8, 0.05, 0.5), Vector3(1.4, 0.55, 0.3), COL_WOOD)
+			_cyl(node, 0.2, 0.25, Vector3(1.4, 0.7, 0.3), team)
+			_add_blob(node, 3.0, 0.3)
+			return node
+	if w.effect == "spotter":
 		var craft := Node3D.new()
 		craft.name = "Craft"
 		craft.position.y = 5.2
@@ -826,7 +893,6 @@ func _build_work(w: Sim.Work) -> Node3D:
 	else:
 		# A fieldwork: a bank of earth with a facing of logs toward the enemy.
 		var half := w.half_width
-		var front := -1.0 if w.side == local_side else 1.0          # world z toward the enemy
 		var bank := _box(node, Vector3(half * 2.0, 0.5, 0.9), Vector3(0, 0.22, -front * 0.2), Color("7c6540"))
 		bank.rotation.x = front * 0.35
 		var count := int(round(half * 2.0 / 0.8))
@@ -1322,6 +1388,18 @@ func on_event(e: Dictionary) -> void:
 			ring_burst(pos, 7.0, Color(0.9, 0.25, 0.2, 0.9), 0.6)
 		"dismount", "mount", "work_gone":
 			dust(pos, 5, 0.9)
+		"mine", "demolish":
+			var reach := float(e.get("radius", 2.0))
+			shake(0.6)
+			hitstop(60)
+			ring_burst(pos, reach * 1.4, Color(1.0, 0.75, 0.4, 0.95), 0.45)
+			_light_flash(to_world(pos, 1.0), 14.0, reach * 3.0, 0.3)
+			for i in 6:
+				var at := pos + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * reach * 0.5
+				flash(at, 0.6, 1.8)
+				dust(at, 3, 1.1)
+				debris(at, 5, Color("5a4630"))
+				puff(at, 1.0, 1.3, 3.4, Color(0.5, 0.47, 0.44))
 		"over":
 			cheering_side = int(e["winner"])
 		"rally":
@@ -1375,7 +1453,7 @@ class RegimentView extends RefCounted:
 		phase = r.id * 1.37
 		ring = MeshInstance3D.new()
 		var disc := PlaneMesh.new()
-		mounted = arm == "cavalry" or arm == "command"
+		mounted = arm == "cavalry" or (arm == "command" and not card_id in Models.FOOT_LEADERS)
 		var radius := 1.75 if not mounted else 2.1
 		disc.size = Vector2(radius * 2.0, radius * 2.0)
 		ring.mesh = disc
@@ -1490,16 +1568,22 @@ class RegimentView extends RefCounted:
 		if r.arm != arm:
 			# Dragoons getting down from, or back into, the saddle: swap the figures.
 			arm = r.arm
-			mounted = arm == "cavalry" or arm == "command"
+			mounted = arm == "cavalry" or (arm == "command" and not card_id in Models.FOOT_LEADERS)
 			for old: Node3D in soldiers:
 				old.queue_free()
 			soldiers.clear()
 			_muster(maxi(r.men, 0))
 			for i in soldiers.size():
 				(soldiers[i] as Node3D).position = _offsets(r, soldiers.size())[i]
-		# Losses: the surplus men fall where they stand.
+		# Losses: the surplus men fall where they stand. Men back from the field hospital rejoin.
 		while soldiers.size() > maxi(r.men, 0):
 			_fall(soldiers.pop_back())
+		if soldiers.size() < r.men and r.men <= r.men_max:
+			var had := soldiers.size()
+			_muster(r.men - had)
+			var places := _offsets(r, soldiers.size())
+			for i in range(had, soldiers.size()):
+				(soldiers[i] as Node3D).position = places[i]
 		var k := 1.0 - exp(-16.0 * delta)
 		var moved := r.pos.distance_to(last_pos)
 		last_pos = r.pos

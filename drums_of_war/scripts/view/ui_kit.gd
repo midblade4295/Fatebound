@@ -370,8 +370,11 @@ func card_face(c: CanvasItem, rect: Rect2, def: Dictionary, art: Texture2D, can_
 		for part: String in parts:
 			fitted(c, Vector2(art_rect.get_center().x, line_y), part, 14, INK, art_rect.size.x - 6.0)
 			line_y += 15.0
-		c.draw_multiline_string(font, Vector2(art_rect.position.x + 4.0, line_y + 4.0), String(def.get("field", "")), HORIZONTAL_ALIGNMENT_CENTER,
-				art_rect.size.x - 8.0, 9, 3, Color(INK, 0.8))
+		# As many lines of description as fit above the name plate, and no more.
+		var room := int(floor((art_rect.end.y - (line_y + 4.0) + 2.0) / 11.0))
+		if room > 0:
+			c.draw_multiline_string(font, Vector2(art_rect.position.x + 4.0, line_y + 4.0), String(def.get("field", "")), HORIZONTAL_ALIGNMENT_CENTER,
+					art_rect.size.x - 8.0, 9, room, Color(INK, 0.8))
 	c.draw_rect(Rect2(art_rect.position, Vector2(art_rect.size.x, 4.0)), Color(0, 0, 0, 0.2))     # the frame's shadow on the picture
 	c.draw_rect(art_rect, Color(1, 1, 1, 0.12), false, 1.0)
 	var name_y := rect.end.y - CARD_NAME
