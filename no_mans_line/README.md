@@ -15,6 +15,19 @@ Controls: tap/click a card to play it. Mortar Strike and Mustard Gas arm a
 targeting mode; tap the battlefield to fire, tap the card again (or right-click)
 to cancel. The gold button blows the whistle.
 
+### Android build
+
+`export_presets.cfg` has an **Android** preset: package `com.nomansline.preview`,
+arm64-v8a, sensor landscape, immersive mode. In the editor: install the Android
+export templates, set the Android SDK and JDK paths and a debug keystore under
+Editor Settings → Export → Android, then Project → Export → Android. From a shell:
+
+```
+godot --headless --path . --export-debug "Android" build/NoMansLine.apk
+```
+
+The APK is a debug-signed preview, not a store build.
+
 ## Rules as implemented
 
 | Thing | Behaviour |
