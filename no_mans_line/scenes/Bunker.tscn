@@ -10,7 +10,7 @@
 size = Vector2(140, 100)
 
 [sub_resource type="CircleShape2D" id="gun_shape"]
-radius = 150.0
+radius = 185.0
 
 [sub_resource type="Gradient" id="puff_gradient"]
 colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)

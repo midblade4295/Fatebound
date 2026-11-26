@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" path="res://assets/atlas/gas_cloud.tres" id="2_cloud"]
 
 [sub_resource type="RectangleShape2D" id="cloud_shape"]
-size = Vector2(190, 170)
+size = Vector2(170, 170)
 
 [sub_resource type="Gradient" id="puff_gradient"]
 colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)

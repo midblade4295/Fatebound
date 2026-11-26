@@ -31,8 +31,10 @@ The APK is a debug-signed preview, not a store build.
 ## Rules as implemented
 
 The whole front fits on one screen: a Command Bunker at each end and seven
-trenches between them. Each side starts with three (reserve, support, front) and
-the middle trench starts neutral.
+trenches between them, with open ground between every pair. Each side starts
+with three (reserve, support, front) and the middle trench starts neutral. The
+camera zooms to fit the field to the screen width (about 0.76x on 16:9, 0.95x on
+a 20:9 phone).
 
 The game is built around one loop: **garrison, bank Supply, barrage, then
 charge.** Supply is slow on purpose, an unprepared charge at even numbers fails,
@@ -53,8 +55,8 @@ and the same charge behind a mortar or gas wins.
 | Clock | 03:00. At 00:00 the side holding more sectors wins. A tie goes to the healthier bunker, otherwise it is a stalemate. |
 | Red AI | Garrisons up to 6 soldiers, then banks Supply. Walks into undefended trenches, attacks defended ones with gas-then-whistle or mortar-plus-whistle, or a bare whistle when it clearly outnumbers you. Shells your troops when they bunch up in the open. No advances in the first 15 seconds. |
 
-Craters still exist in code, but the gaps between trenches on this map are too
-narrow for one to form except dead centre between two trenches.
+A mortar that lands in the open ground between two trenches leaves a crater
+(cover zone, bullets x0.65).
 
 Card cooldowns: Riflemen 3 s, Raiders 5 s, Mortar 8 s, Gas 12 s.
 
@@ -150,7 +152,7 @@ it to `Sprite2D.texture`, `TextureButton.texture_normal`, and so on.
 
 | Resource | Region | Used by |
 | --- | --- | --- |
-| `barbed_wire` | 1113, 560, 255, 176 | either side of the middle trench |
+| `barbed_wire` | 1113, 560, 255, 176 | the open ground around the middle trench |
 | `muzzle_flash` | 646, 566, 44, 32 | `Unit/Muzzle/MuzzleFlash`, bunker gun |
 | `bunker_units_sheet` | 748, 503, 327, 250 | sliced, not placed (the environment sheet's intact / damaged pair is used) |
 
@@ -194,7 +196,7 @@ Inspector. Keep `region.size + margin.size` equal to the cell size.
   rectangle. The tip is erased by the strip tool and every shot gets the separate
   `muzzle_flash` sprite instead.
 - **Backdrop upscale.** The banner is 259 px tall, so filling a 1080 px screen
-  draws it at 3.2x. It reads as a soft painted backdrop; a taller source image
+  draws it at 3.2x or more. It reads as a soft painted backdrop; a taller source image
   would sharpen it.
 - **Still procedural:** unit shadows and health bars, ownership flags, craters,
   the explosion flash, tracers, rain, and the top bar (portraits, tug-of-war bar,
@@ -208,24 +210,24 @@ Collision layer / mask values are shown as `L` / `M` using the layer names below
 
 ```
 Main (Node2D)                        GameManager.gd
-├─ Camera2D                          zoomed and positioned in code so the field spans the screen width
+├─ Camera2D                          zoomed and positioned in code so 2520 world px span the screen
 ├─ Background (Node2D, z -10)
 │  ├─ SkyFill, GroundFill (Polygon2D) flat colour beyond the art (only seen on very tall screens)
-│  ├─ Banner (Sprite2D)              background_banner, scale 3.2, fills the screen
+│  ├─ Banner (Sprite2D)              background_banner, scale 4.2, fills the screen
 │  ├─ GroundMirror (Sprite2D)        background_ground, flipped vertically: more mud under the HUD
 │  └─ SkyFade (Polygon2D)            soft top edge
 ├─ Battlefield (Node2D)
-│  ├─ Sectors (Node2D)               the 9 sectors, left to right, 210 px apart
-│  │  ├─ BlueBunker        (Bunker.tscn)  position (120, 700),  team = Blue
-│  │  ├─ BlueReserveTrench (Trench.tscn)  x = 330,  initial_owner = Blue
-│  │  ├─ BlueSupportTrench (Trench.tscn)  x = 540,  initial_owner = Blue
-│  │  ├─ BlueFrontTrench   (Trench.tscn)  x = 750,  initial_owner = Blue
-│  │  ├─ MiddleTrench      (Trench.tscn)  x = 960,  initial_owner = Neutral
-│  │  ├─ RedFrontTrench    (Trench.tscn)  x = 1170, initial_owner = Red
-│  │  ├─ RedSupportTrench  (Trench.tscn)  x = 1380, initial_owner = Red
-│  │  ├─ RedReserveTrench  (Trench.tscn)  x = 1590, initial_owner = Red
-│  │  └─ RedBunker         (Bunker.tscn)  position (1800, 700), team = Red
-│  ├─ Decor (Node2D)                 WireLeft, WireRight (Sprite2D, barbed_wire)
+│  ├─ Sectors (Node2D)               the 9 sectors, left to right, 280 px apart
+│  │  ├─ BlueBunker        (Bunker.tscn)  position (140, 700),  team = Blue
+│  │  ├─ BlueReserveTrench (Trench.tscn)  x = 420,  initial_owner = Blue
+│  │  ├─ BlueSupportTrench (Trench.tscn)  x = 700,  initial_owner = Blue
+│  │  ├─ BlueFrontTrench   (Trench.tscn)  x = 980,  initial_owner = Blue
+│  │  ├─ MiddleTrench      (Trench.tscn)  x = 1260, initial_owner = Neutral
+│  │  ├─ RedFrontTrench    (Trench.tscn)  x = 1540, initial_owner = Red
+│  │  ├─ RedSupportTrench  (Trench.tscn)  x = 1820, initial_owner = Red
+│  │  ├─ RedReserveTrench  (Trench.tscn)  x = 2100, initial_owner = Red
+│  │  └─ RedBunker         (Bunker.tscn)  position (2380, 700), team = Red
+│  ├─ Decor (Node2D)                 four barbed_wire Sprite2Ds in the gaps around the middle
 │  ├─ Craters (Node2D)               Crater.tscn instances are added here
 │  ├─ Units (Node2D, y_sort_enabled) Unit.tscn instances are added here
 │  └─ Effects (Node2D)               mortars, gas clouds, tracers
@@ -240,8 +242,9 @@ Main (Node2D)                        GameManager.gd
 
 `GameManager` finds the trenches itself: every `Trench` under `Sectors` is
 collected and sorted by x, so adding, removing or moving an instance changes the
-map with no code edits. Keep the spacing at or under about 210 px, or riflemen
-(range 330) can no longer reach the far side of the next trench.
+map with no code edits. Two things to keep in step if you change the spacing:
+riflemen (range 400) must still reach the far side of the next trench, and
+`GameManager.FIELD_VIEW_WIDTH` (2520) is the width the camera fits to the screen.
 
 ### Unit.tscn
 
@@ -281,7 +284,7 @@ as drawn and mirrors Red; a unit also turns to face its target.
 
 ```
 Trench (Area2D)                      Trench.gd, L sectors, M blue_units + red_units
-├─ CollisionShape2D                  RectangleShape2D 180 x 170
+├─ CollisionShape2D                  RectangleShape2D 160 x 170
 ├─ Bay (Sprite2D)                    trench_bay, drawn behind the soldiers
 ├─ Flag (Node2D)
 │  ├─ Pole (Polygon2D)
@@ -357,7 +360,7 @@ MortarStrike (Node2D)      MortarStrike.gd
 └─ FuseTimer (Timer, one_shot)
 
 GasCloud (Area2D)          GasCloud.gd, L hazards, M blue_units + red_units
-├─ CollisionShape2D        RectangleShape2D 190 x 170
+├─ CollisionShape2D        RectangleShape2D 170 x 170
 ├─ Clouds (Node2D) → CloudLeft, CloudRight, CloudMid (Sprite2D, gas_cloud)
 ├─ Puffs (GPUParticles2D)
 └─ TickTimer, LifeTimer (Timer)

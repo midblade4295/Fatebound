@@ -285,8 +285,8 @@ func _count_attackers(enemy_units: Array[Unit]) -> int:
 	for unit in enemy_units:
 		if unit.state == Unit.State.IN_COVER:
 			continue
-		# True once the enemy is within 170 px of our front line.
-		if (unit.global_position.x - front_x) * enemy_dir > -170.0:
+		# True once the enemy is within 230 px of our front line.
+		if (unit.global_position.x - front_x) * enemy_dir > -230.0:
 			total += 1
 	return total
 
@@ -304,7 +304,7 @@ func _find_exposed_cluster(enemy_units: Array[Unit], my_units: Array[Unit]) -> D
 	for unit in enemy_units:
 		if unit.state == Unit.State.IN_COVER:
 			continue
-		if (unit.global_position.x - enemy_line) * enemy_dir > 70.0:
+		if (unit.global_position.x - enemy_line) * enemy_dir > 90.0:
 			exposed.append(unit)
 
 	var best := {}

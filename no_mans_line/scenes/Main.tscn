@@ -22,7 +22,7 @@ fill_to = Vector2(0, 1)
 particle_flag_align_y = true
 particle_flag_disable_z = true
 emission_shape = 3
-emission_box_extents = Vector3(1900, 10, 1)
+emission_box_extents = Vector3(2300, 10, 1)
 direction = Vector3(-0.18, 1, 0)
 spread = 2.0
 initial_velocity_min = 1300.0
@@ -41,25 +41,25 @@ z_index = -10
 
 [node name="SkyFill" type="Polygon2D" parent="Background"]
 color = Color(0.15, 0.16, 0.17, 1)
-polygon = PackedVector2Array(-1400, -900, 3320, -900, 3320, 40, -1400, 40)
+polygon = PackedVector2Array(-2400, -1600, 4920, -1600, 4920, -160, -2400, -160)
 
 [node name="GroundFill" type="Polygon2D" parent="Background"]
 color = Color(0.07, 0.06, 0.05, 1)
-polygon = PackedVector2Array(-1400, 1100, 3320, 1100, 3320, 1800, -1400, 1800)
+polygon = PackedVector2Array(-2400, 1280, 4920, 1280, 4920, 2400, -2400, 2400)
 
 [node name="Banner" type="Sprite2D" parent="Background"]
-position = Vector2(960, 414)
-scale = Vector2(3.2, 3.2)
+position = Vector2(1260, 339)
+scale = Vector2(4.2, 4.2)
 texture = ExtResource("6_banner")
 
 [node name="GroundMirror" type="Sprite2D" parent="Background"]
-position = Vector2(960, 988)
-scale = Vector2(3.2, 3.2)
+position = Vector2(1260, 1092)
+scale = Vector2(4.2, 4.2)
 texture = ExtResource("8_ground")
 flip_v = true
 
 [node name="SkyFade" type="Polygon2D" parent="Background"]
-polygon = PackedVector2Array(-1400, -10, 3320, -10, 3320, 110, -1400, 110)
+polygon = PackedVector2Array(-2400, -215, 4920, -215, 4920, -60, -2400, -60)
 vertex_colors = PackedColorArray(0.15, 0.16, 0.17, 1, 0.15, 0.16, 0.17, 1, 0.15, 0.16, 0.17, 0, 0.15, 0.16, 0.17, 0)
 
 [node name="Battlefield" type="Node2D" parent="."]
@@ -67,49 +67,60 @@ vertex_colors = PackedColorArray(0.15, 0.16, 0.17, 1, 0.15, 0.16, 0.17, 1, 0.15,
 [node name="Sectors" type="Node2D" parent="Battlefield"]
 
 [node name="BlueBunker" parent="Battlefield/Sectors" instance=ExtResource("2_bunker")]
-position = Vector2(120, 700)
+position = Vector2(140, 700)
 
 [node name="BlueReserveTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
-position = Vector2(330, 700)
+position = Vector2(420, 700)
 initial_owner = 0
 
 [node name="BlueSupportTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
-position = Vector2(540, 700)
+position = Vector2(700, 700)
 initial_owner = 0
 
 [node name="BlueFrontTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
-position = Vector2(750, 700)
+position = Vector2(980, 700)
 initial_owner = 0
 
 [node name="MiddleTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
-position = Vector2(960, 700)
+position = Vector2(1260, 700)
 
 [node name="RedFrontTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
-position = Vector2(1170, 700)
+position = Vector2(1540, 700)
 initial_owner = 1
 
 [node name="RedSupportTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
-position = Vector2(1380, 700)
+position = Vector2(1820, 700)
 initial_owner = 1
 
 [node name="RedReserveTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
-position = Vector2(1590, 700)
+position = Vector2(2100, 700)
 initial_owner = 1
 
 [node name="RedBunker" parent="Battlefield/Sectors" instance=ExtResource("2_bunker")]
-position = Vector2(1800, 700)
+position = Vector2(2380, 700)
 team = 1
 
 [node name="Decor" type="Node2D" parent="Battlefield"]
 
-[node name="WireLeft" type="Sprite2D" parent="Battlefield/Decor"]
-position = Vector2(855, 742)
-scale = Vector2(0.3, 0.3)
+[node name="WireBlueFront" type="Sprite2D" parent="Battlefield/Decor"]
+position = Vector2(1120, 716)
+scale = Vector2(0.34, 0.34)
 texture = ExtResource("7_wire")
 
-[node name="WireRight" type="Sprite2D" parent="Battlefield/Decor"]
-position = Vector2(1065, 742)
-scale = Vector2(0.3, 0.3)
+[node name="WireRedFront" type="Sprite2D" parent="Battlefield/Decor"]
+position = Vector2(1400, 716)
+scale = Vector2(0.34, 0.34)
+texture = ExtResource("7_wire")
+flip_h = true
+
+[node name="WireBlueSupport" type="Sprite2D" parent="Battlefield/Decor"]
+position = Vector2(840, 716)
+scale = Vector2(0.34, 0.34)
+texture = ExtResource("7_wire")
+
+[node name="WireRedSupport" type="Sprite2D" parent="Battlefield/Decor"]
+position = Vector2(1680, 716)
+scale = Vector2(0.34, 0.34)
 texture = ExtResource("7_wire")
 flip_h = true
 
@@ -124,11 +135,11 @@ y_sort_enabled = true
 z_index = 20
 
 [node name="Rain" type="GPUParticles2D" parent="Weather"]
-position = Vector2(1100, -120)
-amount = 420
-lifetime = 0.9
+position = Vector2(1400, -330)
+amount = 520
+lifetime = 1.15
 preprocess = 1.0
-visibility_rect = Rect2(-2400, -100, 4800, 1500)
+visibility_rect = Rect2(-2900, -100, 5800, 2000)
 texture = SubResource("streak_texture")
 process_material = SubResource("rain_material")
 

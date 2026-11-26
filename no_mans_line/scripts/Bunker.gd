@@ -21,7 +21,7 @@ const BAR_WIDTH := 100.0
 @export_group("Machine Gun")
 @export var gun_damage := 7.0
 @export var gun_interval := 0.3
-@export var gun_range := 150.0
+@export var gun_range := 185.0
 @export_range(0.0, 1.0, 0.05) var gun_accuracy := 0.85
 ## Half of the bunker's footprint, used for melee reach and blast checks.
 @export var half_width := 70.0

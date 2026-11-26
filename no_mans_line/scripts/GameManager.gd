@@ -32,11 +32,15 @@ const TEAM_RED := 1
 
 ## Y coordinate of the ground line every unit walks on.
 const GROUND_Y := 700.0
-## The battlefield is designed for a view this wide (bunker to bunker).
-const FIELD_VIEW_WIDTH := 1920.0
+## Width of the battlefield in world pixels, bunker to bunker plus a margin.
+## The camera zooms so exactly this much is on screen.
+const FIELD_VIEW_WIDTH := 2520.0
+## How far above the bottom of the screen the ground line sits (room for the
+## card hand), in screen pixels.
+const GROUND_ABOVE_SCREEN_BOTTOM := 390.0
 ## Tappable X range for mortar / gas (the whole battlefield fits one screen).
 const FIELD_MIN_X := 40.0
-const FIELD_MAX_X := 1880.0
+const FIELD_MAX_X := FIELD_VIEW_WIDTH - 40.0
 
 enum Card { RIFLEMEN, RAIDERS, MORTAR, GAS }
 
@@ -74,7 +78,7 @@ const CRATER_SCENE := preload("res://scenes/Crater.tscn")
 @export var raiders_per_card := 2
 @export var max_craters := 8
 ## Gas snaps onto a trench when the tap lands within this distance of it.
-@export var gas_snap_distance := 100.0
+@export var gas_snap_distance := 130.0
 
 # ----------------------------------------------------------------------------
 # State
@@ -429,7 +433,7 @@ func apply_explosion(center: Vector2, radius: float, max_damage: float, min_dama
 ## Leaves a crater (cover zone) on open ground.
 func add_crater(at: Vector2) -> void:
 	for trench in trenches:
-		if absf(trench.global_position.x - at.x) < 96.0:
+		if absf(trench.global_position.x - at.x) < 105.0:
 			return  # No craters inside the trench works.
 	for bunker: Bunker in [blue_bunker, red_bunker]:
 		if absf(bunker.global_position.x - at.x) < bunker.half_width + 30.0:
@@ -455,18 +459,18 @@ func spawn_tracer(from: Vector2, to: Vector2) -> void:
 	tween.tween_callback(tracer.queue_free)
 
 
-## Keeps the whole battlefield on screen and edge to edge. On screens wider
-## than 16:9 the stretch mode adds width, so the camera zooms in until the two
-## bunkers reach the screen edges again, and shifts down so the ground line
-## stays at the same height above the card hand.
+## Keeps the whole battlefield on one screen, edge to edge, on any aspect
+## ratio: the camera zooms until FIELD_VIEW_WIDTH world pixels span the screen
+## (zooming out on 16:9, barely at all on a 20:9 phone), then moves vertically
+## so the ground line stays just above the card hand.
 func _fit_camera() -> void:
 	var view := get_viewport_rect().size
-	var zoom := clampf(view.x / FIELD_VIEW_WIDTH, 1.0, 1.6)
+	var zoom := clampf(view.x / FIELD_VIEW_WIDTH, 0.5, 1.25)
 	camera.zoom = Vector2(zoom, zoom)
-	var screen_centre_y := view.y * 0.5
+	var ground_screen_y := view.y - GROUND_ABOVE_SCREEN_BOTTOM
 	camera.position = Vector2(
 		FIELD_VIEW_WIDTH * 0.5,
-		GROUND_Y - (GROUND_Y - screen_centre_y) / zoom
+		GROUND_Y - (ground_screen_y - view.y * 0.5) / zoom
 	)
 
 
