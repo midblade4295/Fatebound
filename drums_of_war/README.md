@@ -76,8 +76,9 @@ match goes to one minute of sudden-death overtime.
 - `scripts/app/profile.gd`: what is remembered between launches, in `user://profile.cfg`.
 
 - `data/cards.json`: every card's numbers, its rarity and the words that describe it. Balancing
-  is editing this file. Rarity (common, rare, epic, legendary) is a label and a look: the metal
-  of the card's frame and the stone on its corner. It changes nothing in a battle.
+  is editing this file. Rarity (common, rare, epic, legendary) is a label and a look: the colour
+  of the card's frame (green, blue, purple) and the stone on its corner; a legendary card has a
+  shape of its own and a frame that runs through every colour. It changes nothing in a battle.
 - `scripts/sim/battle_sim.gd`: the rules. Pure data at a fixed 20 steps a second with its own
   seeded random source, so the same seed and the same deploys always give the same battle.
 - `scripts/sim/bot.gd`: the computer opponent, at three levels. It plays through the same
@@ -167,8 +168,8 @@ is pinned to the top and bottom, clear of a notch or gesture bar, and the camera
 
 ## Not in yet
 
-Models and pictures for the ten later cards (they borrow the nearest existing figure, tinted,
-and their cards say what they are in words), smoke as a rule (it is a visual effect only), a
+Models for the ten later cards (every card has its painting, but on the field the later ones
+still borrow the nearest existing figure, tinted), smoke as a rule (it is a visual effect only), a
 tutorial, and online play. Known rough edges: none of the sounds has been checked by ear; the
 cavalry crash sound is a stand-in mixed from other takes, and the later cards reuse the first
 eight's sounds; the flinch and thrust clips start from a side-on stance, so bodies swivel

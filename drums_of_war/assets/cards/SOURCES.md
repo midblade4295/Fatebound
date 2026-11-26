@@ -57,3 +57,25 @@ is taken from another game or from stock art, and none depicts a real person.
 ### rally
 
 > Card illustration for a mobile card-battler game set in the 1860s: a small painted ACTION scene for an order card. Use the attached lineup image as the art-style and character reference: paint the same Union drummer boy from it (a cheerful young lad with a big head and rosy cheeks, navy kepi with a plain brass button, royal blue jacket with brass buttons, sky-blue trousers, black boots, a white shoulder strap carrying a big snare drum with red hoops and white rope tensioning). New scene: he marches forward beating the big snare drum with two chunky drumsticks, one stick raised high, mouth open in a brave shout. Right beside him a tall wooden pole is planted in the ground, flying a plain solid royal blue swallow-tailed pennant with no emblem, no stars, no stripes and no markings, streaming in the wind. Behind them, in golden haze and drifting smoke, soft dark-blue silhouettes of chunky soldiers with muskets run in to rally around the pennant. The drummer boy, his drum, the pole and the whole pennant stay inside the picture. Backdrop: golden evening sky, soft orange and yellow autumn trees, a grassy field. Style: stylized 3D-illustration card art with a painterly finish, warm golden-hour light, saturated but not neon colour, chunky heroic-comic proportions (big head, big hands), oversized chunky props. Backdrop simple and soft-focus so the subject reads clearly at thumbnail size. Portrait composition: the drummer boy and pennant fill most of the frame and sit fully inside it with a small margin on every side, his head near the top third, no head, limb, drum or pennant cut off by the edge. Full-bleed painting only: no text, no letters, no numbers, no lettering on buckles or buttons, no border, no card frame, no logo, no national flag, no watermark. Family-friendly, nothing gory, not resembling any real person.
+
+## The ten later cards
+
+Made the same way as the first eight (same model and settings, four variations from one run
+each, on the same ElevenLabs flow, with the approved character references and one of the first
+eight paintings wired in as the style reference). The run was stopped after the pictures had
+been generated and downloaded but before its notes were written, so the exact prompt text was
+not kept; what each was asked to show is given instead. The variation listed was picked by eye
+and saved downscaled to 819 x 1024 as JPEG, otherwise unedited and uncropped.
+
+| File | Variation kept | What it shows |
+|---|---|---|
+| `src/sharpshooters.jpg` | 1 of 4 | Two Union marksmen in dark green: one prone behind a log with a long scoped rifle, one beside him with a spyglass, pointing |
+| `src/zouaves.jpg` | 2 of 4 | A Union zouave (red fez, short blue jacket with red braid, baggy red trousers, white gaiters) charging with the bayonet, two more behind |
+| `src/dragoons.jpg` | 3 of 4 | A dismounted Union dragoon kneeling and firing a carbine, his horse standing behind him |
+| `src/horse_artillery.jpg` | 2 of 4 | A light brass gun hitched behind two galloping horses, the rider whipping them on |
+| `src/gatling_gun.jpg` | 3 of 4 | A Union gunner turning the crank of a brass Gatling gun, cartridge cases flying |
+| `src/howitzer.jpg` | 2 of 4 | A short fat bronze howitzer firing steeply upward, its shell high in the sky, the gunner with his fingers in his ears |
+| `src/grand_battery.jpg` | 2 of 4 | A row of brass cannon all firing at once at dusk |
+| `src/earthworks.jpg` | 1 of 4 | A breastwork of logs, earth and sandbags with two Union infantrymen behind it, one aiming, one leaning on a shovel |
+| `src/balloon.jpg` | 2 of 4 | A cream observation balloon with a plain blue band, an observer in the basket with a telescope |
+| `src/general.jpg` | 3 of 4 | An invented Union general on a rearing dark bay horse, sabre raised, an aide with a plain blue pennant behind |

@@ -19,15 +19,16 @@ const PARCHMENT := Color("ecd9a6")
 const PARCHMENT_LIGHT := Color("f8ecc6")
 const PARCHMENT_DARK := Color("c9ad72")
 const BROWN_INK := Color("38220e")
-# How rare a card is shows in the metal of its frame and the stone set in its corner: pewter
-# and no stone, brass and a sapphire, green enamel and an emerald, purple and gold with a star.
+# How rare a card is shows in the colour of its frame and the stone set on its corner: green
+# for common (no stone), blue for rare, purple for epic. A legendary card is a different shape
+# (a peaked top with a star on it, and cut lower corners) and its frame runs with every colour.
 # It is a label and a look; it changes nothing in a battle.
 const RARITY_ORDER := ["common", "rare", "epic", "legendary"]
 const RARITY := {
-	"common": {"name": "Common", "light": Color("dfe3e8"), "mid": Color("9aa2ac"), "dark": Color("3c4149"), "gem": Color("00000000"), "ink": Color("c9d0d8")},
-	"rare": {"name": "Rare", "light": Color("f5d98a"), "mid": Color("c9a03c"), "dark": Color("4a300c"), "gem": Color("3f8fe8"), "ink": Color("f5d98a")},
-	"epic": {"name": "Epic", "light": Color("8fe0a8"), "mid": Color("2f9a58"), "dark": Color("0f3d22"), "gem": Color("3ddc7a"), "ink": Color("7fe6a0")},
-	"legendary": {"name": "Legendary", "light": Color("ffe9a0"), "mid": Color("8a4fd0"), "dark": Color("2c1450"), "gem": Color("ffd24a"), "ink": Color("d9a8ff")},
+	"common": {"name": "Common", "light": Color("a6e69a"), "mid": Color("4caf50"), "dark": Color("1b4a20"), "gem": Color("00000000"), "ink": Color("8fe08a")},
+	"rare": {"name": "Rare", "light": Color("a3ccff"), "mid": Color("2f7de0"), "dark": Color("11305f"), "gem": Color("4aa3ff"), "ink": Color("8fc0ff")},
+	"epic": {"name": "Epic", "light": Color("d9b0ff"), "mid": Color("8a4fd0"), "dark": Color("2c1450"), "gem": Color("b46bff"), "ink": Color("d9a8ff")},
+	"legendary": {"name": "Legendary", "light": Color("fff6dc"), "mid": Color("f4eeff"), "dark": Color("241a33"), "gem": Color("ffd24a"), "ink": Color("ffffff")},
 }
 const CARD_HEAD := 23.0             # the strip across a card's top that names its kind
 const CARD_NAME := 25.0             # the name plate along its foot
@@ -344,15 +345,16 @@ func card_face(c: CanvasItem, rect: Rect2, def: Dictionary, art: Texture2D, can_
 			c.draw_rect(rect.grow(4.0 + ring * 3.0), Color(1.0, 0.76, 0.16, halo * (0.36 - ring * 0.1)), false, 3.0)
 	var rarity := String(def.get("rarity", "rare"))
 	var metal: Dictionary = RARITY.get(rarity, RARITY["rare"])
-	c.draw_style_box(box("card_edge_" + rarity, metal["dark"], 9.0), rect.grow(3.5))
-	c.draw_style_box(box("card_rim_" + rarity, metal["light"], 8.0), rect.grow(2.2))
-	c.draw_style_box(box("card_rim_low_" + rarity, metal["mid"], 7.0), rect.grow_individual(1.0, 0.0, 1.0, 1.2))
 	if rarity == "legendary":
-		c.draw_style_box(box("card_rim_gold", Color(0, 0, 0, 0), 7.0, 1.0, Color("ffd24a")), rect.grow(2.2))
+		legendary_frame(c, rect)
+	else:
+		c.draw_style_box(box("card_edge_" + rarity, metal["dark"], 9.0), rect.grow(3.5))
+		c.draw_style_box(box("card_rim_" + rarity, metal["light"], 8.0), rect.grow(2.2))
+		c.draw_style_box(box("card_rim_low_" + rarity, metal["mid"], 7.0), rect.grow_individual(1.0, 0.0, 1.0, 1.2))
 	var body := rect.grow(-1.5)
 	c.draw_style_box(box("card_body", PARCHMENT, 5.0, 1.0, Color("8a6a2c")), body)
 	c.draw_rect(Rect2(body.position + Vector2(2, 2), Vector2(body.size.x - 4.0, CARD_HEAD - 3.0)), Color(PARCHMENT_LIGHT, 0.75))
-	var has_gem := rarity != "common"
+	var has_gem := rarity == "rare" or rarity == "epic"
 	fitted(c, Vector2(rect.position.x + rect.size.x * 0.5 + (6.0 if has_gem else 10.0), rect.position.y + 16.0), kind_label(def), 11, BROWN_INK,
 			rect.size.x - (42.0 if has_gem else 32.0))
 	var art_rect := Rect2(rect.position.x + 6.0, rect.position.y + CARD_HEAD, rect.size.x - 12.0, rect.size.y - CARD_HEAD - CARD_NAME)
@@ -375,20 +377,57 @@ func card_face(c: CanvasItem, rect: Rect2, def: Dictionary, art: Texture2D, can_
 	var name_y := rect.end.y - CARD_NAME
 	c.draw_rect(Rect2(body.position.x + 2.0, name_y + 3.0, body.size.x - 4.0, CARD_NAME - 6.5), Color(PARCHMENT_LIGHT, 0.6))
 	fitted(c, Vector2(rect.position.x + rect.size.x * 0.5, name_y + 17.5), String(def["name"]), 14, BROWN_INK, rect.size.x - 10.0)
-	if rarity == "legendary":
-		# A glint that runs along the frame every couple of seconds. Whoever draws the card
-		# redraws it while this is wanted (card_view.gd, deck_screen.gd).
-		var t := fmod(Time.get_ticks_msec() / 1000.0, 2.4) / 0.7
-		if t < 1.0:
-			var gx := rect.position.x - 2.0 + (rect.size.x + 4.0 - 18.0) * t
-			var glint := Color(1, 1, 1, 0.75 * sin(t * PI))
-			c.draw_rect(Rect2(gx, rect.position.y - 2.4, 18.0, 2.4), glint)
-			c.draw_rect(Rect2(rect.end.x - 16.0 - (rect.size.x - 14.0) * t, rect.end.y, 18.0, 2.4), glint)
 	if not can_pay:
 		c.draw_style_box(box("card_dim", Color(0.07, 0.05, 0.08, 0.42), 5.0), body)
 	coin(c, rect.position + Vector2(8, 9), int(def["cost"]), can_pay)
 	if has_gem:
 		gem(c, Vector2(rect.end.x - 5.0, rect.position.y + 6.0), rarity, 7.0)      # set on the corner opposite the coin
+
+
+## The outline of a legendary card: a peak at the top, small cuts at the upper corners and
+## larger ones at the lower, as a closed loop of points a few pixels apart (so that colour can
+## run smoothly round it). "out" is how far outside the card's rect it lies.
+func legendary_outline(rect: Rect2, out: float) -> PackedVector2Array:
+	var r := rect.grow(out)
+	var mid := r.get_center().x
+	var peak := 9.0
+	var cut := 8.0 + out * 0.4
+	var corners: Array = [Vector2(r.position.x, r.position.y + 4.0), Vector2(r.position.x + 4.0, r.position.y),
+			Vector2(mid - 17.0, r.position.y), Vector2(mid, r.position.y - peak), Vector2(mid + 17.0, r.position.y),
+			Vector2(r.end.x - 4.0, r.position.y), Vector2(r.end.x, r.position.y + 4.0), Vector2(r.end.x, r.end.y - cut),
+			Vector2(r.end.x - cut, r.end.y), Vector2(r.position.x + cut, r.end.y), Vector2(r.position.x, r.end.y - cut)]
+	var loop := PackedVector2Array()
+	for i in corners.size():
+		var a: Vector2 = corners[i]
+		var b: Vector2 = corners[(i + 1) % corners.size()]
+		var steps := maxi(1, int(a.distance_to(b) / 7.0))
+		for k in steps:
+			loop.append(a.lerp(b, float(k) / steps))
+	loop.append(loop[0])
+	return loop
+
+
+## The frame of a legendary card: its own shape, a rim that runs through every colour and keeps
+## moving, and a soft glow of the same colours outside it. Whoever draws the card redraws it
+## while it should move (card_view.gd, deck_screen.gd).
+func legendary_frame(c: CanvasItem, rect: Rect2) -> void:
+	var turn := Time.get_ticks_msec() / 1000.0 * 0.22
+	for layer: Array in [[9.5, 7.0, 0.1], [7.0, 5.0, 0.2], [5.0, 3.0, 0.34]]:
+		var haze := legendary_outline(rect, float(layer[0]))
+		var hues := PackedColorArray()
+		for i in haze.size():
+			hues.append(Color.from_hsv(fposmod(float(i) / (haze.size() - 1) - turn, 1.0), 0.85, 1.0, float(layer[2])))
+		c.draw_polyline_colors(haze, hues, float(layer[1]), true)
+	var edge := legendary_outline(rect, 3.6)
+	c.draw_colored_polygon(edge, RARITY["legendary"]["dark"])
+	var rim := legendary_outline(rect, 2.0)
+	var colours := PackedColorArray()
+	for i in rim.size():
+		colours.append(Color.from_hsv(fposmod(float(i) / (rim.size() - 1) - turn, 1.0), 0.62, 1.0))
+	c.draw_polyline_colors(rim, colours, 3.4, true)
+	c.draw_polyline(legendary_outline(rect, 0.3), Color(1, 1, 1, 0.55), 1.0, true)
+	# The star on the peak.
+	gem(c, Vector2(rect.get_center().x, rect.position.y - 4.5), "legendary", 6.0)
 
 
 ## The stone that marks a card's rarity: a cut gem for rare and epic, a gold star for legendary.
@@ -452,7 +491,20 @@ func button(c: CanvasItem, rect: Rect2, label: String, look: String = "wood", si
 func mini_card(c: CanvasItem, rect: Rect2, art: Texture2D, name: String, rarity: String = "rare") -> void:
 	var metal: Dictionary = RARITY.get(rarity, RARITY["rare"])
 	c.draw_style_box(box("mini_edge_" + rarity, metal["dark"], 7.0, 0.0, Color.BLACK, 5.0, Color(0, 0, 0, 0.5), 3.0), rect.grow(3.5))
-	c.draw_style_box(box("mini_rim_" + rarity, metal["light"] if rarity != "legendary" else metal["mid"], 6.0), rect.grow(2.2))
+	c.draw_style_box(box("mini_rim_" + rarity, metal["mid"], 6.0), rect.grow(2.2))
+	if rarity == "legendary":
+		var turn := Time.get_ticks_msec() / 1000.0 * 0.22
+		var r := rect.grow(1.6)
+		var loop := PackedVector2Array()
+		var corners: Array = [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+		for i in 4:
+			for k in 6:
+				loop.append((corners[i] as Vector2).lerp(corners[(i + 1) % 4], k / 6.0))
+		loop.append(loop[0])
+		var hues := PackedColorArray()
+		for i in loop.size():
+			hues.append(Color.from_hsv(fposmod(float(i) / (loop.size() - 1) - turn, 1.0), 0.62, 1.0))
+		c.draw_polyline_colors(loop, hues, 3.0, true)
 	c.draw_style_box(box("mini_body", PARCHMENT, 4.0, 1.0, Color("8a6a2c")), rect)
 	var inner := rect.grow(-4.0)
 	c.draw_rect(inner.grow(1.0), Color("4a3215"))

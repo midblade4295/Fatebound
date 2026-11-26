@@ -176,7 +176,10 @@ func _draw() -> void:
 		var rarity := String(def.get("rarity", "rare"))
 		var tier: Dictionary = Kit.RARITY.get(rarity, Kit.RARITY["rare"])
 		kit.text(self, info.position + Vector2(info.size.x - 18.0, 28), kit.kind_label(def), 12, Kit.BRASS_LIGHT, HORIZONTAL_ALIGNMENT_RIGHT, 150.0, true)
-		kit.text(self, info.position + Vector2(info.size.x - (34.0 if rarity != "common" else 18.0), 46), String(tier["name"]).to_upper(), 12, tier["ink"],
+		var tier_ink: Color = tier["ink"]
+		if rarity == "legendary":
+			tier_ink = Color.from_hsv(fposmod(Time.get_ticks_msec() / 1000.0 * 0.22, 1.0), 0.5, 1.0)
+		kit.text(self, info.position + Vector2(info.size.x - (34.0 if rarity != "common" else 18.0), 46), String(tier["name"]).to_upper(), 12, tier_ink,
 				HORIZONTAL_ALIGNMENT_RIGHT, 150.0, true)
 		kit.gem(self, info.position + Vector2(info.size.x - 24.0, 41), rarity, 6.0)
 		draw_string(kit.font_bold, info.position + Vector2(18, 60), String(def.get("field", "")), HORIZONTAL_ALIGNMENT_LEFT, info.size.x - 36.0, 13, Kit.CREAM)
