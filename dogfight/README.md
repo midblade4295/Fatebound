@@ -198,6 +198,19 @@ override `WingAccent_TeamColor` to repaint a team. It is **not wired into
 
 Preview it with `res://tools/ModelPreview.tscn`.
 
+## Android test build
+
+```
+GODOT=/path/to/godot ANDROID_HOME=/path/to/android-sdk tools/build_android.sh
+```
+
+Exports the "Android Preview" preset (`com.squadronskies.preview`, arm64-v8a +
+armeabi-v7a, sensor landscape, no permissions) with the release template to
+`build/SquadronSkies-preview.apk`. Pass `KEYSTORE`, `KS_ALIAS` and `KS_PASS` to
+sign with a key you keep; otherwise a throwaway key is generated in `build/`
+(git-ignored), and a build signed with a different key will not install over
+it. This is a sideload build for testing, not a store build.
+
 ## Tests
 
 ```
@@ -213,7 +226,7 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 
 These run headless, so they prove rules and wiring, not feel. Screens were also
 checked from software-rendered captures (`tools/ShotCapture.tscn`). **Not yet
-tested:** a real phone (touch feel, frame rate, thermal), an Android export
-(there is no export preset), and anything networked.
+tested:** a real phone (touch feel, frame rate, thermal; the APK builds and its
+signature verifies, but it has not been run on a device) and anything networked.
 
 `project.godot` makes untyped declarations a compile error.
