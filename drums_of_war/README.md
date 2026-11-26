@@ -75,7 +75,9 @@ match goes to one minute of sudden-death overtime.
   the deck builder (pick eight of the eighteen cards; tap a card to read what it does).
 - `scripts/app/profile.gd`: what is remembered between launches, in `user://profile.cfg`.
 
-- `data/cards.json`: every card's numbers. Balancing is editing this file.
+- `data/cards.json`: every card's numbers, its rarity and the words that describe it. Balancing
+  is editing this file. Rarity (common, rare, epic, legendary) is a label and a look: the metal
+  of the card's frame and the stone on its corner. It changes nothing in a battle.
 - `scripts/sim/battle_sim.gd`: the rules. Pure data at a fixed 20 steps a second with its own
   seeded random source, so the same seed and the same deploys always give the same battle.
 - `scripts/sim/bot.gd`: the computer opponent, at three levels. It plays through the same

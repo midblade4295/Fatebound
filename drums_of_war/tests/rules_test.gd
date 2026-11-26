@@ -48,6 +48,12 @@ func has_event(sim: Sim, type: String) -> bool:
 func _init() -> void:
 	cards = Sim.load_cards()
 	check(cards.size() == 18, "eighteen cards load from data/cards.json")
+	var tiers := {}
+	for id: String in cards:
+		tiers[cards[id].get("rarity", "")] = int(tiers.get(cards[id].get("rarity", ""), 0)) + 1
+	check(tiers.keys().all(func(t): return t in ["common", "rare", "epic", "legendary"]), "every card has a rarity")
+	check(int(tiers.get("common", 0)) == 7 and int(tiers.get("rare", 0)) == 6 and int(tiers.get("epic", 0)) == 4 and int(tiers.get("legendary", 0)) == 1,
+			"seven common, six rare, four epic and one legendary")
 	test_powder()
 	test_deploy_and_hand()
 	test_first_volley_and_reload()

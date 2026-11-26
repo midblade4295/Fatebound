@@ -48,7 +48,8 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	# Redraw only when something about the card's look has changed: most frames nothing has.
-	var now := hash([card_id, affordable, selected, dragging, lift, tilt, swell, shrink, offset, halo, fade, size])
+	var glint := Time.get_ticks_msec() / 40 if def.get("rarity", "") == "legendary" else 0     # its frame glints
+	var now := hash([card_id, affordable, selected, dragging, lift, tilt, swell, shrink, offset, halo, fade, size, glint])
 	if now != _drawn:
 		_drawn = now
 		queue_redraw()

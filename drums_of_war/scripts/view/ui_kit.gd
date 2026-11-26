@@ -19,6 +19,16 @@ const PARCHMENT := Color("ecd9a6")
 const PARCHMENT_LIGHT := Color("f8ecc6")
 const PARCHMENT_DARK := Color("c9ad72")
 const BROWN_INK := Color("38220e")
+# How rare a card is shows in the metal of its frame and the stone set in its corner: pewter
+# and no stone, brass and a sapphire, green enamel and an emerald, purple and gold with a star.
+# It is a label and a look; it changes nothing in a battle.
+const RARITY_ORDER := ["common", "rare", "epic", "legendary"]
+const RARITY := {
+	"common": {"name": "Common", "light": Color("dfe3e8"), "mid": Color("9aa2ac"), "dark": Color("3c4149"), "gem": Color("00000000"), "ink": Color("c9d0d8")},
+	"rare": {"name": "Rare", "light": Color("f5d98a"), "mid": Color("c9a03c"), "dark": Color("4a300c"), "gem": Color("3f8fe8"), "ink": Color("f5d98a")},
+	"epic": {"name": "Epic", "light": Color("8fe0a8"), "mid": Color("2f9a58"), "dark": Color("0f3d22"), "gem": Color("3ddc7a"), "ink": Color("7fe6a0")},
+	"legendary": {"name": "Legendary", "light": Color("ffe9a0"), "mid": Color("8a4fd0"), "dark": Color("2c1450"), "gem": Color("ffd24a"), "ink": Color("d9a8ff")},
+}
 const CARD_HEAD := 23.0             # the strip across a card's top that names its kind
 const CARD_NAME := 25.0             # the name plate along its foot
 
@@ -332,13 +342,19 @@ func card_face(c: CanvasItem, rect: Rect2, def: Dictionary, art: Texture2D, can_
 	if halo > 0.02:
 		for ring in 3:
 			c.draw_rect(rect.grow(4.0 + ring * 3.0), Color(1.0, 0.76, 0.16, halo * (0.36 - ring * 0.1)), false, 3.0)
-	c.draw_style_box(box("card_edge", Color("4a300c"), 9.0), rect.grow(3.5))
-	c.draw_style_box(box("card_gilt", BRASS_LIGHT, 8.0), rect.grow(2.2))
-	c.draw_style_box(box("card_gilt_low", BRASS_MID, 7.0), rect.grow_individual(1.0, 0.0, 1.0, 1.2))
+	var rarity := String(def.get("rarity", "rare"))
+	var metal: Dictionary = RARITY.get(rarity, RARITY["rare"])
+	c.draw_style_box(box("card_edge_" + rarity, metal["dark"], 9.0), rect.grow(3.5))
+	c.draw_style_box(box("card_rim_" + rarity, metal["light"], 8.0), rect.grow(2.2))
+	c.draw_style_box(box("card_rim_low_" + rarity, metal["mid"], 7.0), rect.grow_individual(1.0, 0.0, 1.0, 1.2))
+	if rarity == "legendary":
+		c.draw_style_box(box("card_rim_gold", Color(0, 0, 0, 0), 7.0, 1.0, Color("ffd24a")), rect.grow(2.2))
 	var body := rect.grow(-1.5)
 	c.draw_style_box(box("card_body", PARCHMENT, 5.0, 1.0, Color("8a6a2c")), body)
 	c.draw_rect(Rect2(body.position + Vector2(2, 2), Vector2(body.size.x - 4.0, CARD_HEAD - 3.0)), Color(PARCHMENT_LIGHT, 0.75))
-	fitted(c, Vector2(rect.position.x + rect.size.x * 0.5 + 10.0, rect.position.y + 16.0), kind_label(def), 11, BROWN_INK, rect.size.x - 32.0)
+	var has_gem := rarity != "common"
+	fitted(c, Vector2(rect.position.x + rect.size.x * 0.5 + (6.0 if has_gem else 10.0), rect.position.y + 16.0), kind_label(def), 11, BROWN_INK,
+			rect.size.x - (42.0 if has_gem else 32.0))
 	var art_rect := Rect2(rect.position.x + 6.0, rect.position.y + CARD_HEAD, rect.size.x - 12.0, rect.size.y - CARD_HEAD - CARD_NAME)
 	c.draw_rect(art_rect.grow(1.5), Color("4a3215"))
 	if art != null:
@@ -359,9 +375,42 @@ func card_face(c: CanvasItem, rect: Rect2, def: Dictionary, art: Texture2D, can_
 	var name_y := rect.end.y - CARD_NAME
 	c.draw_rect(Rect2(body.position.x + 2.0, name_y + 3.0, body.size.x - 4.0, CARD_NAME - 6.5), Color(PARCHMENT_LIGHT, 0.6))
 	fitted(c, Vector2(rect.position.x + rect.size.x * 0.5, name_y + 17.5), String(def["name"]), 14, BROWN_INK, rect.size.x - 10.0)
+	if rarity == "legendary":
+		# A glint that runs along the frame every couple of seconds. Whoever draws the card
+		# redraws it while this is wanted (card_view.gd, deck_screen.gd).
+		var t := fmod(Time.get_ticks_msec() / 1000.0, 2.4) / 0.7
+		if t < 1.0:
+			var gx := rect.position.x - 2.0 + (rect.size.x + 4.0 - 18.0) * t
+			var glint := Color(1, 1, 1, 0.75 * sin(t * PI))
+			c.draw_rect(Rect2(gx, rect.position.y - 2.4, 18.0, 2.4), glint)
+			c.draw_rect(Rect2(rect.end.x - 16.0 - (rect.size.x - 14.0) * t, rect.end.y, 18.0, 2.4), glint)
 	if not can_pay:
 		c.draw_style_box(box("card_dim", Color(0.07, 0.05, 0.08, 0.42), 5.0), body)
 	coin(c, rect.position + Vector2(8, 9), int(def["cost"]), can_pay)
+	if has_gem:
+		gem(c, Vector2(rect.end.x - 5.0, rect.position.y + 6.0), rarity, 7.0)      # set on the corner opposite the coin
+
+
+## The stone that marks a card's rarity: a cut gem for rare and epic, a gold star for legendary.
+func gem(c: CanvasItem, at: Vector2, rarity: String, size: float) -> void:
+	var colour: Color = (RARITY.get(rarity, RARITY["rare"]) as Dictionary)["gem"]
+	if colour.a <= 0.0:
+		return
+	var outline := PackedVector2Array()
+	if rarity == "legendary":
+		for k in 10:
+			var reach := size * (1.25 if k % 2 == 0 else 0.55)
+			outline.append(at + Vector2.from_angle(-PI * 0.5 + TAU * k / 10.0) * reach)
+	else:
+		outline = PackedVector2Array([at + Vector2(0, -size), at + Vector2(size * 0.8, 0), at + Vector2(0, size), at + Vector2(-size * 0.8, 0)])
+	var shadow := PackedVector2Array()
+	for p: Vector2 in outline:
+		shadow.append(at + (p - at) * 1.3 + Vector2(0, 0.8))
+	c.draw_colored_polygon(shadow, Color(0.12, 0.08, 0.04, 0.85))
+	c.draw_colored_polygon(outline, colour)
+	if rarity != "legendary":
+		c.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -size), at + Vector2(size * 0.8, 0), at]), colour.lightened(0.45))
+	c.draw_circle(at + Vector2(-size * 0.2, -size * 0.3), size * 0.18, Color(1, 1, 1, 0.9))
 
 
 ## The word across a card's head: its arm of service, or what sort of card it is.
@@ -400,9 +449,10 @@ func button(c: CanvasItem, rect: Rect2, label: String, look: String = "wood", si
 
 
 ## The small card that shows what comes next: gilt edge, parchment mat, picture.
-func mini_card(c: CanvasItem, rect: Rect2, art: Texture2D, name: String) -> void:
-	c.draw_style_box(box("mini_edge", Color("4a300c"), 7.0, 0.0, Color.BLACK, 5.0, Color(0, 0, 0, 0.5), 3.0), rect.grow(3.5))
-	c.draw_style_box(box("mini_gilt", BRASS_LIGHT, 6.0), rect.grow(2.2))
+func mini_card(c: CanvasItem, rect: Rect2, art: Texture2D, name: String, rarity: String = "rare") -> void:
+	var metal: Dictionary = RARITY.get(rarity, RARITY["rare"])
+	c.draw_style_box(box("mini_edge_" + rarity, metal["dark"], 7.0, 0.0, Color.BLACK, 5.0, Color(0, 0, 0, 0.5), 3.0), rect.grow(3.5))
+	c.draw_style_box(box("mini_rim_" + rarity, metal["light"] if rarity != "legendary" else metal["mid"], 6.0), rect.grow(2.2))
 	c.draw_style_box(box("mini_body", PARCHMENT, 4.0, 1.0, Color("8a6a2c")), rect)
 	var inner := rect.grow(-4.0)
 	c.draw_rect(inner.grow(1.0), Color("4a3215"))

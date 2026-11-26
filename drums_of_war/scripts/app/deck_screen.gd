@@ -49,9 +49,9 @@ func close() -> void:
 
 
 func _process(delta: float) -> void:
-	if _note_time > 0.0:
-		_note_time -= delta
-		queue_redraw()
+	_note_time = maxf(0.0, _note_time - delta)
+	if visible:
+		queue_redraw()             # the legendary card's glint, and the fading note
 
 
 func rect_of(name: String) -> Rect2:
@@ -135,7 +135,7 @@ func _draw() -> void:
 		var slot := Rect2(strip.position.x + 14.0 + i * 61.5, y + 13.0, 54.0, 58.0)
 		if i < deck.size():
 			var id: String = deck[i]
-			kit.mini_card(self, slot, _art(id), String(app.cards[id]["name"]))
+			kit.mini_card(self, slot, _art(id), String(app.cards[id]["name"]), String(app.cards[id].get("rarity", "rare")))
 			kit.coin(self, slot.position + Vector2(3, 3), int(app.cards[id]["cost"]), true)
 			if id == chosen:
 				draw_rect(slot.grow(4.0), Color(1, 1, 1, 0.9), false, 2.0)
@@ -173,7 +173,12 @@ func _draw() -> void:
 		var def: Dictionary = app.cards[chosen]
 		kit.coin(self, info.position + Vector2(30, 30), int(def["cost"]), true)
 		kit.text(self, info.position + Vector2(54, 36), String(def["name"]), 20, Color("ffd24a"), HORIZONTAL_ALIGNMENT_LEFT, 300.0, true)
-		kit.text(self, info.position + Vector2(info.size.x - 18.0, 34), kit.kind_label(def), 12, Kit.BRASS_LIGHT, HORIZONTAL_ALIGNMENT_RIGHT, 150.0, true)
+		var rarity := String(def.get("rarity", "rare"))
+		var tier: Dictionary = Kit.RARITY.get(rarity, Kit.RARITY["rare"])
+		kit.text(self, info.position + Vector2(info.size.x - 18.0, 28), kit.kind_label(def), 12, Kit.BRASS_LIGHT, HORIZONTAL_ALIGNMENT_RIGHT, 150.0, true)
+		kit.text(self, info.position + Vector2(info.size.x - (34.0 if rarity != "common" else 18.0), 46), String(tier["name"]).to_upper(), 12, tier["ink"],
+				HORIZONTAL_ALIGNMENT_RIGHT, 150.0, true)
+		kit.gem(self, info.position + Vector2(info.size.x - 24.0, 41), rarity, 6.0)
 		draw_string(kit.font_bold, info.position + Vector2(18, 60), String(def.get("field", "")), HORIZONTAL_ALIGNMENT_LEFT, info.size.x - 36.0, 13, Kit.CREAM)
 		draw_multiline_string(kit.font, info.position + Vector2(18, 80), String(def.get("job", "")), HORIZONTAL_ALIGNMENT_LEFT, info.size.x - 190.0, 13, 3,
 				Color(Kit.CREAM, 0.9))

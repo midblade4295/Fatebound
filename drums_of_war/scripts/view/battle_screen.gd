@@ -897,7 +897,7 @@ func _draw_readouts() -> void:
 	var column := ox + 75.0
 	var next_id := sim.next_card(local_side)
 	if next_id != "":
-		kit.mini_card(c, _next_rect(), _art(next_id), String(cards[next_id]["name"]))
+		kit.mini_card(c, _next_rect(), _art(next_id), String(cards[next_id]["name"]), String(cards[next_id].get("rarity", "rare")))
 	var cheapest := 99.0
 	for i in hand.size():
 		cheapest = minf(cheapest, float(cards[hand[i]]["cost"]))

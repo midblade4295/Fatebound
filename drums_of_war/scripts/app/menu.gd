@@ -95,7 +95,7 @@ func _draw() -> void:
 	for i in app.profile.deck.size():
 		var id: String = app.profile.deck[i]
 		var slot := Rect2(panel.position.x + 17.0 + i * 57.0, y + 40.0, 49.0, 52.0)
-		kit.mini_card(self, slot, _art(id), String(app.cards[id]["name"]))
+		kit.mini_card(self, slot, _art(id), String(app.cards[id]["name"]), String(app.cards[id].get("rarity", "rare")))
 		kit.coin(self, slot.position + Vector2(3, 3), int(app.cards[id]["cost"]), true)
 	_hot["deck"] = Rect2(panel.position.x + 142.0, y + 99.0, 200.0, 30.0)
 	kit.button(self, _hot["deck"], "CHANGE DECK", "wood", 14)
