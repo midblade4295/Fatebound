@@ -70,6 +70,7 @@ func _init() -> void:
 	test_earthworks()
 	test_balloon()
 	test_general()
+	test_levels()
 	test_any_deck_plays()
 	test_determinism()
 	print("%d checks, %d failures" % [checks, failures])
@@ -241,7 +242,7 @@ func test_field_gun() -> void:
 	var loose := sim3.spawn(1, "skirmishers", Vector2(9, 12))
 	loose.reload = 99.0
 	sim3.tick()
-	check(near(loose.hp, 180.0 - 60.0), "roundshot does little to loose order (%.1f left)" % loose.hp)
+	check(near(loose.hp, 160.0 - 60.0), "roundshot does little to loose order (%.1f left)" % loose.hp)
 	var sim4 := quiet(new_sim())
 	sim4.spawn(0, "field_gun", Vector2(4, 4))
 	run(sim4, 35.1)
@@ -285,10 +286,16 @@ func test_orders() -> void:
 	check(sim.deploy_error(0, 0, Vector2(2, 2)) != "", "Fire! needs a regiment under it")
 	check(sim.deploy(0, 0, Vector2(9, 6.5)), "Fire! is accepted on a regiment")
 	check(near(r.reload, 0.0), "Fire! clears the reload")
+	check(near(sim.powder[0], 9.0), "and costs 1 Powder")
+	r.fired_first = true
+	sim.decks[0][sim.decks[0].find("fire")] = "militia"
+	sim.decks[0][0] = "fire"
+	sim.deploy(0, 0, Vector2(9, 6.5))
+	check(not r.fired_first, "a regiment given Fire! shoots as hard as with its first volley")
 	sim._start_rout(r)
 	var rally_idx: int = sim.hand(0).find("rally")
 	check(sim.deploy(0, rally_idx, r.pos), "Rally is accepted on a routing regiment")
-	check(r.state == Sim.ST_MARCH and near(r.morale, 50.0), "Rally stops the rout and restores nerve")
+	check(r.state == Sim.ST_MARCH and near(r.morale, 70.0), "Rally stops the rout and restores nerve")
 
 
 func test_win_conditions() -> void:
@@ -345,19 +352,25 @@ func test_sharpshooters() -> void:
 	var sim := quiet(new_sim())
 	sim.spawn(0, "sharpshooters", Vector2(9, 4))
 	var line := sim.spawn(1, "line_infantry", Vector2(9, 10))
-	var gun := sim.spawn(1, "field_gun", Vector2(9, 14.5))
+	var gun := sim.spawn(1, "field_gun", Vector2(9, 13.5))
 	line.reload = 99.0
 	gun.reload = 99.0
 	sim.tick()
-	# 2 men x 55, half again for the first volley.
-	check(near(gun.hp, 150.0 - 165.0) or gun.dead, "sharpshooters pick the gun crew over the nearer line (gun %.1f)" % gun.hp)
+	# 2 men x 45, half again for the first volley.
+	check(near(gun.hp, 150.0 - 135.0), "sharpshooters pick the gun crew over the nearer line (gun %.1f)" % gun.hp)
 	check(near(line.hp, 360.0), "and leave the line alone")
 	var sim2 := quiet(new_sim())
 	sim2.spawn(0, "sharpshooters", Vector2(9, 4))
-	var far := sim2.spawn(1, "line_infantry", Vector2(9, 14.5))
+	var far := sim2.spawn(1, "line_infantry", Vector2(9, 13.5))
 	far.reload = 99.0
 	sim2.tick()
-	check(far.hp < 360.0, "they reach 10.5 paces, far beyond a musket")
+	check(far.hp < 360.0, "they reach 9.5 paces, far beyond a musket")
+	var sim3 := quiet(new_sim())
+	sim3.spawn(0, "sharpshooters", Vector2(3.5, 20.0))
+	var work := sim3.redoubt(1, 0)
+	sim3.tick()
+	# 135 for the volley, and only three tenths of that on earth and timber.
+	check(near(Sim.REDOUBT_HP - work.hp, 135.0 * Sim.STRUCT_MUSKET_MULT * 0.3), "but their rifles do little to a battery (%.1f)" % (Sim.REDOUBT_HP - work.hp))
 
 
 func test_zouaves() -> void:
@@ -438,8 +451,8 @@ func test_gatling() -> void:
 			bursts += 1
 	check(bursts == 4, "a Gatling fires four bursts a second (%d)" % bursts)
 	check(near(100000.0 - foe.hp, 64.0), "for 16 each (%.1f)" % (100000.0 - foe.hp))
-	run(sim, 5.2)
-	check(has_event(sim, "jam") and gun.reload > 3.0, "after six seconds of fire it jams")
+	run(sim, 6.2)
+	check(has_event(sim, "jam") and gun.reload > 2.0, "after seven seconds of fire it jams")
 	var jammed_hp := foe.hp
 	run(sim, 1.0)
 	check(near(foe.hp, jammed_hp), "and is silent while jammed")
@@ -462,8 +475,8 @@ func test_howitzer() -> void:
 	sim.tick()
 	check(has_event(sim, "shell") and near(a.hp, 360.0), "a howitzer shell takes time to arrive")
 	run(sim, 1.4)
-	check(near(a.hp, 230.0) and near(b.hp, 230.0), "then bursts on everyone within reach (%.0f, %.0f)" % [a.hp, b.hp])
-	check(near(how.reload, 6.5 - 1.45, 0.06), "and the howitzer is slow to reload")
+	check(near(a.hp, 210.0) and near(b.hp, 210.0), "then bursts on everyone within reach (%.0f, %.0f)" % [a.hp, b.hp])
+	check(near(how.reload, 6.0 - 1.45, 0.06), "and the howitzer is slow to reload")
 	var sim2 := quiet(new_sim())
 	sim2.spawn(0, "howitzer", Vector2(9, 4))
 	var close := sim2.spawn(1, "line_infantry", Vector2(9, 7))
@@ -495,14 +508,14 @@ func test_grand_battery() -> void:
 	run(sim, 1.9)
 	check(near(sq.hp, 360.0), "nothing lands for two seconds")
 	run(sim, 0.2)
-	check(sq.dead or near(sq.hp, 0.0), "then a square under it is destroyed (200 x2)")
+	check(sq.dead or near(sq.hp, 0.0), "then a square under it is destroyed (180 x2)")
 	var sim2 := quiet(new_sim())
 	sim2.decks[0] = ["grand_battery", "rally", "militia", "scouts", "field_gun"]
 	sim2.powder[0] = 10.0
 	var redoubt := sim2.redoubt(1, 0)
 	sim2.deploy(0, 0, redoubt.pos)
 	run(sim2, 2.1)
-	check(near(redoubt.hp, Sim.REDOUBT_HP - 260.0), "it does 260 to a structure")
+	check(near(redoubt.hp, Sim.REDOUBT_HP - 170.0), "it does 170 to a structure")
 
 
 func test_earthworks() -> void:
@@ -570,7 +583,7 @@ func test_general() -> void:
 	sim.spawn(1, "line_infantry", Vector2(13, 15.5))
 	sim.tick()
 	sim.tick()
-	check(near(led.morale_max - led.morale, plain_loss * 0.6, 0.2), "troops near the General lose less nerve (%.1f against %.1f)" % [led.morale_max - led.morale, plain_loss])
+	check(near(led.morale_max - led.morale, plain_loss * Sim.GENERAL_NERVE, 0.2), "troops near the General lose less nerve (%.1f against %.1f)" % [led.morale_max - led.morale, plain_loss])
 	var sim2 := quiet(new_sim())
 	var loader := sim2.spawn(0, "line_infantry", Vector2(13, 10))
 	sim2.spawn(0, "general", Vector2(13, 7.6))
@@ -601,10 +614,20 @@ func test_general() -> void:
 	var lead := sim5.spawn(0, "line_infantry", Vector2(4, 12))
 	lead.reload = 99.0
 	run(sim5, 6.0)
-	check(sim5.general(0).pos.distance_to(lead.pos) < 4.0, "he rides to keep behind his leading regiment")
+	check(sim5.general(0).pos.distance_to(lead.pos) < 5.0, "he rides to keep behind his leading regiment")
 
 
 ## Every card can be dealt, deployed by the bot and fought with, in decks drawn at random.
+func test_levels() -> void:
+	check(near(float(Bot.LEVELS[1]["powder"]), 1.0) and near(float(Bot.LEVELS[0]["powder"]), 1.0), "Recruit and Regular get Powder at the player's rate")
+	var sim := new_sim()
+	sim.powder_rate[1] = float(Bot.LEVELS[2]["powder"])
+	sim.powder = [0.0, 0.0]
+	run(sim, 14.0)
+	check(near(sim.powder[1] / sim.powder[0], float(Bot.LEVELS[2]["powder"]), 0.01) and float(Bot.LEVELS[2]["powder"]) > 1.0,
+			"the Veteran's Powder comes faster by the stated share (%.2f)" % (sim.powder[1] / sim.powder[0]))
+
+
 func test_any_deck_plays() -> void:
 	var ids: Array = cards.keys()
 	var seen := {}

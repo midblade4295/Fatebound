@@ -182,6 +182,7 @@ func start_match(seed_value: int) -> void:
 	var theirs: Array = enemy_deck if enemy_deck.size() == deck.size() else deck
 	sim = Sim.new(seed_value, cards, deck if local_side == 0 else theirs, theirs if local_side == 0 else deck)
 	bot = Bot.new(1 - local_side, seed_value, level)
+	sim.powder_rate[1 - local_side] = float(bot.cfg["powder"])
 	auto_bot = Bot.new(local_side, seed_value + 99) if autoplay else null
 	paused = false
 	_over_told = false

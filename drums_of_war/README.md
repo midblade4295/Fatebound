@@ -138,6 +138,8 @@ match goes to one minute of sudden-death overtime.
 - `assets/audio/`: sound effects and the battle tune; `SOURCES.md` lists how each was made.
 - `assets/cards/`: card pictures, made by `tools/make_card_art.py` from the painted action scenes
   in `assets/cards/src/`; `SOURCES.md` lists how each was made.
+- `tools/balance.gd`, `tools/balance_report.py`: play hundreds of computer matches and add up
+  how they ended and how each card's holder fared; what the balance numbers were tuned on.
 - `tests/`, `tools/`: headless tests, the test runner, screenshot and model-sheet tools, and
   `tools/prepare_model.py`, which shrinks a generated model's textures.
 
@@ -168,7 +170,10 @@ and their cards say what they are in words), smoke as a rule (it is a visual eff
 tutorial, and online play. Known rough edges: none of the sounds has been checked by ear; the
 cavalry crash sound is a stand-in mixed from other takes, and the later cards reuse the first
 eight's sounds; the flinch and thrust clips start from a side-on stance, so bodies swivel
-slightly into them. The later cards' numbers are a first pass: they pass their rules tests and
-the computer plays them, but they have not been balanced against each other or by hand. The
+slightly into them. Balance has had one pass, measured on computer-versus-computer matches
+(`tools/balance.gd`): cheap musket infantry and the field gun still win more than their share
+there and cavalry and the support cards less, part of which is how the computer plays them.
+Nothing has been tuned on matches played by people. The Veteran's edge is a stated tenth more
+Powder, because tuning how he plays did not make him win more. The
 balloon cannot be shot down. Android's back gesture is handled in code but has not been tried
 on a phone.

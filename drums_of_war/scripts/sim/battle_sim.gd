@@ -66,26 +66,27 @@ const COLUMN_SHOT_MULT := 1.5
 const SQUARE_SHOT_MULT := 2.0
 const SHOT_PIERCE_MULT := 0.5
 const SHOT_PIERCE_WIDTH := 0.9
-const STRUCT_MUSKET_MULT := 0.8
+const STRUCT_MUSKET_MULT := 1.0
 const STRUCT_SHOT_MULT := 0.6
-const STRUCT_MELEE_MULT := 0.5
+const STRUCT_MELEE_MULT := 0.8
+const STRUCT_GUN_MORALE := 0.5      # how much of the usual nerve a hit from a battery's or the farmhouse's gun costs
 const SEPARATION := 1.4
 
-const REDOUBT_HP := 900.0
+const REDOUBT_HP := 650.0
 const REDOUBT_RANGE := 8.5
 const REDOUBT_DMG := 50.0
 const REDOUBT_PERIOD := 2.5
-const HQ_HP := 2000.0
+const HQ_HP := 1800.0
 const HQ_RANGE := 6.5
 const HQ_DMG := 50.0
 const HQ_PERIOD := 2.0
 
 # --- The later cards ----------------------------------------------------------------------
-const GENERAL_NERVE := 0.6          # morale lost by regiments near their General, as a share
+const GENERAL_NERVE := 0.5          # morale lost by regiments near their General, as a share
 const GENERAL_RELOAD := 1.25        # how much faster they reload
 const GENERAL_FALL_RADIUS := 9.0
 const GENERAL_FALL_SHOCK := 35.0
-const GENERAL_FOLLOW := 2.4         # how far behind the leading regiment he rides
+const GENERAL_FOLLOW := 3.5         # how far behind the leading regiment he rides
 const EARTHWORK_MULT := 0.5         # musket fire on troops behind a fieldwork
 const EARTHWORK_DEPTH := 2.0        # how far behind it they are still covered
 const BALLOON_RANGE_MULT := 1.25
@@ -169,6 +170,7 @@ var time: float = 0.0
 var phase: int = PHASE_REGULAR
 var winner: int = NO_WINNER
 var powder: Array = [POWDER_START, POWDER_START]
+var powder_rate: Array = [1.0, 1.0]    # a computer opponent's level may give its side more (see bot.gd LEVELS)
 var decks: Array = [[], []]
 var regiments: Array = []
 var structures: Array = []
@@ -180,6 +182,7 @@ var command_log: Array = []      # every accepted deploy, for replays and determ
 var _next_id: int = 1
 var _deferring: bool = false   # while regiments act, hits are queued so that order of acting gives no edge
 var _pending: Array = []
+var _morale_scale: float = 1.0
 
 
 static func load_cards(path: String = "res://data/cards.json") -> Dictionary:
@@ -436,7 +439,7 @@ func tick() -> void:
 	time = tick_count * DT
 	var gain := DT / POWDER_PERIOD * (2.0 if double_powder() else 1.0)
 	for side in 2:
-		powder[side] = minf(POWDER_MAX, powder[side] + gain)
+		powder[side] = minf(POWDER_MAX, powder[side] + gain * float(powder_rate[side]))
 	_generals.clear()
 	for r: Regiment in regiments:
 		r.men_tick = r.men
@@ -528,7 +531,11 @@ func _update_structure(s: Structure) -> void:
 	s.reload = s.gun_period
 	var dmg := s.gun_dmg * (LOOSE_MUSKET_MULT if bool(best.def.get("loose", false)) else 1.0)
 	events.append({"type": "cannon", "pos": s.pos, "to": best.pos, "side": s.side})
+	# Men attacking a work expect its gun: it hurts as much, but shakes them less than a
+	# volley from troops they did not see coming.
+	_morale_scale = STRUCT_GUN_MORALE
 	_damage(best, dmg, s.pos)
+	_morale_scale = 1.0
 
 
 func _damage_structure(s: Structure, amount: float) -> void:
@@ -933,7 +940,8 @@ func _fire_at_structure(r: Regiment, s: Structure) -> void:
 		events.append({"type": "cannon", "pos": r.pos, "to": s.pos, "side": r.side})
 		_damage_structure(s, float(r.def["shot_dmg"]) * STRUCT_SHOT_MULT)
 		return
-	var dmg := _volley_damage(r) * STRUCT_MUSKET_MULT
+	# A card may be better or worse than a musket against earth and timber ("struct_mult").
+	var dmg := _volley_damage(r) * STRUCT_MUSKET_MULT * float(r.def.get("struct_mult", 1.0))
 	events.append({"type": "volley", "pos": r.pos, "to": s.pos, "side": r.side, "men": r.men_tick})
 	_damage_structure(s, dmg)
 
@@ -1042,7 +1050,7 @@ func _damage(t: Regiment, amount: float, from: Vector2) -> void:
 					_morale_hit(o, GENERAL_FALL_SHOCK)
 		return
 	t.men = int(ceilf(t.hp / float(t.def["hp_per_man"])))
-	var loss := amount / t.max_hp * 100.0 * MORALE_K
+	var loss := amount / t.max_hp * 100.0 * MORALE_K * _morale_scale
 	if t.state != ST_SQUARE and t.state != ST_ROUT:
 		var away := from - t.pos
 		if away.length() > 0.01 and t.facing.dot(away.normalized()) < -0.2:
@@ -1094,6 +1102,7 @@ func _play_order(side: int, card_id: String, def: Dictionary, pos: Vector2) -> v
 		var r := _order_fire_target(side, pos, float(def["radius"]))
 		if r != null:
 			r.reload = 0.0
+			r.fired_first = false      # on the word of command: as steady as the first volley
 	elif card_id == "rally":
 		for r: Regiment in _order_rally_targets(side, pos, float(def["radius"])):
 			if r.state == ST_ROUT:

@@ -72,7 +72,7 @@ func _draw() -> void:
 	_hot.clear()
 	draw_rect(Rect2(Vector2.ZERO, screen), Color(0.07, 0.04, 0.02, 0.38))        # the field steps back
 	var ox := (screen.x - 540.0) * 0.5
-	var block_h := 640.0
+	var block_h := 660.0
 	var y := maxf(40.0, (screen.y - block_h) * 0.5)
 
 	# Title.
@@ -102,14 +102,16 @@ func _draw() -> void:
 	y += 160.0
 
 	# The opponent.
-	var foe := Rect2(ox + 28.0, y, 484.0, 96.0)
+	var foe := Rect2(ox + 28.0, y, 484.0, 116.0)
 	kit.tray(self, foe)
 	kit.text(self, Vector2(foe.position.x + 18.0, y + 27.0), "OPPONENT", 14, Kit.CREAM, HORIZONTAL_ALIGNMENT_LEFT, 200.0, true)
 	for i in Bot.LEVELS.size():
 		var r := Rect2(foe.position.x + 18.0 + i * 152.0, y + 40.0, 144.0, 40.0)
 		_hot["level%d" % i] = r
 		kit.button(self, r, String(Bot.LEVELS[i]["name"]).to_upper(), "on" if app.profile.level == i else "wood", 16)
-	y += 120.0
+	kit.text(self, Vector2(screen.x * 0.5, y + 101.0), String(Bot.LEVELS[app.profile.level]["about"]), 13, Kit.BRASS_LIGHT,
+			HORIZONTAL_ALIGNMENT_CENTER, 460.0, true)
+	y += 138.0
 
 	# Into battle.
 	_hot["battle"] = Rect2(ox + 90.0, y, 360.0, 72.0)
