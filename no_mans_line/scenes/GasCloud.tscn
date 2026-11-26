@@ -1,0 +1,71 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/GasCloud.gd" id="1_gas"]
+
+[sub_resource type="RectangleShape2D" id="cloud_shape"]
+size = Vector2(340, 220)
+
+[sub_resource type="Gradient" id="puff_gradient"]
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="puff_texture"]
+gradient = SubResource("puff_gradient")
+width = 64
+height = 64
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0)
+
+[sub_resource type="Gradient" id="gas_gradient"]
+offsets = PackedFloat32Array(0, 0.25, 1)
+colors = PackedColorArray(0.72, 0.68, 0.2, 0, 0.72, 0.68, 0.2, 0.2, 0.55, 0.6, 0.25, 0)
+
+[sub_resource type="GradientTexture1D" id="gas_ramp"]
+gradient = SubResource("gas_gradient")
+
+[sub_resource type="ParticleProcessMaterial" id="gas_material"]
+particle_flag_disable_z = true
+emission_shape = 3
+emission_box_extents = Vector3(140, 30, 1)
+direction = Vector3(0.3, -1, 0)
+spread = 60.0
+initial_velocity_min = 8.0
+initial_velocity_max = 30.0
+gravity = Vector3(0, -6, 0)
+scale_min = 2.0
+scale_max = 4.5
+color_ramp = SubResource("gas_ramp")
+
+[node name="GasCloud" type="Area2D"]
+z_index = 8
+collision_layer = 16
+collision_mask = 3
+monitorable = false
+script = ExtResource("1_gas")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -40)
+shape = SubResource("cloud_shape")
+
+[node name="Haze" type="Polygon2D" parent="."]
+color = Color(0.7, 0.66, 0.2, 0.16)
+polygon = PackedVector2Array(-180, 60, -196, 0, -160, -70, -90, -120, -10, -140, 80, -118, 158, -74, 196, -6, 178, 60)
+
+[node name="Puffs" type="GPUParticles2D" parent="."]
+position = Vector2(0, -20)
+amount = 36
+lifetime = 2.6
+preprocess = 0.6
+visibility_rect = Rect2(-350, -400, 700, 600)
+texture = SubResource("puff_texture")
+process_material = SubResource("gas_material")
+
+[node name="TickTimer" type="Timer" parent="."]
+wait_time = 0.5
+
+[node name="LifeTimer" type="Timer" parent="."]
+wait_time = 6.0
+one_shot = true
+
+[connection signal="timeout" from="TickTimer" to="." method="_on_tick_timer_timeout"]
+[connection signal="timeout" from="LifeTimer" to="." method="_on_life_timer_timeout"]

@@ -1,0 +1,126 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/Unit.gd" id="1_unit"]
+
+[sub_resource type="CapsuleShape2D" id="body_shape"]
+radius = 12.0
+height = 76.0
+
+[sub_resource type="CircleShape2D" id="vision_shape"]
+radius = 320.0
+
+[sub_resource type="Gradient" id="spark_gradient"]
+colors = PackedColorArray(1, 0.86, 0.45, 1, 1, 0.4, 0.1, 0)
+
+[sub_resource type="GradientTexture1D" id="spark_ramp"]
+gradient = SubResource("spark_gradient")
+
+[sub_resource type="ParticleProcessMaterial" id="spark_material"]
+particle_flag_disable_z = true
+direction = Vector3(1, 0, 0)
+spread = 28.0
+initial_velocity_min = 140.0
+initial_velocity_max = 320.0
+gravity = Vector3(0, 260, 0)
+scale_min = 2.0
+scale_max = 4.0
+color_ramp = SubResource("spark_ramp")
+
+[node name="Unit" type="CharacterBody2D"]
+collision_mask = 0
+motion_mode = 1
+script = ExtResource("1_unit")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -40)
+shape = SubResource("body_shape")
+
+[node name="Visual" type="Node2D" parent="."]
+scale = Vector2(1.4, 1.4)
+
+[node name="Shadow" type="Polygon2D" parent="Visual"]
+color = Color(0, 0, 0, 0.3)
+polygon = PackedVector2Array(-13, 0, -8, -2.5, 8, -2.5, 13, 0, 8, 2.5, -8, 2.5)
+
+[node name="LegBack" type="Polygon2D" parent="Visual"]
+position = Vector2(-2, -22)
+color = Color(0.1, 0.17, 0.26, 1)
+polygon = PackedVector2Array(-3, 0, 3, 0, 2.5, 19, 7, 19.5, 7, 22, -3, 22)
+
+[node name="LegFront" type="Polygon2D" parent="Visual"]
+position = Vector2(2, -22)
+color = Color(0.14, 0.24, 0.36, 1)
+polygon = PackedVector2Array(-3, 0, 3, 0, 2.5, 19, 7, 19.5, 7, 22, -3, 22)
+
+[node name="Pack" type="Polygon2D" parent="Visual"]
+color = Color(0.14, 0.24, 0.36, 1)
+polygon = PackedVector2Array(-13, -45, -7, -46, -7, -29, -13, -30)
+
+[node name="Body" type="Polygon2D" parent="Visual"]
+color = Color(0.25, 0.4, 0.57, 1)
+polygon = PackedVector2Array(-7, -47, 6, -47, 8, -30, 10, -18, -9, -18, -8, -30)
+
+[node name="Armband" type="Polygon2D" parent="Visual"]
+color = Color(0.45, 0.72, 0.95, 1)
+polygon = PackedVector2Array(-3, -43, 4, -43, 4, -39, -3, -39)
+
+[node name="Head" type="Polygon2D" parent="Visual"]
+color = Color(0.7, 0.58, 0.46, 1)
+polygon = PackedVector2Array(-4, -56, 4, -56, 5, -49, 2, -47, -3, -47)
+
+[node name="Helmet" type="Polygon2D" parent="Visual"]
+color = Color(0.14, 0.24, 0.36, 1)
+polygon = PackedVector2Array(-7, -55, -5, -61, 0, -63, 5, -61, 9, -55)
+
+[node name="Rifle" type="Polygon2D" parent="Visual"]
+color = Color(0.15, 0.11, 0.08, 1)
+polygon = PackedVector2Array(-6, -34, 24, -40, 38, -41.5, 38, -40.5, 24, -37.5, -5, -30)
+
+[node name="Club" type="Polygon2D" parent="Visual"]
+visible = false
+position = Vector2(6, -36)
+color = Color(0.15, 0.11, 0.08, 1)
+polygon = PackedVector2Array(-2, 2, 2, 2, 3, -20, 6, -22, 6, -31, -6, -31, -6, -22, -3, -20)
+
+[node name="Muzzle" type="Marker2D" parent="Visual"]
+position = Vector2(39, -41)
+
+[node name="MuzzleFlash" type="Polygon2D" parent="Visual/Muzzle"]
+visible = false
+color = Color(1, 0.72, 0.25, 1)
+polygon = PackedVector2Array(0, -3, 9, -10, 7, -2.5, 22, 0, 7, 2.5, 9, 10, 0, 3)
+
+[node name="MuzzleSparks" type="GPUParticles2D" parent="Visual/Muzzle"]
+emitting = false
+amount = 6
+lifetime = 0.25
+one_shot = true
+explosiveness = 1.0
+process_material = SubResource("spark_material")
+
+[node name="VisionArea" type="Area2D" parent="."]
+position = Vector2(0, -40)
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="VisionArea"]
+shape = SubResource("vision_shape")
+
+[node name="HealthBar" type="Node2D" parent="."]
+visible = false
+position = Vector2(-17, -106)
+
+[node name="Back" type="ColorRect" parent="HealthBar"]
+offset_left = -1.0
+offset_top = -1.0
+offset_right = 35.0
+offset_bottom = 6.0
+mouse_filter = 2
+color = Color(0, 0, 0, 0.65)
+
+[node name="Fill" type="ColorRect" parent="HealthBar"]
+offset_right = 34.0
+offset_bottom = 5.0
+mouse_filter = 2
+color = Color(0.45, 0.72, 0.95, 1)

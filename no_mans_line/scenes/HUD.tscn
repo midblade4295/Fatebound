@@ -1,0 +1,1139 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/HUD.gd" id="1_hud"]
+
+[sub_resource type="Gradient" id="shade_gradient"]
+colors = PackedColorArray(0, 0, 0, 0, 0, 0, 0, 0.9)
+
+[sub_resource type="GradientTexture2D" id="shade_texture"]
+gradient = SubResource("shade_gradient")
+width = 8
+height = 128
+fill_to = Vector2(0, 1)
+
+[sub_resource type="StyleBoxEmpty" id="style_empty"]
+
+[sub_resource type="StyleBoxFlat" id="style_plate"]
+bg_color = Color(0.1, 0.09, 0.08, 0.92)
+border_width_left = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.4, 0.32, 1)
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
+[sub_resource type="StyleBoxFlat" id="style_portrait_blue"]
+bg_color = Color(0.2, 0.33, 0.47, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.08, 0.08, 0.08, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="style_portrait_red"]
+bg_color = Color(0.42, 0.2, 0.17, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.08, 0.08, 0.08, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="style_score"]
+bg_color = Color(0.1, 0.09, 0.08, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="style_icon_blue"]
+bg_color = Color(0.24, 0.47, 0.72, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.08, 0.08, 0.08, 1)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+
+[sub_resource type="StyleBoxFlat" id="style_icon_red"]
+bg_color = Color(0.5, 0.46, 0.42, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.08, 0.08, 0.08, 1)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+
+[sub_resource type="StyleBoxFlat" id="style_bar_back"]
+bg_color = Color(0.1, 0.09, 0.08, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.4, 0.32, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="style_bar_fill"]
+bg_color = Color(0.9, 0.68, 0.22, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.1, 0.09, 0.08, 0)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="style_card_normal"]
+bg_color = Color(0.84, 0.79, 0.64, 1)
+border_width_left = 5
+border_width_top = 5
+border_width_right = 5
+border_width_bottom = 5
+border_color = Color(0.13, 0.11, 0.09, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0, 0, 0, 0.5)
+shadow_size = 8
+
+[sub_resource type="StyleBoxFlat" id="style_card_hover"]
+bg_color = Color(0.92, 0.87, 0.72, 1)
+border_width_left = 5
+border_width_top = 5
+border_width_right = 5
+border_width_bottom = 5
+border_color = Color(0.13, 0.11, 0.09, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0, 0, 0, 0.5)
+shadow_size = 8
+
+[sub_resource type="StyleBoxFlat" id="style_card_pressed"]
+bg_color = Color(0.7, 0.65, 0.52, 1)
+border_width_left = 5
+border_width_top = 5
+border_width_right = 5
+border_width_bottom = 5
+border_color = Color(0.13, 0.11, 0.09, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="style_badge"]
+bg_color = Color(0.13, 0.11, 0.09, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.84, 0.79, 0.64, 1)
+corner_radius_top_left = 22
+corner_radius_top_right = 22
+corner_radius_bottom_right = 22
+corner_radius_bottom_left = 22
+
+[sub_resource type="StyleBoxFlat" id="style_whistle_normal"]
+bg_color = Color(0.9, 0.73, 0.2, 1)
+border_width_left = 6
+border_width_top = 6
+border_width_right = 6
+border_width_bottom = 6
+border_color = Color(0.36, 0.26, 0.05, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(1, 0.8, 0.2, 0.4)
+shadow_size = 18
+
+[sub_resource type="StyleBoxFlat" id="style_whistle_hover"]
+bg_color = Color(0.98, 0.82, 0.3, 1)
+border_width_left = 6
+border_width_top = 6
+border_width_right = 6
+border_width_bottom = 6
+border_color = Color(0.36, 0.26, 0.05, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+shadow_color = Color(1, 0.8, 0.2, 0.55)
+shadow_size = 24
+
+[sub_resource type="StyleBoxFlat" id="style_whistle_pressed"]
+bg_color = Color(0.72, 0.56, 0.12, 1)
+border_width_left = 6
+border_width_top = 6
+border_width_right = 6
+border_width_bottom = 6
+border_color = Color(0.36, 0.26, 0.05, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="BottomShade" type="TextureRect" parent="Root"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -380.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+texture = SubResource("shade_texture")
+expand_mode = 1
+
+[node name="TopBar" type="Control" parent="Root"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 170.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="BluePanel" type="Control" parent="Root/TopBar"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 16.0
+offset_right = 124.0
+offset_bottom = 156.0
+mouse_filter = 2
+
+[node name="Portrait" type="Panel" parent="Root/TopBar/BluePanel"]
+layout_mode = 0
+offset_right = 100.0
+offset_bottom = 100.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("style_portrait_blue")
+
+[node name="Head" type="Polygon2D" parent="Root/TopBar/BluePanel/Portrait"]
+position = Vector2(50, 40)
+color = Color(0.09, 0.14, 0.21, 1)
+polygon = PackedVector2Array(20, 0, 14, 14, 0, 20, -14, 14, -20, 0, -14, -16, 0, -22, 14, -16)
+
+[node name="Shoulders" type="Polygon2D" parent="Root/TopBar/BluePanel/Portrait"]
+color = Color(0.09, 0.14, 0.21, 1)
+polygon = PackedVector2Array(12, 96, 18, 72, 38, 62, 62, 62, 82, 72, 88, 96)
+
+[node name="ScoreLabel" type="Label" parent="Root/TopBar/BluePanel"]
+layout_mode = 0
+offset_top = 104.0
+offset_right = 100.0
+offset_bottom = 138.0
+theme_override_colors/font_color = Color(0.75, 0.87, 1, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("style_score")
+text = "1000"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RedPanel" type="Control" parent="Root/TopBar"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -124.0
+offset_top = 16.0
+offset_right = -24.0
+offset_bottom = 156.0
+grow_horizontal = 0
+mouse_filter = 2
+
+[node name="Portrait" type="Panel" parent="Root/TopBar/RedPanel"]
+layout_mode = 0
+offset_right = 100.0
+offset_bottom = 100.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("style_portrait_red")
+
+[node name="Head" type="Polygon2D" parent="Root/TopBar/RedPanel/Portrait"]
+position = Vector2(50, 40)
+color = Color(0.17, 0.08, 0.07, 1)
+polygon = PackedVector2Array(20, 0, 14, 14, 0, 20, -14, 14, -20, 0, -14, -16, 0, -22, 14, -16)
+
+[node name="Shoulders" type="Polygon2D" parent="Root/TopBar/RedPanel/Portrait"]
+color = Color(0.17, 0.08, 0.07, 1)
+polygon = PackedVector2Array(12, 96, 18, 72, 38, 62, 62, 62, 82, 72, 88, 96)
+
+[node name="ScoreLabel" type="Label" parent="Root/TopBar/RedPanel"]
+layout_mode = 0
+offset_top = 104.0
+offset_right = 100.0
+offset_bottom = 138.0
+theme_override_colors/font_color = Color(1, 0.78, 0.72, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("style_score")
+text = "1000"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TimerPlate" type="Panel" parent="Root/TopBar"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
+offset_right = 120.0
+offset_bottom = 88.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("style_plate")
+
+[node name="CaptionLabel" type="Label" parent="Root/TopBar/TimerPlate"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 4.0
+offset_bottom = 28.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.78, 0.73, 0.62, 1)
+theme_override_font_sizes/font_size = 16
+text = "3 MINUTES"
+horizontal_alignment = 1
+
+[node name="TimerLabel" type="Label" parent="Root/TopBar/TimerPlate"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 22.0
+offset_bottom = 86.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.97, 0.94, 0.86, 1)
+theme_override_font_sizes/font_size = 46
+text = "03:00"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TugOfWar" type="Control" parent="Root/TopBar"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -330.0
+offset_top = 100.0
+offset_right = 330.0
+offset_bottom = 128.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="Frame" type="ColorRect" parent="Root/TopBar/TugOfWar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -4.0
+offset_top = -4.0
+offset_right = 4.0
+offset_bottom = 4.0
+mouse_filter = 2
+color = Color(0.08, 0.07, 0.06, 1)
+
+[node name="Back" type="ColorRect" parent="Root/TopBar/TugOfWar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.5, 0.46, 0.42, 1)
+
+[node name="BlueFill" type="ColorRect" parent="Root/TopBar/TugOfWar"]
+layout_mode = 0
+offset_right = 330.0
+offset_bottom = 28.0
+mouse_filter = 2
+color = Color(0.24, 0.47, 0.72, 1)
+
+[node name="CenterTick" type="ColorRect" parent="Root/TopBar/TugOfWar"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -1.5
+offset_top = -8.0
+offset_right = 1.5
+offset_bottom = 36.0
+mouse_filter = 2
+color = Color(0.08, 0.07, 0.06, 1)
+
+[node name="Marker" type="ColorRect" parent="Root/TopBar/TugOfWar"]
+layout_mode = 0
+offset_left = 325.0
+offset_top = -10.0
+offset_right = 335.0
+offset_bottom = 38.0
+mouse_filter = 2
+color = Color(0.97, 0.94, 0.86, 1)
+
+[node name="BlueIcon" type="Panel" parent="Root/TopBar/TugOfWar"]
+layout_mode = 0
+offset_left = -40.0
+offset_top = -10.0
+offset_right = 8.0
+offset_bottom = 38.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("style_icon_blue")
+
+[node name="RedIcon" type="Panel" parent="Root/TopBar/TugOfWar"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -8.0
+offset_top = -10.0
+offset_right = 40.0
+offset_bottom = 38.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("style_icon_red")
+
+[node name="SectorPips" type="HBoxContainer" parent="Root/TopBar/TugOfWar"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 60.0
+offset_top = 40.0
+offset_right = -60.0
+offset_bottom = 50.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="BlueBunkerPip" type="ColorRect" parent="Root/TopBar/TugOfWar/SectorPips"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.3, 0.55, 0.85, 1)
+
+[node name="BlueTrenchPip" type="ColorRect" parent="Root/TopBar/TugOfWar/SectorPips"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.3, 0.55, 0.85, 1)
+
+[node name="NoMansLandPip" type="ColorRect" parent="Root/TopBar/TugOfWar/SectorPips"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.45, 0.43, 0.4, 1)
+
+[node name="RedTrenchPip" type="ColorRect" parent="Root/TopBar/TugOfWar/SectorPips"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.82, 0.25, 0.2, 1)
+
+[node name="RedBunkerPip" type="ColorRect" parent="Root/TopBar/TugOfWar/SectorPips"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.82, 0.25, 0.2, 1)
+
+[node name="SupplyPanel" type="Control" parent="Root"]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 40.0
+offset_top = -170.0
+offset_right = 360.0
+offset_bottom = -50.0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="TitleLabel" type="Label" parent="Root/SupplyPanel"]
+layout_mode = 0
+offset_right = 160.0
+offset_bottom = 40.0
+theme_override_colors/font_color = Color(0.78, 0.73, 0.62, 1)
+theme_override_font_sizes/font_size = 22
+text = "SUPPLY"
+vertical_alignment = 2
+
+[node name="SupplyValue" type="Label" parent="Root/SupplyPanel"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -160.0
+offset_bottom = 40.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(0.98, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 32
+text = "4 / 10"
+horizontal_alignment = 2
+vertical_alignment = 2
+
+[node name="SupplyBar" type="ProgressBar" parent="Root/SupplyPanel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 48.0
+offset_bottom = 84.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/background = SubResource("style_bar_back")
+theme_override_styles/fill = SubResource("style_bar_fill")
+max_value = 10.0
+step = 0.01
+value = 4.0
+show_percentage = false
+
+[node name="RateLabel" type="Label" parent="Root/SupplyPanel"]
+layout_mode = 0
+offset_top = 88.0
+offset_right = 200.0
+offset_bottom = 114.0
+theme_override_colors/font_color = Color(0.6, 0.56, 0.48, 1)
+theme_override_font_sizes/font_size = 16
+text = "+1 per second"
+
+[node name="TargetingOverlay" type="Control" parent="Root"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Tint" type="ColorRect" parent="Root/TargetingOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.1, 0.06)
+
+[node name="HintLabel" type="Label" parent="Root/TargetingOverlay"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 214.0
+offset_bottom = 254.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 0.86, 0.6, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.04, 0.03, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 26
+text = "TAP THE BATTLEFIELD TO FIRE"
+horizontal_alignment = 1
+
+[node name="Reticle" type="Node2D" parent="Root/TargetingOverlay"]
+visible = false
+
+[node name="Ring" type="Line2D" parent="Root/TargetingOverlay/Reticle"]
+width = 4.0
+default_color = Color(1, 0.4, 0.2, 0.95)
+
+[node name="CrossH" type="Line2D" parent="Root/TargetingOverlay/Reticle"]
+points = PackedVector2Array(-22, 0, 22, 0)
+width = 3.0
+default_color = Color(1, 0.4, 0.2, 0.95)
+
+[node name="CrossV" type="Line2D" parent="Root/TargetingOverlay/Reticle"]
+points = PackedVector2Array(0, -60, 0, 8)
+width = 3.0
+default_color = Color(1, 0.4, 0.2, 0.95)
+
+[node name="CardHand" type="HBoxContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -446.0
+offset_top = -292.0
+offset_right = 446.0
+offset_bottom = -32.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_constants/separation = 44
+alignment = 1
+
+[node name="RiflemenCard" type="Button" parent="Root/CardHand"]
+custom_minimum_size = Vector2(190, 260)
+layout_mode = 2
+focus_mode = 0
+theme_override_styles/focus = SubResource("style_empty")
+theme_override_styles/hover = SubResource("style_card_hover")
+theme_override_styles/pressed = SubResource("style_card_pressed")
+theme_override_styles/normal = SubResource("style_card_normal")
+
+[node name="NameLabel" type="Label" parent="Root/CardHand/RiflemenCard"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 10.0
+offset_bottom = 44.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.11, 0.09, 0.07, 1)
+theme_override_font_sizes/font_size = 21
+text = "Riflemen"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Divider" type="ColorRect" parent="Root/CardHand/RiflemenCard"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 14.0
+offset_top = 46.0
+offset_right = -14.0
+offset_bottom = 48.0
+mouse_filter = 2
+color = Color(0.13, 0.11, 0.09, 0.6)
+
+[node name="Art" type="Node2D" parent="Root/CardHand/RiflemenCard"]
+position = Vector2(95, 238)
+scale = Vector2(2.7, 2.7)
+
+[node name="Shadow" type="Polygon2D" parent="Root/CardHand/RiflemenCard/Art"]
+color = Color(0, 0, 0, 0.25)
+polygon = PackedVector2Array(-16, 0, -9, -3, 9, -3, 16, 0, 9, 3, -9, 3)
+
+[node name="Legs" type="Polygon2D" parent="Root/CardHand/RiflemenCard/Art"]
+color = Color(0.1, 0.15, 0.22, 1)
+polygon = PackedVector2Array(-6, -22, 6, -22, 9, -2, 14, -2, 14, 0, 3, 0, 1, -14, -3, 0, -12, 0, -12, -2, -8, -2)
+
+[node name="Pack" type="Polygon2D" parent="Root/CardHand/RiflemenCard/Art"]
+color = Color(0.1, 0.15, 0.22, 1)
+polygon = PackedVector2Array(-13, -45, -7, -46, -7, -29, -13, -30)
+
+[node name="Body" type="Polygon2D" parent="Root/CardHand/RiflemenCard/Art"]
+color = Color(0.22, 0.35, 0.5, 1)
+polygon = PackedVector2Array(-7, -47, 6, -47, 8, -30, 10, -18, -9, -18, -8, -30)
+
+[node name="Head" type="Polygon2D" parent="Root/CardHand/RiflemenCard/Art"]
+color = Color(0.55, 0.46, 0.37, 1)
+polygon = PackedVector2Array(-4, -56, 4, -56, 5, -49, 2, -47, -3, -47)
+
+[node name="Helmet" type="Polygon2D" parent="Root/CardHand/RiflemenCard/Art"]
+color = Color(0.1, 0.15, 0.22, 1)
+polygon = PackedVector2Array(-7, -55, -5, -61, 0, -63, 5, -61, 9, -55)
+
+[node name="Rifle" type="Polygon2D" parent="Root/CardHand/RiflemenCard/Art"]
+color = Color(0.1, 0.08, 0.06, 1)
+polygon = PackedVector2Array(-6, -34, 24, -40, 38, -41.5, 38, -40.5, 24, -37.5, -5, -30)
+
+[node name="CostBadge" type="Label" parent="Root/CardHand/RiflemenCard"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 56.0
+offset_right = 56.0
+offset_bottom = 100.0
+theme_override_colors/font_color = Color(0.95, 0.9, 0.75, 1)
+theme_override_font_sizes/font_size = 26
+theme_override_styles/normal = SubResource("style_badge")
+text = "2"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CooldownShade" type="ColorRect" parent="Root/CardHand/RiflemenCard"]
+visible = false
+layout_mode = 0
+offset_right = 190.0
+offset_bottom = 260.0
+mouse_filter = 2
+color = Color(0.04, 0.03, 0.03, 0.6)
+
+[node name="CooldownLabel" type="Label" parent="Root/CardHand/RiflemenCard"]
+visible = false
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -56.0
+offset_top = 56.0
+offset_right = -12.0
+offset_bottom = 100.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(1, 0.7, 0.4, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("style_badge")
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RaidersCard" type="Button" parent="Root/CardHand"]
+custom_minimum_size = Vector2(190, 260)
+layout_mode = 2
+focus_mode = 0
+theme_override_styles/focus = SubResource("style_empty")
+theme_override_styles/hover = SubResource("style_card_hover")
+theme_override_styles/pressed = SubResource("style_card_pressed")
+theme_override_styles/normal = SubResource("style_card_normal")
+
+[node name="NameLabel" type="Label" parent="Root/CardHand/RaidersCard"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 10.0
+offset_bottom = 44.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.11, 0.09, 0.07, 1)
+theme_override_font_sizes/font_size = 21
+text = "Trench Raiders"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Divider" type="ColorRect" parent="Root/CardHand/RaidersCard"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 14.0
+offset_top = 46.0
+offset_right = -14.0
+offset_bottom = 48.0
+mouse_filter = 2
+color = Color(0.13, 0.11, 0.09, 0.6)
+
+[node name="Art" type="Node2D" parent="Root/CardHand/RaidersCard"]
+position = Vector2(95, 238)
+scale = Vector2(2.7, 2.7)
+
+[node name="Shadow" type="Polygon2D" parent="Root/CardHand/RaidersCard/Art"]
+color = Color(0, 0, 0, 0.25)
+polygon = PackedVector2Array(-16, 0, -9, -3, 9, -3, 16, 0, 9, 3, -9, 3)
+
+[node name="Legs" type="Polygon2D" parent="Root/CardHand/RaidersCard/Art"]
+color = Color(0.1, 0.15, 0.22, 1)
+polygon = PackedVector2Array(-6, -22, 6, -22, 9, -2, 14, -2, 14, 0, 3, 0, 1, -14, -3, 0, -12, 0, -12, -2, -8, -2)
+
+[node name="Pack" type="Polygon2D" parent="Root/CardHand/RaidersCard/Art"]
+color = Color(0.1, 0.15, 0.22, 1)
+polygon = PackedVector2Array(-13, -45, -7, -46, -7, -29, -13, -30)
+
+[node name="Body" type="Polygon2D" parent="Root/CardHand/RaidersCard/Art"]
+color = Color(0.22, 0.35, 0.5, 1)
+polygon = PackedVector2Array(-7, -47, 6, -47, 8, -30, 10, -18, -9, -18, -8, -30)
+
+[node name="Head" type="Polygon2D" parent="Root/CardHand/RaidersCard/Art"]
+color = Color(0.55, 0.46, 0.37, 1)
+polygon = PackedVector2Array(-4, -56, 4, -56, 5, -49, 2, -47, -3, -47)
+
+[node name="Helmet" type="Polygon2D" parent="Root/CardHand/RaidersCard/Art"]
+color = Color(0.1, 0.15, 0.22, 1)
+polygon = PackedVector2Array(-7, -55, -5, -61, 0, -63, 5, -61, 9, -55)
+
+[node name="Club" type="Polygon2D" parent="Root/CardHand/RaidersCard/Art"]
+position = Vector2(6, -36)
+rotation = 0.5
+color = Color(0.1, 0.08, 0.06, 1)
+polygon = PackedVector2Array(-2, 2, 2, 2, 3, -20, 6, -22, 6, -31, -6, -31, -6, -22, -3, -20)
+
+[node name="CostBadge" type="Label" parent="Root/CardHand/RaidersCard"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 56.0
+offset_right = 56.0
+offset_bottom = 100.0
+theme_override_colors/font_color = Color(0.95, 0.9, 0.75, 1)
+theme_override_font_sizes/font_size = 26
+theme_override_styles/normal = SubResource("style_badge")
+text = "4"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CooldownShade" type="ColorRect" parent="Root/CardHand/RaidersCard"]
+visible = false
+layout_mode = 0
+offset_right = 190.0
+offset_bottom = 260.0
+mouse_filter = 2
+color = Color(0.04, 0.03, 0.03, 0.6)
+
+[node name="CooldownLabel" type="Label" parent="Root/CardHand/RaidersCard"]
+visible = false
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -56.0
+offset_top = 56.0
+offset_right = -12.0
+offset_bottom = 100.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(1, 0.7, 0.4, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("style_badge")
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MortarCard" type="Button" parent="Root/CardHand"]
+custom_minimum_size = Vector2(190, 260)
+layout_mode = 2
+focus_mode = 0
+theme_override_styles/focus = SubResource("style_empty")
+theme_override_styles/hover = SubResource("style_card_hover")
+theme_override_styles/pressed = SubResource("style_card_pressed")
+theme_override_styles/normal = SubResource("style_card_normal")
+
+[node name="NameLabel" type="Label" parent="Root/CardHand/MortarCard"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 10.0
+offset_bottom = 44.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.11, 0.09, 0.07, 1)
+theme_override_font_sizes/font_size = 21
+text = "Mortar Strike"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Divider" type="ColorRect" parent="Root/CardHand/MortarCard"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 14.0
+offset_top = 46.0
+offset_right = -14.0
+offset_bottom = 48.0
+mouse_filter = 2
+color = Color(0.13, 0.11, 0.09, 0.6)
+
+[node name="Art" type="Node2D" parent="Root/CardHand/MortarCard"]
+position = Vector2(95, 238)
+scale = Vector2(2.7, 2.7)
+
+[node name="Mound" type="Polygon2D" parent="Root/CardHand/MortarCard/Art"]
+color = Color(0.3, 0.25, 0.19, 1)
+polygon = PackedVector2Array(-28, 0, -20, -8, -6, -12, 10, -9, 24, -6, 30, 0)
+
+[node name="Shell" type="Polygon2D" parent="Root/CardHand/MortarCard/Art"]
+position = Vector2(-2, -12)
+rotation = 0.6
+color = Color(0.1, 0.09, 0.08, 1)
+polygon = PackedVector2Array(-7, 0, 7, 0, 8, -26, 5, -40, 0, -48, -5, -40, -8, -26)
+
+[node name="Band" type="Polygon2D" parent="Root/CardHand/MortarCard/Art"]
+position = Vector2(-2, -12)
+rotation = 0.6
+color = Color(0.85, 0.5, 0.18, 1)
+polygon = PackedVector2Array(-8, -22, 8, -22, 8, -26, -8, -26)
+
+[node name="Fins" type="Polygon2D" parent="Root/CardHand/MortarCard/Art"]
+position = Vector2(-2, -12)
+rotation = 0.6
+color = Color(0.1, 0.09, 0.08, 1)
+polygon = PackedVector2Array(-11, 10, -4, 0, 4, 0, 11, 10, 0, 5)
+
+[node name="CostBadge" type="Label" parent="Root/CardHand/MortarCard"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 56.0
+offset_right = 56.0
+offset_bottom = 100.0
+theme_override_colors/font_color = Color(0.95, 0.9, 0.75, 1)
+theme_override_font_sizes/font_size = 26
+theme_override_styles/normal = SubResource("style_badge")
+text = "5"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CooldownShade" type="ColorRect" parent="Root/CardHand/MortarCard"]
+visible = false
+layout_mode = 0
+offset_right = 190.0
+offset_bottom = 260.0
+mouse_filter = 2
+color = Color(0.04, 0.03, 0.03, 0.6)
+
+[node name="CooldownLabel" type="Label" parent="Root/CardHand/MortarCard"]
+visible = false
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -56.0
+offset_top = 56.0
+offset_right = -12.0
+offset_bottom = 100.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(1, 0.7, 0.4, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("style_badge")
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="GasCard" type="Button" parent="Root/CardHand"]
+custom_minimum_size = Vector2(190, 260)
+layout_mode = 2
+focus_mode = 0
+theme_override_styles/focus = SubResource("style_empty")
+theme_override_styles/hover = SubResource("style_card_hover")
+theme_override_styles/pressed = SubResource("style_card_pressed")
+theme_override_styles/normal = SubResource("style_card_normal")
+
+[node name="NameLabel" type="Label" parent="Root/CardHand/GasCard"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 10.0
+offset_bottom = 44.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.11, 0.09, 0.07, 1)
+theme_override_font_sizes/font_size = 21
+text = "Mustard Gas"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Divider" type="ColorRect" parent="Root/CardHand/GasCard"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 14.0
+offset_top = 46.0
+offset_right = -14.0
+offset_bottom = 48.0
+mouse_filter = 2
+color = Color(0.13, 0.11, 0.09, 0.6)
+
+[node name="Art" type="Node2D" parent="Root/CardHand/GasCard"]
+position = Vector2(95, 238)
+scale = Vector2(2.7, 2.7)
+
+[node name="Mask" type="Polygon2D" parent="Root/CardHand/GasCard/Art"]
+position = Vector2(0, -36)
+color = Color(0.12, 0.11, 0.09, 1)
+polygon = PackedVector2Array(22, -4, 18, 14, 8, 24, -8, 24, -18, 14, -22, -4, -15, -20, 0, -26, 15, -20)
+
+[node name="EyeLeft" type="Polygon2D" parent="Root/CardHand/GasCard/Art"]
+position = Vector2(-9, -40)
+color = Color(0.74, 0.7, 0.3, 1)
+polygon = PackedVector2Array(7, 0, 5, 5, 0, 7, -5, 5, -7, 0, -5, -5, 0, -7, 5, -5)
+
+[node name="EyeRight" type="Polygon2D" parent="Root/CardHand/GasCard/Art"]
+position = Vector2(9, -40)
+color = Color(0.74, 0.7, 0.3, 1)
+polygon = PackedVector2Array(7, 0, 5, 5, 0, 7, -5, 5, -7, 0, -5, -5, 0, -7, 5, -5)
+
+[node name="Filter" type="Polygon2D" parent="Root/CardHand/GasCard/Art"]
+position = Vector2(0, -8)
+color = Color(0.12, 0.11, 0.09, 1)
+polygon = PackedVector2Array(-9, -8, 9, -8, 11, 6, -11, 6)
+
+[node name="FilterBand" type="Polygon2D" parent="Root/CardHand/GasCard/Art"]
+position = Vector2(0, -8)
+color = Color(0.4, 0.37, 0.3, 1)
+polygon = PackedVector2Array(-10, -1, 10, -1, 10, 2, -10, 2)
+
+[node name="CostBadge" type="Label" parent="Root/CardHand/GasCard"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 56.0
+offset_right = 56.0
+offset_bottom = 100.0
+theme_override_colors/font_color = Color(0.95, 0.9, 0.75, 1)
+theme_override_font_sizes/font_size = 26
+theme_override_styles/normal = SubResource("style_badge")
+text = "6"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CooldownShade" type="ColorRect" parent="Root/CardHand/GasCard"]
+visible = false
+layout_mode = 0
+offset_right = 190.0
+offset_bottom = 260.0
+mouse_filter = 2
+color = Color(0.04, 0.03, 0.03, 0.6)
+
+[node name="CooldownLabel" type="Label" parent="Root/CardHand/GasCard"]
+visible = false
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -56.0
+offset_top = 56.0
+offset_right = -12.0
+offset_bottom = 100.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(1, 0.7, 0.4, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("style_badge")
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="WhistleButton" type="Button" parent="Root"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -276.0
+offset_top = -282.0
+offset_right = -40.0
+offset_bottom = -46.0
+grow_horizontal = 0
+grow_vertical = 0
+focus_mode = 0
+theme_override_styles/focus = SubResource("style_empty")
+theme_override_styles/hover = SubResource("style_whistle_hover")
+theme_override_styles/pressed = SubResource("style_whistle_pressed")
+theme_override_styles/normal = SubResource("style_whistle_normal")
+
+[node name="Icon" type="Node2D" parent="Root/WhistleButton"]
+position = Vector2(118, 96)
+
+[node name="Mouthpiece" type="Polygon2D" parent="Root/WhistleButton/Icon"]
+rotation = -0.5
+color = Color(0.2, 0.14, 0.03, 1)
+polygon = PackedVector2Array(-10, -22, 62, -22, 62, -2, -10, -2)
+
+[node name="Chamber" type="Polygon2D" parent="Root/WhistleButton/Icon"]
+color = Color(0.2, 0.14, 0.03, 1)
+polygon = PackedVector2Array(36, 0, 26, 26, 0, 36, -26, 26, -36, 0, -26, -26, 0, -36, 26, -26)
+
+[node name="Hole" type="Polygon2D" parent="Root/WhistleButton/Icon"]
+color = Color(0.9, 0.73, 0.2, 1)
+polygon = PackedVector2Array(14, 0, 10, 10, 0, 14, -10, 10, -14, 0, -10, -10, 0, -14, 10, -10)
+
+[node name="Ring" type="Line2D" parent="Root/WhistleButton/Icon"]
+points = PackedVector2Array(-30, 22, -50, 34, -58, 52, -46, 64, -30, 54, -28, 36)
+width = 5.0
+default_color = Color(0.2, 0.14, 0.03, 1)
+
+[node name="TitleLabel" type="Label" parent="Root/WhistleButton"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -64.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.16, 0.11, 0.02, 1)
+theme_override_font_sizes/font_size = 29
+text = "Whistle Charge"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CooldownShade" type="ColorRect" parent="Root/WhistleButton"]
+visible = false
+layout_mode = 0
+offset_right = 236.0
+offset_bottom = 236.0
+mouse_filter = 2
+color = Color(0.04, 0.03, 0.03, 0.6)
+
+[node name="Banner" type="Label" parent="Root"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 166.0
+offset_bottom = 210.0
+grow_horizontal = 2
+theme_override_colors/font_outline_color = Color(0.05, 0.04, 0.03, 1)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 32
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="EndScreen" type="ColorRect" parent="Root"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.03, 0.03, 0.03, 0.78)
+
+[node name="Center" type="CenterContainer" parent="Root/EndScreen"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Box" type="VBoxContainer" parent="Root/EndScreen/Center"]
+layout_mode = 2
+theme_override_constants/separation = 28
+
+[node name="TitleLabel" type="Label" parent="Root/EndScreen/Center/Box"]
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.05, 0.04, 0.03, 1)
+theme_override_constants/outline_size = 14
+theme_override_font_sizes/font_size = 120
+text = "VICTORY"
+horizontal_alignment = 1
+
+[node name="ReasonLabel" type="Label" parent="Root/EndScreen/Center/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.81, 0.7, 1)
+theme_override_font_sizes/font_size = 32
+text = "Red Command Bunker destroyed"
+horizontal_alignment = 1
+
+[node name="RestartButton" type="Button" parent="Root/EndScreen/Center/Box"]
+custom_minimum_size = Vector2(340, 96)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+theme_override_colors/font_color = Color(0.16, 0.11, 0.02, 1)
+theme_override_colors/font_hover_color = Color(0.16, 0.11, 0.02, 1)
+theme_override_colors/font_pressed_color = Color(0.16, 0.11, 0.02, 1)
+theme_override_font_sizes/font_size = 34
+theme_override_styles/focus = SubResource("style_empty")
+theme_override_styles/hover = SubResource("style_whistle_hover")
+theme_override_styles/pressed = SubResource("style_whistle_pressed")
+theme_override_styles/normal = SubResource("style_whistle_normal")
+text = "PLAY AGAIN"
+
+[connection signal="gui_input" from="Root/TargetingOverlay" to="." method="_on_targeting_overlay_gui_input"]
+[connection signal="pressed" from="Root/CardHand/RiflemenCard" to="." method="_on_card_pressed" binds= [0]]
+[connection signal="pressed" from="Root/CardHand/RaidersCard" to="." method="_on_card_pressed" binds= [1]]
+[connection signal="pressed" from="Root/CardHand/MortarCard" to="." method="_on_card_pressed" binds= [2]]
+[connection signal="pressed" from="Root/CardHand/GasCard" to="." method="_on_card_pressed" binds= [3]]
+[connection signal="pressed" from="Root/WhistleButton" to="." method="_on_whistle_button_pressed"]
+[connection signal="pressed" from="Root/EndScreen/Center/Box/RestartButton" to="." method="_on_restart_button_pressed"]
