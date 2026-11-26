@@ -34,8 +34,8 @@ const SECTOR_COLORS := {
 }
 ## Reticle radius per targeted card (matches the ability's area of effect).
 const RETICLE_RADIUS := {
-	GameManager.Card.MORTAR: 150.0,
-	GameManager.Card.GAS: 170.0,
+	GameManager.Card.MORTAR: 85.0,
+	GameManager.Card.GAS: 95.0,
 }
 
 var game: GameManager
@@ -173,7 +173,9 @@ func _begin_targeting(card_id: int) -> void:
 	targeting_hint.text = "%s - tap the battlefield to fire (tap the card again to cancel)" % [
 		str(GameManager.CARDS[card_id]["name"]).to_upper()
 	]
-	_build_reticle(RETICLE_RADIUS[card_id])
+	# The reticle is drawn on the HUD, so convert world pixels to screen pixels.
+	var zoom := get_viewport().get_canvas_transform().get_scale().x
+	_build_reticle(RETICLE_RADIUS[card_id] * zoom)
 	reticle.visible = false
 
 

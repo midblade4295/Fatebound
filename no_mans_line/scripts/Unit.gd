@@ -30,14 +30,14 @@ enum DamageKind { BULLET, MELEE, EXPLOSION, GAS }
 const STATS := {
 	Type.RIFLEMAN: {
 		"max_health": 60.0,
-		"march_speed": 95.0,
-		"charge_speed": 165.0,
+		"march_speed": 55.0,
+		"charge_speed": 70.0,
 		"damage": 8.0,
 		"attack_interval": 1.25,
-		"cover_range": 980.0,
-		"aggro_range": 300.0,
-		"attack_reach": 320.0,
-		"bunker_reach": 260.0,
+		"cover_range": 330.0,
+		"aggro_range": 110.0,
+		"attack_reach": 120.0,
+		"bunker_reach": 110.0,
 		"melee": false,
 		"open_ground_damage_mult": 1.0,
 		"trench_fight_bonus": 1.0,
@@ -45,14 +45,14 @@ const STATS := {
 	},
 	Type.RAIDER: {
 		"max_health": 90.0,
-		"march_speed": 150.0,
-		"charge_speed": 235.0,
+		"march_speed": 75.0,
+		"charge_speed": 100.0,
 		"damage": 22.0,
 		"attack_interval": 0.55,
-		"cover_range": 175.0,
-		"aggro_range": 230.0,
-		"attack_reach": 44.0,
-		"bunker_reach": 120.0,
+		"cover_range": 85.0,
+		"aggro_range": 95.0,
+		"attack_reach": 22.0,
+		"bunker_reach": 82.0,
 		"melee": true,
 		"open_ground_damage_mult": 1.5,
 		"trench_fight_bonus": 1.6,
@@ -81,13 +81,13 @@ const LOOKS := {
 	GameManager.TEAM_BLUE: {
 		Type.RIFLEMAN: {
 			"frames": preload("res://assets/sprites/blue_rifleman.tres"),
-			"scale": 0.5,
+			"scale": 0.42,
 			"muzzle": Vector2(117, -151),
 			"recolor": [],
 		},
 		Type.RAIDER: {
 			"frames": preload("res://assets/sprites/blue_raider.tres"),
-			"scale": 0.52,
+			"scale": 0.44,
 			"muzzle": Vector2(100, -118),
 			"recolor": [],
 		},
@@ -95,7 +95,7 @@ const LOOKS := {
 	GameManager.TEAM_RED: {
 		Type.RIFLEMAN: {
 			"frames": preload("res://assets/sprites/red_rifleman.tres"),
-			"scale": 0.5,
+			"scale": 0.42,
 			"muzzle": Vector2(126, -154),
 			# The sheet has no Red walk cycle: red_rifleman.tres reuses Blue's.
 			"recolor": [ANIM_WALK],
@@ -103,7 +103,7 @@ const LOOKS := {
 		Type.RAIDER: {
 			# The sheet has no Red raiders at all: reuse Blue's, repainted.
 			"frames": preload("res://assets/sprites/blue_raider.tres"),
-			"scale": 0.52,
+			"scale": 0.44,
 			"muzzle": Vector2(100, -118),
 			"recolor": [ANIM_WALK, ANIM_COVER, ANIM_AIM, ANIM_ATTACK],
 		},
@@ -222,8 +222,8 @@ func _ready() -> void:
 	add_to_group("team_%d" % team)
 
 	_facing = GameManager.advance_dir(team)
-	_lane_offset = randf_range(-10.0, 14.0)
-	_spread_x = randf_range(-80.0, 80.0)
+	_lane_offset = randf_range(-6.0, 8.0)
+	_spread_x = randf_range(-40.0, 40.0)
 	_attack_cooldown = randf_range(0.2, attack_interval)
 	_think_cooldown = randf_range(0.0, THINK_INTERVAL)
 	_apply_team_look()
@@ -543,12 +543,12 @@ func _perform_attack(victim: Node2D) -> void:
 	_play_attack_animation()
 
 	# Rifle shot: accuracy drops with distance, bunkers are too big to miss.
-	var aim := victim.global_position + Vector2(0.0, -50.0)
+	var aim := victim.global_position + Vector2(0.0, -36.0)
 	var distance := global_position.distance_to(victim.global_position)
 	var hit_chance := lerpf(0.95, 0.5, clampf(distance / cover_range, 0.0, 1.0))
 	var hit := victim is Bunker or randf() <= hit_chance
 	if not hit:
-		aim += Vector2(_facing * randf_range(40.0, 120.0), randf_range(-70.0, -20.0))
+		aim += Vector2(_facing * randf_range(25.0, 70.0), randf_range(-45.0, -12.0))
 	_play_muzzle_flash()
 	game.spawn_tracer(muzzle.global_position, aim)
 	if hit:
@@ -732,7 +732,7 @@ func _on_sprite_animation_finished() -> void:
 
 func _play_muzzle_flash() -> void:
 	muzzle_flash.flip_h = _facing < 0.0
-	muzzle_flash.position.x = _facing * 8.0
+	muzzle_flash.position.x = _facing * 6.0
 	muzzle_flash.visible = true
 	muzzle_sparks.rotation = 0.0 if _facing > 0.0 else PI
 	muzzle_sparks.restart()
@@ -752,5 +752,5 @@ func _flash_hit() -> void:
 
 func _update_health_bar() -> void:
 	var fraction := clampf(health / max_health, 0.0, 1.0)
-	health_fill.size.x = 34.0 * fraction
+	health_fill.size.x = 26.0 * fraction
 	health_bar.visible = fraction < 0.999 and state != State.DEAD

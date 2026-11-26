@@ -14,8 +14,8 @@ signal supply_changed(team: int, amount: float)
 signal time_changed(seconds_left: int)
 ## Emitted when a team blows the whistle. Every Unit listens to this.
 signal whistle_charge(team: int)
-## owners has 5 entries, left to right: Blue Bunker, Blue Trench, No Man's Land,
-## Red Trench, Red Bunker. Each is TEAM_BLUE, TEAM_RED or TEAM_NONE.
+## owners runs left to right: Blue Bunker, every trench, Red Bunker.
+## Each entry is TEAM_BLUE, TEAM_RED or TEAM_NONE.
 signal sector_control_changed(owners: Array[int])
 signal bunker_health_changed(team: int, health: float, max_health: float)
 signal card_played(team: int, card_id: int)
@@ -32,7 +32,9 @@ const TEAM_RED := 1
 
 ## Y coordinate of the ground line every unit walks on.
 const GROUND_Y := 700.0
-## Tappable X range for mortar / gas.
+## The battlefield is designed for a view this wide (bunker to bunker).
+const FIELD_VIEW_WIDTH := 1920.0
+## Tappable X range for mortar / gas (the whole battlefield fits one screen).
 const FIELD_MIN_X := 40.0
 const FIELD_MAX_X := 1880.0
 
@@ -62,7 +64,7 @@ const CRATER_SCENE := preload("res://scenes/Crater.tscn")
 ## Base income. Deliberately slow: every card should be a decision, not a reflex.
 @export var supply_per_second := 0.5
 @export var supply_start := 5.0
-## Extra income per sector held beyond your own bunker and home trench.
+## Extra income per sector held beyond the ones you start with.
 @export var supply_per_extra_sector := 0.1
 ## In the last `final_push_seconds` of the match income is multiplied.
 @export var final_push_seconds := 45.0
@@ -72,7 +74,7 @@ const CRATER_SCENE := preload("res://scenes/Crater.tscn")
 @export var raiders_per_card := 2
 @export var max_craters := 8
 ## Gas snaps onto a trench when the tap lands within this distance of it.
-@export var gas_snap_distance := 240.0
+@export var gas_snap_distance := 100.0
 
 # ----------------------------------------------------------------------------
 # State
@@ -81,9 +83,13 @@ var match_over := false
 var winner := TEAM_NONE
 ## Current Supply per team, indexed by TEAM_BLUE / TEAM_RED.
 var supply: Array[float] = [0.0, 0.0]
-## Trenches ordered left to right (Blue's home trench first).
+## Every Trench under Battlefield/Sectors, ordered left to right (Blue's
+## rearmost trench first, Red's rearmost last).
 var trenches: Array[Trench] = []
-var sector_owners: Array[int] = [TEAM_BLUE, TEAM_BLUE, TEAM_NONE, TEAM_RED, TEAM_RED]
+## Blue Bunker, each trench left to right, Red Bunker.
+var sector_owners: Array[int] = []
+## Sectors each team holds at kick-off (its bunker + its own trenches).
+var _starting_sectors: Array[int] = [1, 1]
 
 var _card_cooldowns := [[0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]]
 var _whistle_cooldowns: Array[float] = [0.0, 0.0]
@@ -94,9 +100,7 @@ var _shake := 0.0
 @onready var camera: Camera2D = $Camera2D
 @onready var match_timer: Timer = $MatchTimer
 @onready var blue_bunker: Bunker = $Battlefield/Sectors/BlueBunker
-@onready var blue_trench: Trench = $Battlefield/Sectors/BlueTrench
-@onready var no_mans_land: Area2D = $Battlefield/Sectors/NoMansLand
-@onready var red_trench: Trench = $Battlefield/Sectors/RedTrench
+@onready var sectors_root: Node2D = $Battlefield/Sectors
 @onready var red_bunker: Bunker = $Battlefield/Sectors/RedBunker
 @onready var craters_root: Node2D = $Battlefield/Craters
 @onready var units_root: Node2D = $Battlefield/Units
@@ -110,7 +114,17 @@ var _shake := 0.0
 # ----------------------------------------------------------------------------
 func _ready() -> void:
 	randomize()
-	trenches = [blue_trench, red_trench]
+	# Collect the trenches from the scene, so adding or removing a Trench
+	# instance under Battlefield/Sectors is all it takes to change the map.
+	for child in sectors_root.get_children():
+		if child is Trench:
+			trenches.append(child)
+	trenches.sort_custom(func(a: Trench, b: Trench) -> bool: return a.global_position.x < b.global_position.x)
+	for trench in trenches:
+		trench.owner_changed.connect(_on_trench_owner_changed)
+		if trench.initial_owner != TEAM_NONE:
+			_starting_sectors[trench.initial_owner] += 1
+	sector_owners = _read_sector_owners()
 	supply = [supply_start, supply_start]
 
 	# Children are ready before their parent, so everything below exists.
@@ -121,8 +135,12 @@ func _ready() -> void:
 
 	for team in [TEAM_BLUE, TEAM_RED]:
 		supply_changed.emit(team, supply[team])
-		# Each side starts with one rifle squad already marching to its trench.
-		spawn_squad(team, Unit.Type.RIFLEMAN, riflemen_per_card)
+		# Each side starts with one rifle squad already at its front trench.
+		var front := get_front_trench(team)
+		spawn_squad(team, Unit.Type.RIFLEMAN, riflemen_per_card, Vector2(front.global_position.x, GROUND_Y))
+
+	_fit_camera()
+	get_viewport().size_changed.connect(_fit_camera)
 
 	sector_control_changed.emit(sector_owners)
 	match_timer.start(match_length)
@@ -166,8 +184,18 @@ func get_bunker(team: int) -> Bunker:
 	return blue_bunker if team == TEAM_BLUE else red_bunker
 
 
+## The trench right in front of a team's bunker.
 func get_home_trench(team: int) -> Trench:
-	return blue_trench if team == TEAM_BLUE else red_trench
+	return trenches[0] if team == TEAM_BLUE else trenches[trenches.size() - 1]
+
+
+## The forward-most trench a team owns (its home trench if it owns none).
+func get_front_trench(team: int) -> Trench:
+	var front := get_home_trench(team)
+	for trench in _trenches_from_home(team):
+		if trench.owner_team == team:
+			front = trench
+	return front
 
 
 func get_time_left() -> float:
@@ -185,9 +213,9 @@ func get_units(team: int) -> Array[Unit]:
 
 
 ## Supply per second for `team` right now: base income, plus a bonus for every
-## sector held beyond the two you start with, doubled during the final push.
+## sector held beyond the ones you start with, doubled during the final push.
 func get_supply_rate(team: int) -> float:
-	var extra_sectors := maxi(0, count_sectors(team) - 2)
+	var extra_sectors := maxi(0, count_sectors(team) - _starting_sectors[team])
 	var rate := supply_per_second + supply_per_extra_sector * extra_sectors
 	if _final_push:
 		rate *= final_push_multiplier
@@ -208,7 +236,7 @@ func count_stationed(team: int) -> int:
 
 ## Where units wait when every reachable trench is full.
 func get_rally_point(team: int) -> Vector2:
-	return Vector2(get_bunker(team).global_position.x + advance_dir(team) * 190.0, GROUND_Y)
+	return Vector2(get_bunker(team).global_position.x + advance_dir(team) * 110.0, GROUND_Y)
 
 
 # ----------------------------------------------------------------------------
@@ -223,8 +251,8 @@ func _trenches_from_home(team: int) -> Array[Trench]:
 
 
 ## Where fresh troops go: the forward-most trench their side owns that still has
-## a free slot, so reinforcements flow to the front line. If the home trench has
-## been lost but stands empty they walk back into it. Units cannot pass an
+## a free slot, so reinforcements flow to the front line. If none has room they
+## walk back into one of their own original trenches that stands empty. Units cannot pass an
 ## enemy-held trench, so the scan stops there. Capturing an enemy trench always
 ## takes a Whistle Charge.
 func find_cover_trench(team: int, _from_position: Vector2) -> Trench:
@@ -237,7 +265,7 @@ func find_cover_trench(team: int, _from_position: Vector2) -> Trench:
 			continue
 		if trench.owner_team == team:
 			front = trench  # Later in the loop = further forward.
-		elif trench == get_home_trench(team):
+		elif trench.initial_owner == team and fallback == null:
 			fallback = trench
 	return front if front != null else fallback
 
@@ -263,7 +291,7 @@ func find_charge_objective(team: int, from_x: float, ignore: Trench = null) -> N
 		if not trench.is_hostile_to(team) and trench.get_free_slot_count() == 0:
 			continue  # Ours and already full: run past it.
 		var ahead := (trench.global_position.x - from_x) * dir
-		if ahead < -60.0:
+		if ahead < -30.0:
 			continue  # Behind us.
 		if ahead < best_ahead:
 			best = trench
@@ -314,14 +342,16 @@ func play_card(team: int, card_id: int, target: Vector2 = Vector2.ZERO) -> bool:
 	return true
 
 
-func spawn_squad(team: int, unit_type: Unit.Type, count: int) -> void:
-	var origin := get_bunker(team).get_spawn_position()
+## Spawns `count` soldiers in a short column. They appear at their bunker
+## unless `at` is given.
+func spawn_squad(team: int, unit_type: Unit.Type, count: int, at: Vector2 = Vector2.INF) -> void:
+	var origin := at if at != Vector2.INF else get_bunker(team).get_spawn_position()
 	var dir := advance_dir(team)
 	for i in count:
 		var unit: Unit = UNIT_SCENE.instantiate()
 		unit.setup(self, team, unit_type)
 		# Stagger the squad in a short column behind the spawn point.
-		unit.position = origin + Vector2(-dir * 38.0 * i, randf_range(-8.0, 12.0))
+		unit.position = origin + Vector2(-dir * 24.0 * i, randf_range(-5.0, 8.0))
 		units_root.add_child(unit)
 
 
@@ -336,10 +366,14 @@ func launch_mortar(team: int, target: Vector2) -> void:
 func release_gas(team: int, target: Vector2) -> void:
 	var x := clampf(target.x, FIELD_MIN_X, FIELD_MAX_X)
 	# Gas is meant for trenches: snap to the closest one if the tap was near it.
+	var nearest := gas_snap_distance
+	var snapped_x := x
 	for trench in trenches:
-		if absf(trench.global_position.x - x) <= gas_snap_distance:
-			x = trench.global_position.x
-			break
+		var distance := absf(trench.global_position.x - x)
+		if distance <= nearest:
+			nearest = distance
+			snapped_x = trench.global_position.x
+	x = snapped_x
 	var cloud: GasCloud = GAS_SCENE.instantiate()
 	cloud.source_team = team
 	cloud.position = Vector2(x, GROUND_Y)
@@ -395,10 +429,10 @@ func apply_explosion(center: Vector2, radius: float, max_damage: float, min_dama
 ## Leaves a crater (cover zone) on open ground.
 func add_crater(at: Vector2) -> void:
 	for trench in trenches:
-		if absf(trench.global_position.x - at.x) < 190.0:
+		if absf(trench.global_position.x - at.x) < 96.0:
 			return  # No craters inside the trench works.
 	for bunker: Bunker in [blue_bunker, red_bunker]:
-		if absf(bunker.global_position.x - at.x) < bunker.half_width + 70.0:
+		if absf(bunker.global_position.x - at.x) < bunker.half_width + 30.0:
 			return
 
 	var crater: Crater = CRATER_SCENE.instantiate()
@@ -411,7 +445,7 @@ func add_crater(at: Vector2) -> void:
 ## Short orange bullet streak between two points.
 func spawn_tracer(from: Vector2, to: Vector2) -> void:
 	var tracer := Line2D.new()
-	tracer.width = 2.5
+	tracer.width = 2.0
 	tracer.default_color = Color(1.0, 0.74, 0.32, 0.95)
 	tracer.points = PackedVector2Array([from, to])
 	tracer.z_index = 6
@@ -419,6 +453,21 @@ func spawn_tracer(from: Vector2, to: Vector2) -> void:
 	var tween := tracer.create_tween()
 	tween.tween_property(tracer, "modulate:a", 0.0, 0.12)
 	tween.tween_callback(tracer.queue_free)
+
+
+## Keeps the whole battlefield on screen and edge to edge. On screens wider
+## than 16:9 the stretch mode adds width, so the camera zooms in until the two
+## bunkers reach the screen edges again, and shifts down so the ground line
+## stays at the same height above the card hand.
+func _fit_camera() -> void:
+	var view := get_viewport_rect().size
+	var zoom := clampf(view.x / FIELD_VIEW_WIDTH, 1.0, 1.6)
+	camera.zoom = Vector2(zoom, zoom)
+	var screen_centre_y := view.y * 0.5
+	camera.position = Vector2(
+		FIELD_VIEW_WIDTH * 0.5,
+		GROUND_Y - (GROUND_Y - screen_centre_y) / zoom
+	)
 
 
 func shake_camera(strength: float) -> void:
@@ -443,41 +492,25 @@ func count_sectors(team: int) -> int:
 
 ## 0.0 = Red is dominating, 0.5 = even, 1.0 = Blue is dominating.
 func get_tug_of_war() -> float:
-	var sector_term := clampf((count_sectors(TEAM_BLUE) - count_sectors(TEAM_RED)) / 3.0, -1.0, 1.0)
+	var swing := maxf(1.0, trenches.size() * 0.5 + 0.5)
+	var sector_term := clampf((count_sectors(TEAM_BLUE) - count_sectors(TEAM_RED)) / swing, -1.0, 1.0)
 	var health_term := blue_bunker.get_health_fraction() - red_bunker.get_health_fraction()
 	return clampf(0.5 + 0.5 * (0.7 * sector_term + 0.3 * health_term), 0.0, 1.0)
 
 
+func _read_sector_owners() -> Array[int]:
+	var owners: Array[int] = [TEAM_BLUE if blue_bunker.is_alive() else TEAM_RED]
+	for trench in trenches:
+		owners.append(trench.owner_team)
+	owners.append(TEAM_RED if red_bunker.is_alive() else TEAM_BLUE)
+	return owners
+
+
 func _update_sector_control() -> void:
-	var owners: Array[int] = [
-		TEAM_BLUE if blue_bunker.is_alive() else TEAM_RED,
-		blue_trench.owner_team,
-		_get_no_mans_land_owner(),
-		red_trench.owner_team,
-		TEAM_RED if red_bunker.is_alive() else TEAM_BLUE,
-	]
+	var owners := _read_sector_owners()
 	if owners != sector_owners:
 		sector_owners = owners
 		sector_control_changed.emit(sector_owners)
-
-
-## No Man's Land belongs to whoever has more living soldiers standing in it.
-func _get_no_mans_land_owner() -> int:
-	var blue := 0
-	var red := 0
-	for body in no_mans_land.get_overlapping_bodies():
-		var unit := body as Unit
-		if unit == null or not unit.is_alive():
-			continue
-		if unit.team == TEAM_BLUE:
-			blue += 1
-		else:
-			red += 1
-	if blue > red:
-		return TEAM_BLUE
-	if red > blue:
-		return TEAM_RED
-	return TEAM_NONE
 
 
 func _on_sector_timer_timeout() -> void:

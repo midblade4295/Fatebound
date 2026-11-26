@@ -9,6 +9,8 @@ extends Area2D
 signal health_changed(team: int, health: float, max_health: float)
 signal destroyed(team: int)
 
+const BAR_WIDTH := 100.0
+
 @export_enum("Blue:0", "Red:1") var team: int = 0
 @export var max_health := 1000.0
 @export_group("Art")
@@ -19,15 +21,16 @@ signal destroyed(team: int)
 @export_group("Machine Gun")
 @export var gun_damage := 7.0
 @export var gun_interval := 0.3
-@export var gun_range := 340.0
+@export var gun_range := 150.0
 @export_range(0.0, 1.0, 0.05) var gun_accuracy := 0.85
 ## Half of the bunker's footprint, used for melee reach and blast checks.
-@export var half_width := 95.0
+@export var half_width := 70.0
 
 var game: GameManager
 var health := 0.0
 ## Seconds the machine gun stays silent after a shell lands on the bunker.
 var _suppressed_time := 0.0
+var _mortar_rest_scale := Vector2.ONE
 
 @onready var visual: Node2D = $Visual
 @onready var sprite: Sprite2D = $Visual/Sprite
@@ -45,6 +48,7 @@ var _suppressed_time := 0.0
 
 func _ready() -> void:
 	health = max_health
+	_mortar_rest_scale = mortar_prop.scale
 	sprite.texture = intact_texture
 	# The art is drawn facing right; Red's bunker is mirrored. Mirroring the
 	# parent also mirrors the Muzzle and SpawnPoint markers.
@@ -84,7 +88,7 @@ func take_damage(amount: float, kind: Unit.DamageKind, _attacker: Unit) -> void:
 	if not is_alive() or kind == Unit.DamageKind.GAS:
 		return  # Concrete does not breathe.
 	health = maxf(0.0, health - amount)
-	health_fill.size.x = 150.0 * get_health_fraction()
+	health_fill.size.x = BAR_WIDTH * get_health_fraction()
 	health_changed.emit(team, health, max_health)
 
 	if get_health_fraction() <= damaged_below and sprite.texture != damaged_texture:
@@ -138,10 +142,10 @@ func _on_gun_timer_timeout() -> void:
 	if victim == null:
 		return
 
-	var aim := victim.global_position + Vector2(0.0, -45.0)
+	var aim := victim.global_position + Vector2(0.0, -32.0)
 	var hit := randf() <= gun_accuracy
 	if not hit:
-		aim += Vector2(randf_range(-50.0, 50.0), randf_range(-60.0, 10.0))
+		aim += Vector2(randf_range(-30.0, 30.0), randf_range(-36.0, 8.0))
 	game.spawn_tracer(muzzle.global_position, aim)
 	muzzle_flash.visible = true
 	muzzle_flash.rotation = randf_range(-0.15, 0.15)
@@ -154,7 +158,6 @@ func _on_gun_timer_timeout() -> void:
 
 ## Small kick on the mortar beside the bunker when this team fires a shell.
 func play_mortar_recoil() -> void:
-	var rest := Vector2(0.6, 0.6)
-	mortar_prop.scale = rest * Vector2(1.0, 0.82)
+	mortar_prop.scale = _mortar_rest_scale * Vector2(1.0, 0.82)
 	var tween := create_tween()
-	tween.tween_property(mortar_prop, "scale", rest, 0.25)
+	tween.tween_property(mortar_prop, "scale", _mortar_rest_scale, 0.25)

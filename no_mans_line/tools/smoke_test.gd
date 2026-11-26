@@ -32,7 +32,7 @@ func _start_match() -> void:
 	_game = MAIN_SCENE.instantiate()
 	root.add_child(_game)
 	_stats = {"cards": [0, 0, 0, 0], "whistles": [0, 0], "blue_cards": 0, "red_cards": 0, "flips": 0, "captures": [0, 0]}
-	for trench in [_game.blue_trench, _game.red_trench]:
+	for trench in _game.trenches:
 		trench.owner_changed.connect(func(_t: Trench, new_owner: int) -> void: _stats["captures"][new_owner] += 1)
 	_game.sector_control_changed.connect(func(_o: Array[int]) -> void: _stats["flips"] += 1)
 	# Give Blue a second AIController so nobody needs to touch the screen.

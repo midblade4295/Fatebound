@@ -6,7 +6,7 @@ extends Node2D
 ## crater behind.
 
 @export var delay := 1.6
-@export var radius := 150.0
+@export var radius := 85.0
 @export var max_damage := 70.0
 @export var min_damage := 25.0
 ## Seconds that survivors in the blast stay pinned (unable to attack).
@@ -58,14 +58,14 @@ func _on_fuse_timer_timeout() -> void:
 
 	game.apply_explosion(global_position, radius, max_damage, min_damage, pin_time)
 	game.add_crater(global_position)
-	game.shake_camera(10.0)
+	game.shake_camera(8.0)
 
 	debris.emitting = true
 	smoke.emitting = true
 	blast.visible = true
-	blast.scale = Vector2(0.3, 0.3)
+	blast.scale = Vector2(0.18, 0.18)
 	var tween := create_tween()
-	tween.tween_property(blast, "scale", Vector2(1.5, 1.5), 0.18)
+	tween.tween_property(blast, "scale", Vector2(0.9, 0.9), 0.18)
 	tween.parallel().tween_property(blast, "modulate:a", 0.0, 0.3)
 	tween.tween_interval(2.2)
 	tween.tween_callback(queue_free)

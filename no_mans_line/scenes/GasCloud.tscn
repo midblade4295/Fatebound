@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" path="res://assets/atlas/gas_cloud.tres" id="2_cloud"]
 
 [sub_resource type="RectangleShape2D" id="cloud_shape"]
-size = Vector2(340, 220)
+size = Vector2(190, 170)
 
 [sub_resource type="Gradient" id="puff_gradient"]
 colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
@@ -27,14 +27,14 @@ gradient = SubResource("gas_gradient")
 [sub_resource type="ParticleProcessMaterial" id="gas_material"]
 particle_flag_disable_z = true
 emission_shape = 3
-emission_box_extents = Vector3(140, 30, 1)
+emission_box_extents = Vector3(76, 20, 1)
 direction = Vector3(0.3, -1, 0)
 spread = 60.0
 initial_velocity_min = 8.0
 initial_velocity_max = 30.0
 gravity = Vector3(0, -6, 0)
-scale_min = 2.0
-scale_max = 4.5
+scale_min = 1.2
+scale_max = 2.6
 color_ramp = SubResource("gas_ramp")
 
 [node name="GasCloud" type="Area2D"]
@@ -45,31 +45,31 @@ monitorable = false
 script = ExtResource("1_gas")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, -40)
+position = Vector2(0, -35)
 shape = SubResource("cloud_shape")
 
 [node name="Clouds" type="Node2D" parent="."]
 modulate = Color(1, 1, 1, 0.6)
 
 [node name="CloudLeft" type="Sprite2D" parent="Clouds"]
-position = Vector2(-104, -44)
-scale = Vector2(0.9, 0.9)
+position = Vector2(-56, -30)
+scale = Vector2(0.52, 0.52)
 texture = ExtResource("2_cloud")
 
 [node name="CloudRight" type="Sprite2D" parent="Clouds"]
-position = Vector2(106, -42)
-scale = Vector2(0.86, 0.86)
+position = Vector2(58, -28)
+scale = Vector2(0.5, 0.5)
 texture = ExtResource("2_cloud")
 flip_h = true
 
 [node name="CloudMid" type="Sprite2D" parent="Clouds"]
-position = Vector2(0, -62)
-scale = Vector2(1.15, 1.15)
+position = Vector2(0, -42)
+scale = Vector2(0.68, 0.68)
 texture = ExtResource("2_cloud")
 
 [node name="Puffs" type="GPUParticles2D" parent="."]
-position = Vector2(0, -20)
-amount = 36
+position = Vector2(0, -16)
+amount = 24
 lifetime = 2.6
 preprocess = 0.6
 visibility_rect = Rect2(-350, -400, 700, 600)

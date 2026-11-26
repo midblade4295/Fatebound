@@ -7,9 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/HUD.tscn" id="5_hud"]
 [ext_resource type="Texture2D" path="res://assets/atlas/background_banner.tres" id="6_banner"]
 [ext_resource type="Texture2D" path="res://assets/atlas/barbed_wire.tres" id="7_wire"]
-
-[sub_resource type="RectangleShape2D" id="nml_shape"]
-size = Vector2(400, 240)
+[ext_resource type="Texture2D" path="res://assets/atlas/background_ground.tres" id="8_ground"]
 
 [sub_resource type="Gradient" id="streak_gradient"]
 colors = PackedColorArray(1, 1, 1, 0, 1, 1, 1, 1)
@@ -42,65 +40,78 @@ position = Vector2(960, 540)
 z_index = -10
 
 [node name="SkyFill" type="Polygon2D" parent="Background"]
-color = Color(0.13, 0.14, 0.15, 1)
-polygon = PackedVector2Array(-1200, -800, 3120, -800, 3120, 420, -1200, 420)
+color = Color(0.15, 0.16, 0.17, 1)
+polygon = PackedVector2Array(-1400, -900, 3320, -900, 3320, 40, -1400, 40)
 
 [node name="GroundFill" type="Polygon2D" parent="Background"]
 color = Color(0.07, 0.06, 0.05, 1)
-polygon = PackedVector2Array(-1200, 760, 3120, 760, 3120, 1600, -1200, 1600)
+polygon = PackedVector2Array(-1400, 1100, 3320, 1100, 3320, 1800, -1400, 1800)
 
 [node name="Banner" type="Sprite2D" parent="Background"]
-position = Vector2(960, 546)
-scale = Vector2(1.85, 1.85)
+position = Vector2(960, 414)
+scale = Vector2(3.2, 3.2)
 texture = ExtResource("6_banner")
 
-[node name="SkyFade" type="Polygon2D" parent="Background"]
-polygon = PackedVector2Array(-1200, 300, 3120, 300, 3120, 470, -1200, 470)
-vertex_colors = PackedColorArray(0.13, 0.14, 0.15, 1, 0.13, 0.14, 0.15, 1, 0.13, 0.14, 0.15, 0, 0.13, 0.14, 0.15, 0)
+[node name="GroundMirror" type="Sprite2D" parent="Background"]
+position = Vector2(960, 988)
+scale = Vector2(3.2, 3.2)
+texture = ExtResource("8_ground")
+flip_v = true
 
-[node name="GroundFade" type="Polygon2D" parent="Background"]
-polygon = PackedVector2Array(-1200, 730, 3120, 730, 3120, 790, -1200, 790)
-vertex_colors = PackedColorArray(0.07, 0.06, 0.05, 0, 0.07, 0.06, 0.05, 0, 0.07, 0.06, 0.05, 1, 0.07, 0.06, 0.05, 1)
+[node name="SkyFade" type="Polygon2D" parent="Background"]
+polygon = PackedVector2Array(-1400, -10, 3320, -10, 3320, 110, -1400, 110)
+vertex_colors = PackedColorArray(0.15, 0.16, 0.17, 1, 0.15, 0.16, 0.17, 1, 0.15, 0.16, 0.17, 0, 0.15, 0.16, 0.17, 0)
 
 [node name="Battlefield" type="Node2D" parent="."]
 
 [node name="Sectors" type="Node2D" parent="Battlefield"]
 
 [node name="BlueBunker" parent="Battlefield/Sectors" instance=ExtResource("2_bunker")]
-position = Vector2(130, 700)
+position = Vector2(120, 700)
 
-[node name="BlueTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
-position = Vector2(600, 700)
+[node name="BlueReserveTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
+position = Vector2(330, 700)
 initial_owner = 0
 
-[node name="NoMansLand" type="Area2D" parent="Battlefield/Sectors"]
+[node name="BlueSupportTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
+position = Vector2(540, 700)
+initial_owner = 0
+
+[node name="BlueFrontTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
+position = Vector2(750, 700)
+initial_owner = 0
+
+[node name="MiddleTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
 position = Vector2(960, 700)
-collision_layer = 8
-collision_mask = 3
-monitorable = false
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Battlefield/Sectors/NoMansLand"]
-position = Vector2(0, -40)
-shape = SubResource("nml_shape")
+[node name="RedFrontTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
+position = Vector2(1170, 700)
+initial_owner = 1
 
-[node name="WireA" type="Sprite2D" parent="Battlefield/Sectors/NoMansLand"]
-position = Vector2(-70, -26)
-scale = Vector2(0.48, 0.48)
-texture = ExtResource("7_wire")
+[node name="RedSupportTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
+position = Vector2(1380, 700)
+initial_owner = 1
 
-[node name="WireB" type="Sprite2D" parent="Battlefield/Sectors/NoMansLand"]
-position = Vector2(86, -20)
-scale = Vector2(0.44, 0.44)
-texture = ExtResource("7_wire")
-flip_h = true
-
-[node name="RedTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
-position = Vector2(1320, 700)
+[node name="RedReserveTrench" parent="Battlefield/Sectors" instance=ExtResource("3_trench")]
+position = Vector2(1590, 700)
 initial_owner = 1
 
 [node name="RedBunker" parent="Battlefield/Sectors" instance=ExtResource("2_bunker")]
-position = Vector2(1790, 700)
+position = Vector2(1800, 700)
 team = 1
+
+[node name="Decor" type="Node2D" parent="Battlefield"]
+
+[node name="WireLeft" type="Sprite2D" parent="Battlefield/Decor"]
+position = Vector2(855, 742)
+scale = Vector2(0.3, 0.3)
+texture = ExtResource("7_wire")
+
+[node name="WireRight" type="Sprite2D" parent="Battlefield/Decor"]
+position = Vector2(1065, 742)
+scale = Vector2(0.3, 0.3)
+texture = ExtResource("7_wire")
+flip_h = true
 
 [node name="Craters" type="Node2D" parent="Battlefield"]
 
@@ -145,8 +156,6 @@ script = ExtResource("4_ai")
 [connection signal="whistle_charge" from="." to="HUD" method="_on_whistle_charge"]
 [connection signal="destroyed" from="Battlefield/Sectors/BlueBunker" to="." method="_on_bunker_destroyed"]
 [connection signal="health_changed" from="Battlefield/Sectors/BlueBunker" to="." method="_on_bunker_health_changed"]
-[connection signal="owner_changed" from="Battlefield/Sectors/BlueTrench" to="." method="_on_trench_owner_changed"]
-[connection signal="owner_changed" from="Battlefield/Sectors/RedTrench" to="." method="_on_trench_owner_changed"]
 [connection signal="destroyed" from="Battlefield/Sectors/RedBunker" to="." method="_on_bunker_destroyed"]
 [connection signal="health_changed" from="Battlefield/Sectors/RedBunker" to="." method="_on_bunker_health_changed"]
 [connection signal="timeout" from="MatchTimer" to="." method="_on_match_timer_timeout"]

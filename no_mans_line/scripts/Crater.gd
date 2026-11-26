@@ -7,15 +7,18 @@ extends StaticBody2D
 ## Collision setup: StaticBody2D on layer 3 (cover), mask 0.
 ##                  CoverZone Area2D on layer 0, mask 1 + 2 (unit layers).
 
+## Craters are small on this map: the gaps between trenches are narrow.
+const FULL_SCALE := Vector2(0.5, 0.5)
+
 var _inside: Array[Unit] = []
 var _removing := false
 
 
 func _ready() -> void:
 	# Pop in.
-	scale = Vector2(0.4, 0.4)
+	scale = FULL_SCALE * 0.4
 	var tween := create_tween()
-	tween.tween_property(self, "scale", Vector2.ONE, 0.15)
+	tween.tween_property(self, "scale", FULL_SCALE, 0.15)
 
 
 func _on_cover_zone_body_entered(body: Node2D) -> void:

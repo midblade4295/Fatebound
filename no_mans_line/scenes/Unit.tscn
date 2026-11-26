@@ -5,8 +5,8 @@
 [ext_resource type="Texture2D" path="res://assets/atlas/muzzle_flash.tres" id="3_flash"]
 
 [sub_resource type="CapsuleShape2D" id="body_shape"]
-radius = 14.0
-height = 90.0
+radius = 11.0
+height = 74.0
 
 [sub_resource type="CircleShape2D" id="vision_shape"]
 radius = 320.0
@@ -21,11 +21,11 @@ gradient = SubResource("spark_gradient")
 particle_flag_disable_z = true
 direction = Vector3(1, 0, 0)
 spread = 28.0
-initial_velocity_min = 140.0
-initial_velocity_max = 320.0
+initial_velocity_min = 90.0
+initial_velocity_max = 200.0
 gravity = Vector3(0, 260, 0)
-scale_min = 2.0
-scale_max = 4.0
+scale_min = 1.5
+scale_max = 3.0
 color_ramp = SubResource("spark_ramp")
 
 [node name="Unit" type="CharacterBody2D"]
@@ -34,26 +34,26 @@ motion_mode = 1
 script = ExtResource("1_unit")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, -46)
+position = Vector2(0, -38)
 shape = SubResource("body_shape")
 
 [node name="Shadow" type="Polygon2D" parent="."]
 color = Color(0, 0, 0, 0.3)
-polygon = PackedVector2Array(-24, 0, -14, -4, 14, -4, 24, 0, 14, 4, -14, 4)
+polygon = PackedVector2Array(-17, 0, -10, -3, 10, -3, 17, 0, 10, 3, -10, 3)
 
 [node name="Sprite" type="AnimatedSprite2D" parent="."]
-scale = Vector2(0.5, 0.5)
+scale = Vector2(0.42, 0.42)
 sprite_frames = ExtResource("2_frames")
 animation = &"walk"
 offset = Vector2(0, -99.5)
 
 [node name="Muzzle" type="Marker2D" parent="."]
-position = Vector2(58, -76)
+position = Vector2(49, -63)
 
 [node name="MuzzleFlash" type="Sprite2D" parent="Muzzle"]
 visible = false
-position = Vector2(8, 0)
-scale = Vector2(0.6, 0.6)
+position = Vector2(6, 0)
+scale = Vector2(0.42, 0.42)
 texture = ExtResource("3_flash")
 
 [node name="MuzzleSparks" type="GPUParticles2D" parent="Muzzle"]
@@ -65,7 +65,7 @@ explosiveness = 1.0
 process_material = SubResource("spark_material")
 
 [node name="VisionArea" type="Area2D" parent="."]
-position = Vector2(0, -46)
+position = Vector2(0, -38)
 collision_layer = 0
 collision_mask = 2
 monitorable = false
@@ -75,25 +75,25 @@ shape = SubResource("vision_shape")
 
 [node name="PinnedMark" type="Polygon2D" parent="."]
 visible = false
-position = Vector2(0, -128)
+position = Vector2(0, -106)
 color = Color(1, 0.82, 0.25, 1)
-polygon = PackedVector2Array(-9, -8, 0, 1, 9, -8, 9, -3, 0, 6, -9, -3)
+polygon = PackedVector2Array(-7, -6, 0, 1, 7, -6, 7, -2, 0, 5, -7, -2)
 
 [node name="HealthBar" type="Node2D" parent="."]
 visible = false
-position = Vector2(-17, -114)
+position = Vector2(-13, -95)
 
 [node name="Back" type="ColorRect" parent="HealthBar"]
 offset_left = -1.0
 offset_top = -1.0
-offset_right = 35.0
-offset_bottom = 6.0
+offset_right = 27.0
+offset_bottom = 5.0
 mouse_filter = 2
 color = Color(0, 0, 0, 0.65)
 
 [node name="Fill" type="ColorRect" parent="HealthBar"]
-offset_right = 34.0
-offset_bottom = 5.0
+offset_right = 26.0
+offset_bottom = 4.0
 mouse_filter = 2
 color = Color(0.45, 0.72, 0.95, 1)
 

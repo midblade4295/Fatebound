@@ -3,10 +3,9 @@
 [ext_resource type="Script" path="res://scripts/Trench.gd" id="1_trench"]
 [ext_resource type="Texture2D" path="res://assets/atlas/trench_bay.tres" id="2_bay"]
 [ext_resource type="Texture2D" path="res://assets/atlas/trench_parapet.tres" id="3_parapet"]
-[ext_resource type="Texture2D" path="res://assets/atlas/barbed_wire.tres" id="4_wire"]
 
 [sub_resource type="RectangleShape2D" id="zone_shape"]
-size = Vector2(330, 220)
+size = Vector2(180, 170)
 
 [node name="Trench" type="Area2D"]
 collision_layer = 8
@@ -15,69 +14,49 @@ monitorable = false
 script = ExtResource("1_trench")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, -40)
+position = Vector2(0, -35)
 shape = SubResource("zone_shape")
 
 [node name="Bay" type="Sprite2D" parent="."]
-position = Vector2(0, -28)
-scale = Vector2(1.5, 1.5)
+position = Vector2(0, -20)
+scale = Vector2(0.9, 0.95)
 texture = ExtResource("2_bay")
 
 [node name="Flag" type="Node2D" parent="."]
-position = Vector2(-150, -84)
+position = Vector2(-80, -66)
 
 [node name="Pole" type="Polygon2D" parent="Flag"]
 color = Color(0.14, 0.11, 0.09, 1)
-polygon = PackedVector2Array(-2, 0, 2, 0, 2, -86, -2, -86)
+polygon = PackedVector2Array(-1.5, 0, 1.5, 0, 1.5, -58, -1.5, -58)
 
 [node name="Cloth" type="Polygon2D" parent="Flag"]
 color = Color(0.55, 0.52, 0.46, 1)
-polygon = PackedVector2Array(2, -86, 46, -78, 40, -70, 46, -60, 2, -56)
+polygon = PackedVector2Array(1.5, -58, 32, -52, 27, -46, 32, -39, 1.5, -36)
 
 [node name="Slots" type="Node2D" parent="."]
 
 [node name="Slot0" type="Marker2D" parent="Slots"]
-position = Vector2(-112, 20)
+position = Vector2(-60, 16)
 
 [node name="Slot1" type="Marker2D" parent="Slots"]
-position = Vector2(-80, 26)
+position = Vector2(-30, 20)
 
 [node name="Slot2" type="Marker2D" parent="Slots"]
-position = Vector2(-48, 20)
+position = Vector2(0, 16)
 
 [node name="Slot3" type="Marker2D" parent="Slots"]
-position = Vector2(-16, 26)
+position = Vector2(30, 20)
 
 [node name="Slot4" type="Marker2D" parent="Slots"]
-position = Vector2(16, 20)
-
-[node name="Slot5" type="Marker2D" parent="Slots"]
-position = Vector2(48, 26)
-
-[node name="Slot6" type="Marker2D" parent="Slots"]
-position = Vector2(80, 20)
-
-[node name="Slot7" type="Marker2D" parent="Slots"]
-position = Vector2(112, 26)
+position = Vector2(60, 16)
 
 [node name="Parapet" type="Node2D" parent="."]
 z_index = 5
 
 [node name="Sandbags" type="Sprite2D" parent="Parapet"]
 position = Vector2(0, 14)
-scale = Vector2(1.5, 1.5)
+scale = Vector2(0.9, 0.95)
 texture = ExtResource("3_parapet")
-
-[node name="WireLeft" type="Sprite2D" parent="Parapet"]
-position = Vector2(-206, 4)
-scale = Vector2(0.36, 0.36)
-texture = ExtResource("4_wire")
-
-[node name="WireRight" type="Sprite2D" parent="Parapet"]
-position = Vector2(206, 4)
-scale = Vector2(0.36, 0.36)
-texture = ExtResource("4_wire")
-flip_h = true
 
 [connection signal="body_entered" from="." to="." method="_on_body_entered"]
 [connection signal="body_exited" from="." to="." method="_on_body_exited"]

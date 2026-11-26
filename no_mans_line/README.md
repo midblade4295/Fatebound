@@ -30,23 +30,31 @@ The APK is a debug-signed preview, not a store build.
 
 ## Rules as implemented
 
+The whole front fits on one screen: a Command Bunker at each end and seven
+trenches between them. Each side starts with three (reserve, support, front) and
+the middle trench starts neutral.
+
 The game is built around one loop: **garrison, bank Supply, barrage, then
 charge.** Supply is slow on purpose, an unprepared charge at even numbers fails,
 and the same charge behind a mortar or gas wins.
 
 | Thing | Behaviour |
 | --- | --- |
-| Supply | Both teams: +0.5 per second, max 10, start at 5. +0.1 per second for every sector held beyond your own bunker and home trench. Doubled in the last 45 seconds ("final push"). |
-| Riflemen (2) | 3 infantry. Walk to the forward-most trench their side owns that has a free slot, take cover (bullets x0.4, mortars x0.5) and shoot across No Man's Land. |
+| Sectors | 9: the two bunkers and the seven trenches. A bunker belongs to its side while it stands. A trench belongs to the last team to station a soldier in it with no enemy inside. |
+| Supply | Both teams: +0.5 per second, max 10, start at 5. +0.1 per second for every sector held beyond the four you start with. Doubled in the last 45 seconds ("final push"). |
+| Trenches | 5 firing slots each. Stationed soldiers take bullets x0.4 and mortars x0.5. |
+| Riflemen (2) | 3 infantry. Walk to the forward-most trench their side owns that has a free slot, take cover and shoot at the next trench over. |
 | Trench Raiders (4) | 2 fast melee troops. x1.6 melee damage when fighting in a trench, x1.5 incoming damage on open ground. |
-| Mortar Strike (5) | Targeted. Shell lands after 1.6 s, 70 to 25 damage over a 150 px radius, hits both teams, leaves a crater (cover zone, bullets x0.65) on open ground. Survivors are **pinned** for 4.5 s. A shell on a bunker silences its machine gun for 4.5 s. |
+| Mortar Strike (5) | Targeted. Shell lands after 1.6 s, 70 to 25 damage over an 85 px radius (about one trench), hits both teams. Survivors are **pinned** for 4.5 s. A shell on a bunker silences its machine gun for 4.5 s. |
 | Mustard Gas (6) | Targeted, snaps onto a trench. 6 s cloud, 4 damage every 0.5 s to everyone inside, ignores cover. Everyone inside is **pinned** while they stay in it. |
 | Pinned | A pinned soldier (yellow chevron overhead) cannot attack and moves at half speed. This is the window a charge needs. |
-| Whistle Charge | "Advance one line": every Blue unit stationed in a trench goes for the next trench ahead. It is assaulted if the enemy holds it, moved up into if it is yours and has room; otherwise the target is the enemy Command Bunker. 8 s cooldown. |
+| Whistle Charge | "Advance one line": every Blue unit stationed in a trench goes for the next trench ahead. It is assaulted if the enemy (or nobody) holds it, moved up into if it is yours and has room; otherwise the target is the enemy Command Bunker. 8 s cooldown. |
 | Bunkers | 1000 HP each, with a short-range machine gun. Switch to the damaged art at 40% health. Destroying one ends the match at once. |
-| Clock | 03:00. At 00:00 the side holding more of the 5 sectors wins. A sector tie goes to the healthier bunker, otherwise it is a stalemate. |
-| Sectors | Bunker: its owner while it stands. Trench: last team to station a soldier in it with no enemy inside. No Man's Land: whoever has more soldiers standing in it. |
-| Red AI | Garrisons up to 6 soldiers, then banks Supply. Attacks with gas-then-whistle or mortar-plus-whistle, or a bare whistle when it clearly outnumbers you. Shells your troops when they bunch up in the open. No attacks in the first 20 seconds. |
+| Clock | 03:00. At 00:00 the side holding more sectors wins. A tie goes to the healthier bunker, otherwise it is a stalemate. |
+| Red AI | Garrisons up to 6 soldiers, then banks Supply. Walks into undefended trenches, attacks defended ones with gas-then-whistle or mortar-plus-whistle, or a bare whistle when it clearly outnumbers you. Shells your troops when they bunch up in the open. No advances in the first 15 seconds. |
+
+Craters still exist in code, but the gaps between trenches on this map are too
+narrow for one to form except dead centre between two trenches.
 
 Card cooldowns: Riflemen 3 s, Raiders 5 s, Mortar 8 s, Gas 12 s.
 
@@ -121,6 +129,7 @@ it to `Sprite2D.texture`, `TextureButton.texture_normal`, and so on.
 | Resource | Region | Used by |
 | --- | --- | --- |
 | `background_banner` | 0, 18, 1376, 259 | `Main/Background/Banner` |
+| `background_ground` | 0, 177, 1376, 100 | `Main/Background/GroundMirror` (bottom strip of the banner, flipped) |
 | `bunker_intact` | 42, 307, 288, 226 | `Bunker/Visual/Sprite` |
 | `bunker_damaged` | 355, 307, 288, 226 | Bunker at 40% health and when destroyed |
 | `trench_bay` | 1105, 303, 214, 96 | `Trench/Bay` (wall behind the soldiers) |
@@ -141,7 +150,7 @@ it to `Sprite2D.texture`, `TextureButton.texture_normal`, and so on.
 
 | Resource | Region | Used by |
 | --- | --- | --- |
-| `barbed_wire` | 1113, 560, 255, 176 | No Man's Land and trench flanks |
+| `barbed_wire` | 1113, 560, 255, 176 | either side of the middle trench |
 | `muzzle_flash` | 646, 566, 44, 32 | `Unit/Muzzle/MuzzleFlash`, bunker gun |
 | `bunker_units_sheet` | 748, 503, 327, 250 | sliced, not placed (the environment sheet's intact / damaged pair is used) |
 
@@ -184,6 +193,9 @@ Inspector. Keep `region.size + margin.size` equal to the cell size.
 - **Overlapping frames.** Blue's "fire" muzzle flash reaches into the next frame's
   rectangle. The tip is erased by the strip tool and every shot gets the separate
   `muzzle_flash` sprite instead.
+- **Backdrop upscale.** The banner is 259 px tall, so filling a 1080 px screen
+  draws it at 3.2x. It reads as a soft painted backdrop; a taller source image
+  would sharpen it.
 - **Still procedural:** unit shadows and health bars, ownership flags, craters,
   the explosion flash, tracers, rain, and the top bar (portraits, tug-of-war bar,
   supply bar). The sheets have no art for them.
@@ -196,20 +208,24 @@ Collision layer / mask values are shown as `L` / `M` using the layer names below
 
 ```
 Main (Node2D)                        GameManager.gd
-├─ Camera2D                          position (960, 540): centres the field on any aspect ratio
+├─ Camera2D                          zoomed and positioned in code so the field spans the screen width
 ├─ Background (Node2D, z -10)
-│  ├─ SkyFill, GroundFill (Polygon2D) flat colour above and below the banner
-│  ├─ Banner (Sprite2D)              background_banner, scale 1.85 (covers up to 21:9)
-│  └─ SkyFade, GroundFade (Polygon2D) alpha gradients that hide the banner's edges
+│  ├─ SkyFill, GroundFill (Polygon2D) flat colour beyond the art (only seen on very tall screens)
+│  ├─ Banner (Sprite2D)              background_banner, scale 3.2, fills the screen
+│  ├─ GroundMirror (Sprite2D)        background_ground, flipped vertically: more mud under the HUD
+│  └─ SkyFade (Polygon2D)            soft top edge
 ├─ Battlefield (Node2D)
-│  ├─ Sectors (Node2D)               the 5 zones, left to right
-│  │  ├─ BlueBunker   (Bunker.tscn)  position (130, 700),  team = Blue
-│  │  ├─ BlueTrench   (Trench.tscn)  position (600, 700),  initial_owner = Blue
-│  │  ├─ NoMansLand   (Area2D)       position (960, 700),  L sectors, M blue_units + red_units
-│  │  │  ├─ CollisionShape2D         RectangleShape2D 400 x 240
-│  │  │  └─ WireA, WireB (Sprite2D)  barbed_wire
-│  │  ├─ RedTrench    (Trench.tscn)  position (1320, 700), initial_owner = Red
-│  │  └─ RedBunker    (Bunker.tscn)  position (1790, 700), team = Red
+│  ├─ Sectors (Node2D)               the 9 sectors, left to right, 210 px apart
+│  │  ├─ BlueBunker        (Bunker.tscn)  position (120, 700),  team = Blue
+│  │  ├─ BlueReserveTrench (Trench.tscn)  x = 330,  initial_owner = Blue
+│  │  ├─ BlueSupportTrench (Trench.tscn)  x = 540,  initial_owner = Blue
+│  │  ├─ BlueFrontTrench   (Trench.tscn)  x = 750,  initial_owner = Blue
+│  │  ├─ MiddleTrench      (Trench.tscn)  x = 960,  initial_owner = Neutral
+│  │  ├─ RedFrontTrench    (Trench.tscn)  x = 1170, initial_owner = Red
+│  │  ├─ RedSupportTrench  (Trench.tscn)  x = 1380, initial_owner = Red
+│  │  ├─ RedReserveTrench  (Trench.tscn)  x = 1590, initial_owner = Red
+│  │  └─ RedBunker         (Bunker.tscn)  position (1800, 700), team = Red
+│  ├─ Decor (Node2D)                 WireLeft, WireRight (Sprite2D, barbed_wire)
 │  ├─ Craters (Node2D)               Crater.tscn instances are added here
 │  ├─ Units (Node2D, y_sort_enabled) Unit.tscn instances are added here
 │  └─ Effects (Node2D)               mortars, gas clouds, tracers
@@ -222,11 +238,16 @@ Main (Node2D)                        GameManager.gd
 └─ HUD (HUD.tscn)
 ```
 
+`GameManager` finds the trenches itself: every `Trench` under `Sectors` is
+collected and sorted by x, so adding, removing or moving an instance changes the
+map with no code edits. Keep the spacing at or under about 210 px, or riflemen
+(range 330) can no longer reach the far side of the next trench.
+
 ### Unit.tscn
 
 ```
 Unit (CharacterBody2D)               Unit.gd, motion_mode = Floating, M none
-├─ CollisionShape2D                  CapsuleShape2D (radius 14, height 90)
+├─ CollisionShape2D                  CapsuleShape2D (radius 11, height 74)
 ├─ Shadow (Polygon2D)
 ├─ Sprite (AnimatedSprite2D)         sprite_frames, scale and offset are set in code per team / type
 ├─ Muzzle (Marker2D)                 rifle tip; mirrored in code when the unit faces left
@@ -260,16 +281,15 @@ as drawn and mirrors Red; a unit also turns to face its target.
 
 ```
 Trench (Area2D)                      Trench.gd, L sectors, M blue_units + red_units
-├─ CollisionShape2D                  RectangleShape2D 330 x 220
+├─ CollisionShape2D                  RectangleShape2D 180 x 170
 ├─ Bay (Sprite2D)                    trench_bay, drawn behind the soldiers
 ├─ Flag (Node2D)
 │  ├─ Pole (Polygon2D)
-│  └─ Cloth (Polygon2D)              recoloured to the owning team
+│  └─ Cloth (Polygon2D)              recoloured to the owning team (gray = neutral)
 ├─ Slots (Node2D)
-│  └─ Slot0 .. Slot7 (Marker2D)      one firing position each: capacity = child count
+│  └─ Slot0 .. Slot4 (Marker2D)      one firing position each: capacity = child count
 └─ Parapet (Node2D, z 5)             drawn in front of the soldiers
-   ├─ Sandbags (Sprite2D)            trench_parapet
-   └─ WireLeft, WireRight (Sprite2D) barbed_wire
+   └─ Sandbags (Sprite2D)            trench_parapet
 ```
 
 ### HUD.tscn
@@ -285,7 +305,7 @@ HUD (CanvasLayer)                    HUD.gd
    │  └─ TugOfWar (Control)
    │     ├─ Frame, Back, BlueFill, CenterTick, Marker (ColorRect)
    │     ├─ BlueIcon, RedIcon (Panel)
-   │     └─ SectorPips (HBoxContainer) → 5 x ColorRect, one per sector
+   │     └─ SectorPips (HBoxContainer) → 9 x ColorRect, one per sector
    ├─ SupplyPanel (Control)   → TitleLabel, SupplyValue (Label), SupplyBar (ProgressBar), RateLabel
    ├─ TargetingOverlay (Control, full rect, hidden)   catches the battlefield tap
    │  ├─ Tint (ColorRect), HintLabel (Label)
@@ -317,7 +337,7 @@ receives input underneath the cards) or the armed card cannot be tapped to cance
 
 ```
 Bunker (Area2D)            Bunker.gd, L sectors, M none; exports intact_texture / damaged_texture
-├─ CollisionShape2D        RectangleShape2D 190 x 130
+├─ CollisionShape2D        RectangleShape2D 140 x 100
 ├─ Visual (Node2D)         scale.x = -1 for Red, which also mirrors the markers
 │  ├─ MortarProp (Sprite2D)   mortar_cannon, kicks when the team fires a shell
 │  ├─ Sprite (Sprite2D)       bunker_intact / bunker_damaged
@@ -337,7 +357,7 @@ MortarStrike (Node2D)      MortarStrike.gd
 └─ FuseTimer (Timer, one_shot)
 
 GasCloud (Area2D)          GasCloud.gd, L hazards, M blue_units + red_units
-├─ CollisionShape2D        RectangleShape2D 340 x 220
+├─ CollisionShape2D        RectangleShape2D 190 x 170
 ├─ Clouds (Node2D) → CloudLeft, CloudRight, CloudMid (Sprite2D, gas_cloud)
 ├─ Puffs (GPUParticles2D)
 └─ TickTimer, LifeTimer (Timer)
@@ -359,10 +379,10 @@ Project Settings → Layer Names → 2D Physics:
 
 | Layer | Name | Who is on it | Who scans for it (mask) |
 | --- | --- | --- | --- |
-| 1 | `blue_units` | Blue `Unit` bodies | Red `VisionArea`, Red bunker `GunRange`, Trench, NoMansLand, GasCloud, Crater `CoverZone` |
-| 2 | `red_units` | Red `Unit` bodies | Blue `VisionArea`, Blue bunker `GunRange`, Trench, NoMansLand, GasCloud, Crater `CoverZone` |
+| 1 | `blue_units` | Blue `Unit` bodies | Red `VisionArea`, Red bunker `GunRange`, Trench, GasCloud, Crater `CoverZone` |
+| 2 | `red_units` | Red `Unit` bodies | Blue `VisionArea`, Blue bunker `GunRange`, Trench, GasCloud, Crater `CoverZone` |
 | 3 | `cover` | `Crater` (StaticBody2D) | nobody |
-| 4 | `sectors` | `Trench`, `NoMansLand`, `Bunker` | nobody |
+| 4 | `sectors` | `Trench`, `Bunker` | nobody |
 | 5 | `hazards` | `GasCloud` | nobody |
 
 Units have mask 0, so soldiers never block each other. Their layer exists only so
@@ -378,7 +398,6 @@ them per instance.
 | Main | `SectorTimer` | `timeout` | `Main` | `_on_sector_timer_timeout` |
 | Main | `BlueBunker`, `RedBunker` | `destroyed` | `Main` | `_on_bunker_destroyed` |
 | Main | `BlueBunker`, `RedBunker` | `health_changed` | `Main` | `_on_bunker_health_changed` |
-| Main | `BlueTrench`, `RedTrench` | `owner_changed` | `Main` | `_on_trench_owner_changed` |
 | Main | `AIController/ThinkTimer` | `timeout` | `AIController` | `_on_think_timer_timeout` |
 | Main | `Main` | `supply_changed` | `HUD` | `_on_supply_changed` |
 | Main | `Main` | `time_changed` | `HUD` | `_on_time_changed` |
@@ -403,7 +422,9 @@ Arguments** (type `int`). It matches `GameManager.Card`: 0 Riflemen, 1 Raiders,
 2 Mortar, 3 Gas.
 
 Connected in code instead: every `Unit` connects itself to
-`GameManager.whistle_charge` in `_ready()`, because units are spawned at runtime.
+`GameManager.whistle_charge` in `_ready()`, because units are spawned at runtime,
+and `GameManager` connects each trench's `owner_changed` when it collects the
+trenches.
 
 ### Things that break the scene if changed
 

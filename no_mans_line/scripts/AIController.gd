@@ -23,8 +23,8 @@ enum Mode { BUILD_UP, DEFEND, ASSAULT }
 ## for mortars and gas instead.
 @export var garrison_target := 6
 @export_group("Charging")
-## No attacks during the first seconds of a match, so both sides can dig in.
-@export var opening_truce := 20.0
+## No advances during the first seconds of a match, so the player can settle in.
+@export var opening_truce := 15.0
 ## Minimum stationed soldiers before the AI considers a charge.
 @export var min_charge_force := 4
 ## Without a barrage the AI only charges when its stationed force >= all
@@ -37,7 +37,7 @@ enum Mode { BUILD_UP, DEFEND, ASSAULT }
 @export_group("Artillery")
 ## Enemies in the open, close together, needed for a defensive mortar.
 @export var mortar_cluster_size := 3
-@export var mortar_cluster_radius := 130.0
+@export var mortar_cluster_radius := 75.0
 ## Defenders in a trench needed before gas is preferred over a mortar.
 @export var gas_garrison := 4
 ## Think ticks to wait between releasing gas and blowing the whistle, so the
@@ -68,8 +68,7 @@ func _on_think_timer_timeout() -> void:
 	var my_units := game.get_units(team)
 	var enemy_units := game.get_units(_enemy_team)
 	var my_stationed := _count_in_state(my_units, Unit.State.IN_COVER)
-	var home := game.get_home_trench(team)
-	var intruders := home.count_inside(_enemy_team)
+	var intruders := _count_intruders()
 	var attackers := _count_attackers(enemy_units)
 
 	# A charge queued behind a gas cloud goes ahead no matter what.
@@ -80,7 +79,7 @@ func _on_think_timer_timeout() -> void:
 		return
 
 	# Our trench is being gassed: get the men out of it -- forward.
-	if my_stationed >= 2 and _is_gassed(home) and game.trigger_whistle(team):
+	if _garrison_is_gassed() and game.trigger_whistle(team):
 		return
 
 	# --- 2. Pick a mode -----------------------------------------------------
@@ -109,6 +108,10 @@ func _choose_mode(my_stationed: int, enemy_total: int, intruders: int, attackers
 	if intruders > 0 or attackers >= 2:
 		return Mode.DEFEND
 	var elapsed := game.match_length - game.get_time_left()
+	# Undefended ground ahead (the neutral middle trench, or one the enemy
+	# abandoned): walk in and take it.
+	if elapsed >= opening_truce and my_stationed >= 3 and _objective_is_undefended():
+		return Mode.ASSAULT
 	if elapsed >= opening_truce and my_stationed >= min_charge_force:
 		# Clearly outnumbering the enemy: go over the top.
 		if _outnumbers(my_stationed, enemy_total):
@@ -192,20 +195,49 @@ func _outnumbers(my_stationed: int, enemy_total: int) -> bool:
 
 ## Is there still a free trench slot our reinforcements could walk to?
 func _has_room() -> bool:
-	return game.find_cover_trench(team, game.get_home_trench(team).global_position) != null
+	return game.find_cover_trench(team, Vector2.ZERO) != null
+
+
+## Our most advanced trench with soldiers stationed in it (or, with nobody
+## stationed anywhere, the most advanced trench we own).
+func _get_front_trench() -> Trench:
+	var dir := GameManager.advance_dir(team)
+	var front: Trench = null
+	for trench in game.trenches:
+		if trench.count_stationed(team) == 0:
+			continue
+		if front == null or (trench.global_position.x - front.global_position.x) * dir > 0.0:
+			front = trench
+	return front if front != null else game.get_front_trench(team)
 
 
 ## What a Whistle Charge would go for right now: a Trench or the enemy Bunker.
-## Measured from our most advanced stationed soldier.
 func _get_objective() -> Node2D:
-	var dir := GameManager.advance_dir(team)
-	var front_x := game.get_home_trench(team).global_position.x
-	var front_trench: Trench = game.get_home_trench(team)
+	var front := _get_front_trench()
+	return game.find_charge_objective(team, front.global_position.x, front)
+
+
+## True when the next trench ahead has no enemy in it at all.
+func _objective_is_undefended() -> bool:
+	var objective := _get_objective() as Trench
+	return objective != null and objective.is_hostile_to(team) and objective.count_inside(_enemy_team) == 0
+
+
+## Enemy soldiers standing inside any trench we own or garrison.
+func _count_intruders() -> int:
+	var total := 0
 	for trench in game.trenches:
-		if trench.count_stationed(team) > 0 and (trench.global_position.x - front_x) * dir > 0.0:
-			front_x = trench.global_position.x
-			front_trench = trench
-	return game.find_charge_objective(team, front_x, front_trench)
+		if trench.owner_team == team or trench.count_stationed(team) > 0:
+			total += trench.count_inside(_enemy_team)
+	return total
+
+
+## Is a trench holding two or more of our soldiers under a gas cloud?
+func _garrison_is_gassed() -> bool:
+	for trench in game.trenches:
+		if trench.count_stationed(team) >= 2 and _is_gassed(trench):
+			return true
+	return false
 
 
 ## Enemy soldiers stationed in the trench we would assault (0 for a bunker).
@@ -224,7 +256,7 @@ func _barrage_ready() -> bool:
 func _is_gassed(trench: Trench) -> bool:
 	for node in get_tree().get_nodes_in_group("gas_clouds"):
 		var cloud := node as GasCloud
-		if cloud != null and cloud.is_active() and absf(cloud.global_position.x - trench.global_position.x) < 200.0:
+		if cloud != null and cloud.is_active() and absf(cloud.global_position.x - trench.global_position.x) < 100.0:
 			return true
 	return false
 
@@ -245,14 +277,16 @@ func _count_type(units: Array[Unit], wanted: Unit.Type) -> int:
 	return total
 
 
-## Enemy soldiers out of cover who have reached the middle of the field.
+## Enemy soldiers out of cover who are closing on (or past) our front trench.
 func _count_attackers(enemy_units: Array[Unit]) -> int:
 	var enemy_dir := GameManager.advance_dir(_enemy_team)
+	var front_x := _get_front_trench().global_position.x
 	var total := 0
 	for unit in enemy_units:
 		if unit.state == Unit.State.IN_COVER:
 			continue
-		if (unit.global_position.x - 960.0) * enemy_dir > -120.0:
+		# True once the enemy is within 170 px of our front line.
+		if (unit.global_position.x - front_x) * enemy_dir > -170.0:
 			total += 1
 	return total
 
@@ -262,15 +296,15 @@ func _count_attackers(enemy_units: Array[Unit]) -> int:
 func _find_exposed_cluster(enemy_units: Array[Unit], my_units: Array[Unit]) -> Dictionary:
 	if not game.can_play_card(team, GameManager.Card.MORTAR):
 		return {}
-	# Only troops that have left their own trench line count: shelling fresh
-	# squads next to the enemy bunker is a waste of Supply.
+	# Only troops that have gone past their own front trench count: shelling
+	# reinforcements on their way up the line is a waste of Supply.
 	var enemy_dir := GameManager.advance_dir(_enemy_team)
-	var enemy_line := game.get_home_trench(_enemy_team).global_position.x
+	var enemy_line := game.get_front_trench(_enemy_team).global_position.x
 	var exposed: Array[Unit] = []
 	for unit in enemy_units:
 		if unit.state == Unit.State.IN_COVER:
 			continue
-		if (unit.global_position.x - enemy_line) * enemy_dir > 120.0:
+		if (unit.global_position.x - enemy_line) * enemy_dir > 70.0:
 			exposed.append(unit)
 
 	var best := {}

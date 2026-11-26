@@ -7,10 +7,10 @@
 [ext_resource type="Texture2D" path="res://assets/atlas/muzzle_flash.tres" id="5_flash"]
 
 [sub_resource type="RectangleShape2D" id="footprint_shape"]
-size = Vector2(190, 130)
+size = Vector2(140, 100)
 
 [sub_resource type="CircleShape2D" id="gun_shape"]
-radius = 340.0
+radius = 150.0
 
 [sub_resource type="Gradient" id="puff_gradient"]
 colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
@@ -33,14 +33,14 @@ gradient = SubResource("smoke_fade")
 [sub_resource type="ParticleProcessMaterial" id="wreck_material"]
 particle_flag_disable_z = true
 emission_shape = 3
-emission_box_extents = Vector3(60, 10, 1)
+emission_box_extents = Vector3(42, 8, 1)
 direction = Vector3(0.2, -1, 0)
 spread = 18.0
 initial_velocity_min = 40.0
 initial_velocity_max = 90.0
 gravity = Vector3(0, -20, 0)
-scale_min = 1.5
-scale_max = 3.5
+scale_min = 1.0
+scale_max = 2.4
 color_ramp = SubResource("smoke_ramp")
 
 [node name="Bunker" type="Area2D"]
@@ -51,23 +51,24 @@ intact_texture = ExtResource("2_intact")
 damaged_texture = ExtResource("3_damaged")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, -55)
+position = Vector2(0, -42)
 shape = SubResource("footprint_shape")
 
 [node name="Visual" type="Node2D" parent="."]
 
 [node name="MortarProp" type="Sprite2D" parent="Visual"]
-position = Vector2(-96, -18)
-scale = Vector2(0.6, 0.6)
+position = Vector2(-72, -12)
+scale = Vector2(0.42, 0.42)
 texture = ExtResource("4_mortar")
 
 [node name="Sprite" type="Sprite2D" parent="Visual"]
-position = Vector2(4, -68)
-scale = Vector2(0.8, 0.8)
+position = Vector2(3, -50)
+scale = Vector2(0.6, 0.6)
 texture = ExtResource("2_intact")
 
 [node name="Flag" type="Node2D" parent="Visual"]
-position = Vector2(-42, -150)
+position = Vector2(-32, -110)
+scale = Vector2(0.75, 0.75)
 
 [node name="Pole" type="Polygon2D" parent="Visual/Flag"]
 color = Color(0.12, 0.1, 0.08, 1)
@@ -78,19 +79,19 @@ color = Color(0.3, 0.55, 0.85, 1)
 polygon = PackedVector2Array(2, -78, 52, -70, 44, -60, 52, -48, 2, -44)
 
 [node name="Muzzle" type="Marker2D" parent="Visual"]
-position = Vector2(86, -66)
+position = Vector2(64, -49)
 
 [node name="MuzzleFlash" type="Sprite2D" parent="Visual/Muzzle"]
 visible = false
-position = Vector2(10, 0)
-scale = Vector2(0.8, 0.8)
+position = Vector2(8, 0)
+scale = Vector2(0.6, 0.6)
 texture = ExtResource("5_flash")
 
 [node name="SpawnPoint" type="Marker2D" parent="Visual"]
-position = Vector2(160, 0)
+position = Vector2(96, 0)
 
 [node name="GunRange" type="Area2D" parent="."]
-position = Vector2(0, -40)
+position = Vector2(0, -30)
 collision_layer = 0
 collision_mask = 2
 monitorable = false
@@ -103,24 +104,24 @@ wait_time = 0.3
 autostart = true
 
 [node name="HealthBar" type="Node2D" parent="."]
-position = Vector2(-75, -250)
+position = Vector2(-50, -186)
 
 [node name="Back" type="ColorRect" parent="HealthBar"]
 offset_left = -2.0
 offset_top = -2.0
-offset_right = 152.0
-offset_bottom = 12.0
+offset_right = 102.0
+offset_bottom = 10.0
 mouse_filter = 2
 color = Color(0, 0, 0, 0.65)
 
 [node name="Fill" type="ColorRect" parent="HealthBar"]
-offset_right = 150.0
-offset_bottom = 10.0
+offset_right = 100.0
+offset_bottom = 8.0
 mouse_filter = 2
 color = Color(0.45, 0.72, 0.95, 1)
 
 [node name="WreckSmoke" type="GPUParticles2D" parent="."]
-position = Vector2(0, -100)
+position = Vector2(0, -76)
 emitting = false
 amount = 40
 lifetime = 3.0
