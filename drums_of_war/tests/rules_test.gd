@@ -47,7 +47,7 @@ func has_event(sim: Sim, type: String) -> bool:
 
 func _init() -> void:
 	cards = Sim.load_cards()
-	check(cards.size() == 8, "eight cards load from data/cards.json")
+	check(cards.size() == 18, "eighteen cards load from data/cards.json")
 	test_powder()
 	test_deploy_and_hand()
 	test_first_volley_and_reload()
@@ -60,6 +60,17 @@ func _init() -> void:
 	test_redoubt_and_deploy_zone()
 	test_orders()
 	test_win_conditions()
+	test_sharpshooters()
+	test_zouaves()
+	test_dragoons()
+	test_horse_artillery()
+	test_gatling()
+	test_howitzer()
+	test_grand_battery()
+	test_earthworks()
+	test_balloon()
+	test_general()
+	test_any_deck_plays()
 	test_determinism()
 	print("%d checks, %d failures" % [checks, failures])
 	if failures == 0:
@@ -326,3 +337,295 @@ func test_determinism() -> void:
 				print("    first difference at deploy %d: %s vs %s" % [i, a.command_log[i], b.command_log[i]])
 				break
 	check(a.state_hash() != c.state_hash(), "a different seed gives a different battle")
+
+
+# --- The ten later cards ---------------------------------------------------------------------
+
+func test_sharpshooters() -> void:
+	var sim := quiet(new_sim())
+	sim.spawn(0, "sharpshooters", Vector2(9, 4))
+	var line := sim.spawn(1, "line_infantry", Vector2(9, 10))
+	var gun := sim.spawn(1, "field_gun", Vector2(9, 14.5))
+	line.reload = 99.0
+	gun.reload = 99.0
+	sim.tick()
+	# 2 men x 55, half again for the first volley.
+	check(near(gun.hp, 150.0 - 165.0) or gun.dead, "sharpshooters pick the gun crew over the nearer line (gun %.1f)" % gun.hp)
+	check(near(line.hp, 360.0), "and leave the line alone")
+	var sim2 := quiet(new_sim())
+	sim2.spawn(0, "sharpshooters", Vector2(9, 4))
+	var far := sim2.spawn(1, "line_infantry", Vector2(9, 14.5))
+	far.reload = 99.0
+	sim2.tick()
+	check(far.hp < 360.0, "they reach 10.5 paces, far beyond a musket")
+
+
+func test_zouaves() -> void:
+	var sim := quiet(new_sim())
+	var z := sim.spawn(0, "zouaves", Vector2(13, 10))
+	var foe := sim.spawn(1, "line_infantry", Vector2(13, 15))
+	foe.reload = 99.0
+	check(near(z.morale_max, 160.0), "zouaves have the steadiest nerve on the field")
+	sim.tick()
+	check(z.reload > 0.0, "they open with a volley")
+	run(sim, 3.0)
+	check(has_event(sim, "bayonet"), "and then go in with the bayonet instead of reloading")
+	check(z.in_melee or foe.state == Sim.ST_ROUT or foe.dead, "they are in among the enemy within three seconds, or it has already run")
+	var cav_sim := quiet(new_sim())
+	var z2 := cav_sim.spawn(0, "zouaves", Vector2(13, 10))
+	cav_sim.spawn(1, "scouts", Vector2(13, 16))
+	run(cav_sim, 0.2)
+	check(z2.state == Sim.ST_FORMING, "they still form square when horse bears down")
+
+
+func test_dragoons() -> void:
+	var sim := quiet(new_sim())
+	var d := sim.spawn(0, "dragoons", Vector2(13, 4))
+	check(d.mounted and d.arm == "cavalry", "dragoons arrive mounted")
+	var start := d.pos.y
+	run(sim, 1.0)
+	check(d.pos.y - start > 2.5, "and ride fast (%.2f paces in a second)" % (d.pos.y - start))
+	var foe := sim.spawn(1, "militia", Vector2(13, d.pos.y + 5.5))
+	foe.reload = 99.0
+	var hp := foe.hp
+	run(sim, 0.2)
+	check(not d.mounted and d.arm == "infantry" and has_event(sim, "dismount"), "they get down when an enemy comes into carbine range")
+	var held := d.pos
+	run(sim, 1.5)
+	check(foe.hp < hp, "and open fire on foot")
+	check(d.pos.distance_to(held) < 0.3, "holding the spot")
+	foe.dead = true
+	run(sim, 2.5)
+	check(d.mounted and has_event(sim, "mount"), "they mount again once it is quiet")
+	var sq := quiet(new_sim())
+	var line := sq.spawn(1, "line_infantry", Vector2(13, 20))
+	line.reload = 99.0
+	sq.spawn(0, "dragoons", Vector2(13, 14.5))
+	run(sq, 0.2)
+	check(line.state == Sim.ST_FORMING, "mounted dragoons make infantry form square")
+
+
+func test_horse_artillery() -> void:
+	var sim := quiet(new_sim())
+	var gun := sim.spawn(0, "horse_artillery", Vector2(13, 4))
+	var start := gun.pos.y
+	run(sim, 1.4)
+	check(near(gun.pos.y, start), "horse artillery waits a moment before limbering up")
+	run(sim, 3.0)
+	check(gun.limbered and gun.pos.y > start + 2.0, "then follows the advance (%.2f paces)" % (gun.pos.y - start))
+	var foe := sim.spawn(1, "line_infantry", Vector2(13, gun.pos.y + 9.0))
+	foe.reload = 99.0
+	run(sim, 0.1)
+	check(not gun.limbered and gun.reload > 1.0, "an enemy in range makes it unlimber, which takes time")
+	var stopped := gun.pos.y
+	run(sim, 1.4)
+	check(foe.hp < 360.0 and near(gun.pos.y, stopped, 0.05), "and then it fires from where it stopped")
+
+
+func test_gatling() -> void:
+	var sim := quiet(new_sim())
+	var gun := sim.spawn(0, "gatling_gun", Vector2(9, 4))
+	var foe := sim.spawn(1, "heavy_cavalry", Vector2(9, 10))
+	foe.hp = 100000.0
+	foe.max_hp = 100000.0
+	foe.recoil = 99.0
+	foe.def = foe.def.duplicate()
+	foe.def["speed"] = 0.0
+	run(sim, 1.0)
+	var bursts := 0
+	for e: Dictionary in sim.events:
+		if e["type"] == "burst":
+			bursts += 1
+	check(bursts == 4, "a Gatling fires four bursts a second (%d)" % bursts)
+	check(near(100000.0 - foe.hp, 64.0), "for 16 each (%.1f)" % (100000.0 - foe.hp))
+	run(sim, 5.2)
+	check(has_event(sim, "jam") and gun.reload > 3.0, "after six seconds of fire it jams")
+	var jammed_hp := foe.hp
+	run(sim, 1.0)
+	check(near(foe.hp, jammed_hp), "and is silent while jammed")
+	sim.powder[0] = 10.0
+	sim.decks[0] = ["fire", "rally", "militia", "scouts", "field_gun"]
+	check(sim.deploy(0, 0, gun.pos), "Fire! can be given to a jammed Gatling")
+	run(sim, 0.3)
+	check(foe.hp < jammed_hp, "which clears the jam")
+
+
+func test_howitzer() -> void:
+	var sim := quiet(new_sim())
+	var how := sim.spawn(0, "howitzer", Vector2(9, 4))
+	var a := sim.spawn(1, "line_infantry", Vector2(9, 14))
+	var b := sim.spawn(1, "line_infantry", Vector2(10.6, 14.4))
+	for r: Sim.Regiment in [a, b]:
+		r.reload = 99.0
+		r.def = r.def.duplicate()
+		r.def["speed"] = 0.0
+	sim.tick()
+	check(has_event(sim, "shell") and near(a.hp, 360.0), "a howitzer shell takes time to arrive")
+	run(sim, 1.4)
+	check(near(a.hp, 230.0) and near(b.hp, 230.0), "then bursts on everyone within reach (%.0f, %.0f)" % [a.hp, b.hp])
+	check(near(how.reload, 6.5 - 1.45, 0.06), "and the howitzer is slow to reload")
+	var sim2 := quiet(new_sim())
+	sim2.spawn(0, "howitzer", Vector2(9, 4))
+	var close := sim2.spawn(1, "line_infantry", Vector2(9, 7))
+	close.reload = 99.0
+	close.def = close.def.duplicate()
+	close.def["speed"] = 0.0
+	run(sim2, 3.0)
+	check(near(close.hp, 360.0), "it cannot drop a shell on something right in front of it")
+	var sim3 := quiet(new_sim())
+	sim3.spawn(0, "howitzer", Vector2(9, 4))
+	var mover := sim3.spawn(1, "scouts", Vector2(3, 15))
+	sim3.tick()
+	run(sim3, 1.4)
+	check(near(mover.hp, mover.max_hp), "a shell can be outrun")
+
+
+func test_grand_battery() -> void:
+	var sim := quiet(new_sim())
+	sim.decks[0] = ["grand_battery", "rally", "militia", "scouts", "field_gun"]
+	sim.powder[0] = 10.0
+	var sq := sim.spawn(1, "line_infantry", Vector2(13, 24))
+	sq.state = Sim.ST_SQUARE
+	sq.formation = "square"
+	sq.release_timer = 99.0
+	sq.reload = 99.0
+	check(sim.deploy_error(0, 0, sq.pos) == "", "the Grand Battery can be called down anywhere, even deep in enemy ground")
+	sim.deploy(0, 0, sq.pos)
+	check(near(sim.powder[0], 6.0), "it costs 4 Powder")
+	run(sim, 1.9)
+	check(near(sq.hp, 360.0), "nothing lands for two seconds")
+	run(sim, 0.2)
+	check(sq.dead or near(sq.hp, 0.0), "then a square under it is destroyed (200 x2)")
+	var sim2 := quiet(new_sim())
+	sim2.decks[0] = ["grand_battery", "rally", "militia", "scouts", "field_gun"]
+	sim2.powder[0] = 10.0
+	var redoubt := sim2.redoubt(1, 0)
+	sim2.deploy(0, 0, redoubt.pos)
+	run(sim2, 2.1)
+	check(near(redoubt.hp, Sim.REDOUBT_HP - 260.0), "it does 260 to a structure")
+
+
+func test_earthworks() -> void:
+	var open_sim := quiet(new_sim())
+	var target := open_sim.spawn(0, "line_infantry", Vector2(13, 10))
+	target.reload = 99.0
+	open_sim.spawn(1, "line_infantry", Vector2(13, 15.5))
+	open_sim.tick()
+	var open_loss := 360.0 - target.hp
+	var sim := quiet(new_sim())
+	sim.decks[0] = ["earthworks", "rally", "militia", "scouts", "field_gun"]
+	sim.powder[0] = 10.0
+	check(sim.deploy(0, 0, Vector2(13, 10.6)), "earthworks are placed like a unit")
+	check(sim.works.size() == 1 and sim.regiments.is_empty(), "they are a work, not a regiment")
+	var covered := sim.spawn(0, "line_infantry", Vector2(13, 10))
+	covered.reload = 99.0
+	sim.spawn(1, "line_infantry", Vector2(13, 15.5))
+	sim.tick()
+	check(near(360.0 - covered.hp, open_loss * 0.5), "a volley does half to troops behind them (%.1f against %.1f)" % [360.0 - covered.hp, open_loss])
+	var sim2 := quiet(new_sim())
+	sim2.place_work(0, "earthworks", Vector2(13, 10.6))
+	var shelled := sim2.spawn(0, "line_infantry", Vector2(13, 10))
+	shelled.reload = 99.0
+	sim2.spawn(1, "field_gun", Vector2(13, 20))
+	sim2.tick()
+	check(near(360.0 - shelled.hp, 225.0), "they do nothing against cannon (%.1f, the full 150 x1.5 on a column)" % (360.0 - shelled.hp))
+	run(sim2, 60.0)
+	check(sim2.works.is_empty(), "and they crumble after a minute")
+
+
+func test_balloon() -> void:
+	var sim := quiet(new_sim())
+	sim.spawn(0, "field_gun", Vector2(13, 4))
+	var far := sim.spawn(1, "line_infantry", Vector2(13, 18))
+	far.reload = 99.0
+	far.def = far.def.duplicate()
+	far.def["speed"] = 0.0
+	run(sim, 0.5)
+	check(near(far.hp, 360.0), "14 paces is beyond a field gun")
+	sim.place_work(0, "balloon", Vector2(15, 3))
+	sim.tick()
+	check(far.hp < 360.0, "until a balloon goes up on that flank")
+	var sim2 := quiet(new_sim())
+	sim2.spawn(0, "field_gun", Vector2(13, 4))
+	var other := sim2.spawn(1, "line_infantry", Vector2(13, 18))
+	other.reload = 99.0
+	other.def = other.def.duplicate()
+	other.def["speed"] = 0.0
+	sim2.place_work(0, "balloon", Vector2(3, 3))
+	run(sim2, 0.5)
+	check(near(other.hp, 360.0), "a balloon on the other flank is no help")
+
+
+func test_general() -> void:
+	var plain := quiet(new_sim())
+	var alone := plain.spawn(0, "line_infantry", Vector2(13, 10))
+	alone.reload = 99.0
+	plain.spawn(1, "line_infantry", Vector2(13, 15.5))
+	plain.tick()
+	var plain_loss := alone.morale_max - alone.morale
+	var sim := quiet(new_sim())
+	var led := sim.spawn(0, "line_infantry", Vector2(13, 10))
+	led.reload = 99.0
+	var g := sim.spawn(0, "general", Vector2(13, 7.6))
+	sim.spawn(1, "line_infantry", Vector2(13, 15.5))
+	sim.tick()
+	sim.tick()
+	check(near(led.morale_max - led.morale, plain_loss * 0.6, 0.2), "troops near the General lose less nerve (%.1f against %.1f)" % [led.morale_max - led.morale, plain_loss])
+	var sim2 := quiet(new_sim())
+	var loader := sim2.spawn(0, "line_infantry", Vector2(13, 10))
+	sim2.spawn(0, "general", Vector2(13, 7.6))
+	loader.reload = 3.0
+	loader.state = Sim.ST_SQUARE
+	loader.release_timer = 99.0
+	run(sim2, 1.0)
+	check(near(loader.reload, 3.0 - 1.25, 0.07), "and reload a quarter faster (%.2f left of 3)" % loader.reload)
+	var sim3 := quiet(new_sim())
+	var runner := sim3.spawn(0, "line_infantry", Vector2(13, 14))
+	runner.state = Sim.ST_ROUT
+	runner.morale = 0.0
+	sim3.spawn(0, "general", Vector2(13, 12))
+	run(sim3, 2.6)
+	check(runner.state != Sim.ST_ROUT, "a routed regiment rallies on the General")
+	var sim4 := quiet(new_sim())
+	var shaken := sim4.spawn(0, "line_infantry", Vector2(13, 10))
+	shaken.reload = 99.0
+	var doomed := sim4.spawn(0, "general", Vector2(13, 7.6))
+	sim4.tick()
+	sim4._damage(doomed, 9999.0, Vector2(13, 20))
+	check(has_event(sim4, "general_down") and near(shaken.morale, 100.0 - 35.0), "when he falls, those around him take a shock (%.1f)" % shaken.morale)
+	var sim5 := quiet(new_sim())
+	sim5.decks[0] = ["general", "general", "militia", "scouts", "field_gun"]
+	sim5.powder[0] = 10.0
+	check(sim5.deploy(0, 0, Vector2(9, 6)), "a General can be deployed")
+	check(sim5.deploy_error(0, 0, Vector2(9, 6)) != "" or sim5.hand(0)[0] != "general", "but only one at a time")
+	var lead := sim5.spawn(0, "line_infantry", Vector2(4, 12))
+	lead.reload = 99.0
+	run(sim5, 6.0)
+	check(sim5.general(0).pos.distance_to(lead.pos) < 4.0, "he rides to keep behind his leading regiment")
+
+
+## Every card can be dealt, deployed by the bot and fought with, in decks drawn at random.
+func test_any_deck_plays() -> void:
+	var ids: Array = cards.keys()
+	var seen := {}
+	for trial in 6:
+		var rng := Sim.GsRng.new(100 + trial)
+		var deck0: Array = ids.duplicate()
+		var deck1: Array = ids.duplicate()
+		rng.shuffle(deck0)
+		rng.shuffle(deck1)
+		var sim := Sim.new(200 + trial, cards, deck0.slice(0, 8), deck1.slice(0, 8))
+		var b0 := Bot.new(0, 200 + trial)
+		var b1 := Bot.new(1, 200 + trial)
+		var guard := 0
+		while sim.phase != Sim.PHASE_OVER and guard < 6000:
+			b0.tick(sim)
+			b1.tick(sim)
+			sim.tick()
+			sim.events.clear()
+			guard += 1
+		for c: Dictionary in sim.command_log:
+			seen[c["card"]] = true
+		check(sim.phase == Sim.PHASE_OVER, "a match with random decks finishes (trial %d)" % trial)
+		check(sim.command_log.size() >= 12, "and the bots find things to play from them (%d deploys)" % sim.command_log.size())
+	check(seen.size() >= 16, "nearly every card gets played across the trials (%d of 18)" % seen.size())

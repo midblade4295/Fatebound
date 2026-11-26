@@ -80,6 +80,18 @@ const HQ_RANGE := 6.5
 const HQ_DMG := 50.0
 const HQ_PERIOD := 2.0
 
+# --- The later cards ----------------------------------------------------------------------
+const GENERAL_NERVE := 0.6          # morale lost by regiments near their General, as a share
+const GENERAL_RELOAD := 1.25        # how much faster they reload
+const GENERAL_FALL_RADIUS := 9.0
+const GENERAL_FALL_SHOCK := 35.0
+const GENERAL_FOLLOW := 2.4         # how far behind the leading regiment he rides
+const EARTHWORK_MULT := 0.5         # musket fire on troops behind a fieldwork
+const EARTHWORK_DEPTH := 2.0        # how far behind it they are still covered
+const BALLOON_RANGE_MULT := 1.25
+const LOOSE_SHELL_MULT := 0.6
+const GATLING_COOL := 1.5           # heat lost per second while the gun is not firing
+
 enum { ST_MARCH, ST_FORMING, ST_SQUARE, ST_ROUT }
 enum { PHASE_REGULAR, PHASE_OVERTIME, PHASE_OVER }
 const NO_WINNER := -1
@@ -115,6 +127,23 @@ class Regiment extends RefCounted:
 	var rally_timer: float = 0.0
 	var in_melee: bool = false
 	var dead: bool = false
+	var mounted: bool = false    # dragoons: in the saddle (arm is then "cavalry"), or on foot
+	var limbered: bool = false   # horse artillery: hooked up and moving
+	var idle_time: float = 0.0   # seconds with nothing to shoot at
+	var heat: float = 0.0        # Gatling: seconds of fire since it last cooled
+	var fired_tick: int = -1000
+	var shock_tick: int = -1000
+
+
+## A thing placed on the field that is not a regiment: a length of earthworks or a balloon.
+class Work extends RefCounted:
+	var id: int
+	var side: int
+	var kind: String             # the card id: "earthworks" or "balloon"
+	var pos: Vector2
+	var half_width: float
+	var life: float
+	var dead: bool = false
 
 
 class Structure extends RefCounted:
@@ -143,6 +172,9 @@ var powder: Array = [POWDER_START, POWDER_START]
 var decks: Array = [[], []]
 var regiments: Array = []
 var structures: Array = []
+var works: Array = []            # earthworks and balloons
+var shells: Array = []           # in the air: {due (tick), pos, side, dmg, struct, radius, kind}
+var _generals: Array = []        # the Generals alive this tick
 var events: Array = []           # things the view may want to show; safe to clear at any time
 var command_log: Array = []      # every accepted deploy, for replays and determinism checks
 var _next_id: int = 1
@@ -295,6 +327,8 @@ func deploy_error(side: int, hand_index: int, pos: Vector2) -> String:
 		if card_id == "rally" and _order_rally_targets(side, pos, float(def["radius"])).is_empty():
 			return "No regiment there to rally"
 		return ""
+	if def.get("arm", "") == "command" and general(side) != null:
+		return "Your General is already on the field"
 	if in_creek(pos.y):
 		return "Cannot deploy in the creek"
 	if local_y(side, pos.y) > deploy_depth(side, pos.x):
@@ -317,9 +351,35 @@ func deploy(side: int, hand_index: int, pos: Vector2) -> bool:
 	command_log.append({"tick": tick_count, "side": side, "card": card_id, "x": pos.x, "y": pos.y})
 	if def["type"] == "order":
 		_play_order(side, card_id, def, pos)
+	elif def["type"] == "work":
+		place_work(side, card_id, pos)
 	else:
 		spawn(side, card_id, pos)
 	return true
+
+
+## Puts a fieldwork or a balloon on the field.
+func place_work(side: int, card_id: String, pos: Vector2) -> Work:
+	var def: Dictionary = cards[card_id]
+	var w := Work.new()
+	w.id = _next_id
+	_next_id += 1
+	w.side = side
+	w.kind = card_id
+	w.pos = pos
+	w.half_width = float(def.get("radius", 1.0))
+	w.life = float(def.get("life", 60.0))
+	works.append(w)
+	events.append({"type": "deploy", "pos": pos, "side": side, "card": card_id})
+	return w
+
+
+## A side's General, if he is on the field.
+func general(side: int) -> Regiment:
+	for r: Regiment in regiments:
+		if r.side == side and r.arm == "command" and not r.dead:
+			return r
+	return null
 
 
 ## Puts a regiment straight onto the field. deploy() uses it; tests use it to set up scenes.
@@ -343,6 +403,7 @@ func spawn(side: int, card_id: String, pos: Vector2) -> Regiment:
 	r.morale_max = float(def["morale"])
 	r.morale = r.morale_max
 	r.life = float(def.get("life", -1.0))
+	r.mounted = def.has("dismount")
 	if r.arm == "artillery":
 		r.formation = "line"
 	regiments.append(r)
@@ -357,6 +418,10 @@ func state_hash() -> int:
 		parts.append("%d:%d:%s:%.4f:%.4f:%.3f:%.3f:%d" % [r.id, r.side, r.card_id, r.pos.x, r.pos.y, r.hp, r.morale, r.state])
 	for s: Structure in structures:
 		parts.append("%d:%.3f" % [s.id, s.hp])
+	for w: Work in works:
+		parts.append("%d:%s:%.3f" % [w.id, w.kind, w.life])
+	for sh: Dictionary in shells:
+		parts.append("%d:%.3f:%.3f" % [int(sh["due"]), Vector2(sh["pos"]).x, Vector2(sh["pos"]).y])
 	return "|".join(parts).hash()
 
 
@@ -372,8 +437,11 @@ func tick() -> void:
 	var gain := DT / POWDER_PERIOD * (2.0 if double_powder() else 1.0)
 	for side in 2:
 		powder[side] = minf(POWDER_MAX, powder[side] + gain)
+	_generals.clear()
 	for r: Regiment in regiments:
 		r.men_tick = r.men
+		if r.arm == "command" and not r.dead:
+			_generals.append(r)
 	for s: Structure in structures:
 		if not s.dead:
 			_update_structure(s)
@@ -388,6 +456,8 @@ func tick() -> void:
 		else:
 			_morale_hit(hit[1], hit[2])
 	_pending.clear()
+	_update_shells()
+	_update_works()
 	_separate()
 	regiments = regiments.filter(func(r: Regiment) -> bool: return not r.dead)
 	_check_clock()
@@ -439,11 +509,14 @@ func _update_structure(s: Structure) -> void:
 		return
 	var best: Regiment = null
 	var best_d := INF
+	var reach := s.gun_range
+	if s.kind == "redoubt" and balloon_over(s.side, s.pos.x):
+		reach *= BALLOON_RANGE_MULT
 	for r: Regiment in regiments:
 		if r.dead or r.side == s.side:
 			continue
 		var d := s.pos.distance_to(r.pos)
-		if d > s.gun_range:
+		if d > reach:
 			continue
 		if r.state == ST_ROUT:
 			d += 4.0
@@ -480,7 +553,11 @@ func _damage_structure(s: Structure, amount: float) -> void:
 func _update_regiment(r: Regiment) -> void:
 	r.since_hit += DT
 	if r.reload > 0.0:
-		r.reload = maxf(0.0, r.reload - DT)
+		r.reload = maxf(0.0, r.reload - DT * (GENERAL_RELOAD if _general_near(r) != null else 1.0))
+		if r.reload < 0.00001:
+			r.reload = 0.0             # so that a quarter-second reload is five ticks, not sometimes six
+	if r.heat > 0.0 and tick_count - r.fired_tick > 6:
+		r.heat = maxf(0.0, r.heat - GATLING_COOL * DT)
 	if r.life > 0.0:
 		r.life -= DT
 		if r.life <= 0.0:
@@ -505,8 +582,14 @@ func _update_regiment(r: Regiment) -> void:
 		return
 
 	var foe := _nearest_enemy(r, CONTACT)
+	var was_fighting := r.in_melee
 	r.in_melee = foe != null
 	if r.in_melee:
+		if not was_fighting and r.def.has("bayonet_shock") and tick_count - r.shock_tick > 60:
+			# Veterans going in with the bayonet: the sight of it shakes whoever they reach.
+			r.shock_tick = tick_count
+			events.append({"type": "bayonet", "pos": foe.pos, "side": r.side})
+			_morale_hit(foe, float(r.def["bayonet_shock"]))
 		_melee(r, foe)
 		r.runup = 0.0
 		if r.state == ST_MARCH and r.arm != "cavalry":
@@ -515,12 +598,73 @@ func _update_regiment(r: Regiment) -> void:
 
 	if r.state == ST_FORMING:
 		return
+	if r.arm == "command":
+		_update_general(r)
+		return
+	if r.def.has("dismount") and _update_dragoons(r):
+		return
 
 	var shoot_range := float(r.def.get("range", 0.0))
 	if shoot_range > 0.0:
+		if r.arm == "artillery" and balloon_over(r.side, r.pos.x):
+			shoot_range *= BALLOON_RANGE_MULT
 		_update_shooter(r, shoot_range)
 	else:
 		_update_cavalry(r)
+
+
+## The General keeps just behind whichever of his regiments is furthest forward near him.
+## He does not seek a fight; if nobody is left to lead he stays where he is.
+func _update_general(r: Regiment) -> void:
+	var lead: Regiment = null
+	var lead_score := -INF
+	for o: Regiment in regiments:
+		if o.dead or o.side != r.side or o == r or o.state == ST_ROUT or o.arm == "command":
+			continue
+		if float(o.def.get("speed", 0.0)) <= 0.0:
+			continue
+		var score := local_y(r.side, o.pos.y) - absf(o.pos.x - r.pos.x) * 0.5
+		if score > lead_score:
+			lead_score = score
+			lead = o
+	if lead == null:
+		return
+	var goal := _fix_pos(lead.pos - Vector2(0.0, fwd(r.side) * GENERAL_FOLLOW))
+	if in_creek(goal.y):
+		goal = lead.pos
+	if r.pos.distance_to(goal) > 0.7:
+		_move(r, goal, float(r.def["speed"]))
+	else:
+		r.facing = Vector2(0.0, fwd(r.side))
+
+
+## Dragoons ride up their lane until something is in carbine range, get down and fight on
+## foot, and mount again once it has been quiet for a moment. Returns true while there is
+## nothing for the ordinary shooting rules to do.
+func _update_dragoons(r: Regiment) -> bool:
+	var reach := float(r.def["range"])
+	var has_target := _shoot_target_regiment(r, reach) != null or _shoot_target_structure(r, reach) != null
+	if r.mounted:
+		if has_target and not in_ford_water(r.pos):
+			r.mounted = false
+			r.arm = "infantry"
+			r.formation = "line"
+			r.idle_time = 0.0
+			r.reload = maxf(r.reload, float(r.def["dismount"]))
+			events.append({"type": "dismount", "pos": r.pos, "side": r.side})
+			return true
+		r.formation = "column"
+		_move(r, _lane_structure(r).pos, float(r.def["speed"]))
+		return true
+	if has_target:
+		r.idle_time = 0.0
+		return false
+	r.idle_time += DT
+	if r.idle_time >= float(r.def.get("remount", 2.0)):
+		r.mounted = true
+		r.arm = "cavalry"
+		events.append({"type": "mount", "pos": r.pos, "side": r.side})
+	return true
 
 
 func _update_square(r: Regiment) -> void:
@@ -549,9 +693,17 @@ func _update_square(r: Regiment) -> void:
 
 func _update_shooter(r: Regiment, shoot_range: float) -> void:
 	var wet := in_ford_water(r.pos)
+	if not wet and r.def.has("closes") and r.state == ST_MARCH and r.reload > 0.0:
+		# The volley is away: close with the bayonet instead of standing to reload.
+		var prey := _nearest_enemy(r, float(r.def["closes"]), true)
+		if prey != null and prey.arm != "cavalry" and _bank(prey.pos.y) == _bank(r.pos.y):
+			r.formation = "line"
+			_move(r, prey.pos, float(r.def["speed"]) * 1.25)
+			return
 	if not wet:
 		var target_reg := _shoot_target_regiment(r, shoot_range)
 		if target_reg != null:
+			_unlimber(r)
 			r.facing = (target_reg.pos - r.pos).normalized()
 			if r.state != ST_SQUARE:
 				r.formation = "line"
@@ -561,14 +713,21 @@ func _update_shooter(r: Regiment, shoot_range: float) -> void:
 			return
 		var target_st := _shoot_target_structure(r, shoot_range)
 		if target_st != null:
+			_unlimber(r)
 			r.facing = (target_st.pos - r.pos).normalized()
 			if r.state != ST_SQUARE:
 				r.formation = "line"
 			if r.reload <= 0.0:
 				_fire_at_structure(r, target_st)
 			return
-	if r.state == ST_SQUARE or r.arm == "artillery":
+	if r.state == ST_SQUARE or (r.arm == "artillery" and not r.def.has("limber")):
 		return
+	if r.arm == "artillery" and not r.limbered:
+		# Horse artillery: nothing in reach, so after a moment the team is hooked up again.
+		r.idle_time += DT
+		if r.idle_time < float(r.def["limber"]):
+			return
+		r.limbered = true
 	# Nothing to shoot: advance on a nearby enemy, or up the lane.
 	var goal: Vector2
 	var near := _nearest_enemy(r, shoot_range + 3.0, true)
@@ -578,6 +737,14 @@ func _update_shooter(r: Regiment, shoot_range: float) -> void:
 		goal = _lane_structure(r).pos
 	r.formation = "column"
 	_move(r, goal, float(r.def["speed"]))
+
+
+## A gun that was on the move has to be unhooked before it can fire.
+func _unlimber(r: Regiment) -> void:
+	r.idle_time = 0.0
+	if r.limbered:
+		r.limbered = false
+		r.reload = maxf(r.reload, float(r.def.get("unlimber", 1.0)))
 
 
 func _update_cavalry(r: Regiment) -> void:
@@ -600,18 +767,25 @@ func _update_rout(r: Regiment) -> void:
 	r.formation = "rout"
 	var home := hq(r.side)
 	var speed := maxf(1.4, float(r.def["speed"])) * ROUT_SPEED_MULT
-	if home == null or home.dead:
+	# Run for the headquarters, or for the General if he is nearer.
+	var refuge := Vector2.INF
+	if home != null and not home.dead:
+		refuge = home.pos
+	for g: Regiment in _generals:
+		if g.side == r.side and not g.dead and g != r and r.pos.distance_to(g.pos) < r.pos.distance_to(refuge):
+			refuge = g.pos
+	if refuge == Vector2.INF:
 		var edge := Vector2(r.pos.x, 0.6 if r.side == 0 else FIELD_H - 0.6)
 		_move(r, edge, speed)
 		if r.pos.distance_to(edge) < 0.3:
 			r.dead = true
 		return
-	if r.pos.distance_to(home.pos) <= RALLY_DIST:
+	if r.pos.distance_to(refuge) <= RALLY_DIST:
 		r.rally_timer += DT
 		if r.rally_timer >= RALLY_TIME:
 			_rally(r, RALLY_MORALE * r.morale_max)
 	else:
-		_move(r, home.pos, speed)
+		_move(r, refuge, speed)
 
 
 func _rally(r: Regiment, morale_value: float) -> void:
@@ -639,6 +813,15 @@ func _start_rout(r: Regiment) -> void:
 
 func _fire_at_regiment(r: Regiment, t: Regiment) -> void:
 	r.reload = float(r.def["reload"])
+	r.fired_tick = tick_count
+	if r.def.has("burst_dmg"):
+		_fire_burst(r, t, null)
+		return
+	if r.def.has("shell_dmg"):
+		r.fired_first = true
+		_launch_shell(r.side, r.pos, t.pos, float(r.def["shell_dmg"]), float(r.def["shell_dmg"]) * STRUCT_SHOT_MULT,
+				float(r.def["shell_radius"]), float(r.def["shell_time"]), "shell")
+		return
 	if r.arm == "artillery":
 		_fire_gun(r, t)
 		return
@@ -646,11 +829,105 @@ func _fire_at_regiment(r: Regiment, t: Regiment) -> void:
 	if bool(t.def.get("loose", false)):
 		dmg *= LOOSE_MUSKET_MULT
 	events.append({"type": "volley", "pos": r.pos, "to": t.pos, "side": r.side, "men": r.men_tick})
-	_damage(t, dmg, r.pos)
+	_damage(t, dmg * cover_mult(t, r.pos), r.pos)
+
+
+## The Gatling: a short burst every quarter second with no reload to wait out, until the
+## barrels have been turning too long and it jams.
+func _fire_burst(r: Regiment, t: Regiment, s: Structure) -> void:
+	r.fired_first = true
+	var dmg := float(r.def["burst_dmg"])
+	if t != null:
+		events.append({"type": "burst", "pos": r.pos, "to": t.pos, "side": r.side})
+		if bool(t.def.get("loose", false)):
+			dmg *= LOOSE_MUSKET_MULT
+		_damage(t, dmg * cover_mult(t, r.pos), r.pos)
+	else:
+		events.append({"type": "burst", "pos": r.pos, "to": s.pos, "side": r.side})
+		_damage_structure(s, dmg * STRUCT_MUSKET_MULT)
+	r.heat += float(r.def["reload"])
+	if r.heat >= float(r.def["jam_after"]):
+		r.heat = 0.0
+		r.reload = float(r.def["jam_time"])
+		events.append({"type": "jam", "pos": r.pos, "side": r.side})
+
+
+## A shell (or a whole bombardment) on its way: it lands where it was aimed, after "delay"
+## seconds, on whoever is there by then.
+func _launch_shell(side: int, from: Vector2, to: Vector2, dmg: float, struct_dmg: float, radius: float, delay: float, kind: String) -> void:
+	shells.append({"due": tick_count + int(round(delay / DT)), "pos": to, "side": side, "dmg": dmg, "struct": struct_dmg,
+			"radius": radius, "kind": kind})
+	events.append({"type": "shell", "pos": from, "to": to, "side": side, "time": delay, "radius": radius, "kind": kind})
+
+
+func _update_shells() -> void:
+	if shells.is_empty():
+		return
+	var flying: Array = []
+	for sh: Dictionary in shells:
+		if int(sh["due"]) > tick_count:
+			flying.append(sh)
+			continue
+		var at: Vector2 = sh["pos"]
+		var radius := float(sh["radius"])
+		events.append({"type": "shell_burst", "pos": at, "side": sh["side"], "radius": radius, "kind": sh["kind"]})
+		for o: Regiment in regiments:
+			if o.dead or o.side == int(sh["side"]) or o.pos.distance_to(at) > radius:
+				continue
+			var dmg := float(sh["dmg"])
+			if sh["kind"] == "barrage":
+				dmg *= _shot_mult(o)          # round shot and shell together: worst for squares and columns
+			elif bool(o.def.get("loose", false)):
+				dmg *= LOOSE_SHELL_MULT
+			_damage(o, dmg, at)
+		for st: Structure in structures:
+			if not st.dead and st.side != int(sh["side"]) and st.pos.distance_to(at) <= radius + st.radius:
+				_damage_structure(st, float(sh["struct"]))
+	shells = flying
+
+
+func _update_works() -> void:
+	if works.is_empty():
+		return
+	for w: Work in works:
+		w.life -= DT
+		if w.life <= 0.0:
+			w.dead = true
+			events.append({"type": "work_gone", "pos": w.pos, "side": w.side, "kind": w.kind})
+	works = works.filter(func(w: Work) -> bool: return not w.dead)
+
+
+## True if that side has a balloon up over the flank that x lies on.
+func balloon_over(side: int, x: float) -> bool:
+	for w: Work in works:
+		if w.kind == "balloon" and w.side == side and (w.pos.x < FIELD_W * 0.5) == (x < FIELD_W * 0.5):
+			return true
+	return false
+
+
+## How much of a musket volley reaches a regiment: half if it stands behind one of its own
+## fieldworks and the fire comes from in front of the work.
+func cover_mult(t: Regiment, from: Vector2) -> float:
+	for w: Work in works:
+		if w.kind != "earthworks" or w.side != t.side or absf(t.pos.x - w.pos.x) > w.half_width:
+			continue
+		var behind := (w.pos.y - t.pos.y) * fwd(t.side)       # how far behind the work the regiment stands
+		if behind >= -0.6 and behind <= EARTHWORK_DEPTH and (from.y - w.pos.y) * fwd(t.side) > 0.0:
+			return EARTHWORK_MULT
+	return 1.0
 
 
 func _fire_at_structure(r: Regiment, s: Structure) -> void:
 	r.reload = float(r.def["reload"])
+	r.fired_tick = tick_count
+	if r.def.has("burst_dmg"):
+		_fire_burst(r, null, s)
+		return
+	if r.def.has("shell_dmg"):
+		r.fired_first = true
+		_launch_shell(r.side, r.pos, s.pos, float(r.def["shell_dmg"]), float(r.def["shell_dmg"]) * STRUCT_SHOT_MULT,
+				float(r.def["shell_radius"]), float(r.def["shell_time"]), "shell")
+		return
 	if r.arm == "artillery":
 		r.fired_first = true
 		events.append({"type": "cannon", "pos": r.pos, "to": s.pos, "side": r.side})
@@ -718,7 +995,7 @@ func _shot_mult(t: Regiment) -> float:
 func _melee(r: Regiment, foe: Regiment) -> void:
 	var dps := r.men_tick * float(r.def["melee_dps"])
 	if r.arm == "cavalry":
-		if r.runup >= CHARGE_RUNUP:
+		if r.runup >= CHARGE_RUNUP and r.def.has("charge_dmg"):
 			if foe.state == ST_SQUARE:
 				events.append({"type": "repelled", "pos": foe.pos, "side": r.side})
 				_damage(r, SQUARE_REPEL_DMG, foe.pos)
@@ -757,6 +1034,12 @@ func _damage(t: Regiment, amount: float, from: Vector2) -> void:
 		t.men = 0
 		t.dead = true
 		events.append({"type": "destroyed_regiment", "pos": t.pos, "side": t.side})
+		if t.arm == "command":
+			# The General is down: everyone who could see him fall is shaken.
+			events.append({"type": "general_down", "pos": t.pos, "side": t.side})
+			for o: Regiment in regiments:
+				if not o.dead and o.side == t.side and o != t and o.pos.distance_to(t.pos) <= GENERAL_FALL_RADIUS:
+					_morale_hit(o, GENERAL_FALL_SHOCK)
 		return
 	t.men = int(ceilf(t.hp / float(t.def["hp_per_man"])))
 	var loss := amount / t.max_hp * 100.0 * MORALE_K
@@ -773,6 +1056,8 @@ func _morale_hit(t: Regiment, amount: float) -> void:
 		return
 	if t.dead or t.state == ST_ROUT:
 		return
+	if _general_near(t) != null:
+		amount *= GENERAL_NERVE
 	t.morale -= amount
 	if t.morale <= 0.0:
 		_start_rout(t)
@@ -786,7 +1071,7 @@ func _order_fire_target(side: int, pos: Vector2, radius: float) -> Regiment:
 	for r: Regiment in regiments:
 		if r.dead or r.side != side or r.state == ST_ROUT or r.state == ST_FORMING:
 			continue
-		if float(r.def.get("range", 0.0)) <= 0.0:
+		if float(r.def.get("range", 0.0)) <= 0.0 or r.mounted or r.limbered:
 			continue
 		var d := r.pos.distance_to(pos)
 		if d <= best_d:
@@ -815,6 +1100,9 @@ func _play_order(side: int, card_id: String, def: Dictionary, pos: Vector2) -> v
 				_rally(r, float(def["morale_restore"]))
 			else:
 				r.morale = minf(r.morale_max, r.morale + float(def["morale_restore"]))
+	elif card_id == "grand_battery":
+		var off_map := Vector2(pos.x, -2.0 if side == 0 else FIELD_H + 2.0)
+		_launch_shell(side, off_map, pos, float(def["dmg"]), float(def["struct_dmg"]), float(def["radius"]), float(def["delay"]), "barrage")
 
 
 # --- Targeting -----------------------------------------------------------------------------
@@ -834,6 +1122,15 @@ func _nearest_enemy(r: Regiment, max_dist: float, skip_routing: bool = false) ->
 	return best
 
 
+## The side's General within reach of a regiment, if there is one (never the regiment itself).
+func _general_near(r: Regiment) -> Regiment:
+	for g: Regiment in _generals:
+		if g.side == r.side and g != r and not g.dead and g.state != ST_ROUT \
+				and r.pos.distance_to(g.pos) <= float(g.def.get("aura", 5.0)):
+			return g
+	return null
+
+
 func _enemy_cavalry_within(r: Regiment, dist: float) -> bool:
 	for o: Regiment in regiments:
 		if o.dead or o.side == r.side or o.arm != "cavalry" or o.state == ST_ROUT:
@@ -846,13 +1143,17 @@ func _enemy_cavalry_within(r: Regiment, dist: float) -> bool:
 func _shoot_target_regiment(r: Regiment, shoot_range: float) -> Regiment:
 	var best: Regiment = null
 	var best_score := INF
+	var too_close := float(r.def.get("min_range", 0.0))
+	var snipes := bool(r.def.get("snipe", false))
 	for o: Regiment in regiments:
 		if o.dead or o.side == r.side:
 			continue
 		var d := r.pos.distance_to(o.pos)
-		if d > shoot_range:
+		if d > shoot_range or d < too_close:
 			continue
 		var score := d + (3.0 if o.state == ST_ROUT else 0.0)
+		if snipes and (o.arm == "artillery" or o.arm == "command"):
+			score -= 100.0             # gunners and officers first
 		if score < best_score:
 			best_score = score
 			best = o
@@ -866,7 +1167,7 @@ func _shoot_target_structure(r: Regiment, shoot_range: float) -> Structure:
 		if s.dead or s.side == r.side:
 			continue
 		var d := r.pos.distance_to(s.pos) - s.radius
-		if d <= shoot_range and d < best_d:
+		if d <= shoot_range and d < best_d and d >= float(r.def.get("min_range", 0.0)) - s.radius:
 			best_d = d
 			best = s
 	return best
@@ -881,7 +1182,7 @@ func _charge_target(r: Regiment) -> Regiment:
 		var d := r.pos.distance_to(o.pos)
 		if d > CAV_AGGRO:
 			continue
-		var soft := o.arm == "artillery" or bool(o.def.get("loose", false)) or o.state == ST_ROUT
+		var soft := o.arm == "artillery" or o.arm == "command" or bool(o.def.get("loose", false)) or o.state == ST_ROUT
 		var score := d * (0.6 if soft else 1.0)
 		if score < best_score:
 			best_score = score
@@ -975,8 +1276,8 @@ func _separate() -> void:
 				continue
 			var push := Vector2(1.0, 0.0) if dist < 0.001 else d / dist
 			var amount := (SEPARATION - dist) * 0.25
-			var a_fixed := a.state == ST_SQUARE or a.state == ST_FORMING or a.arm == "artillery"
-			var b_fixed := b.state == ST_SQUARE or b.state == ST_FORMING or b.arm == "artillery"
+			var a_fixed := a.state == ST_SQUARE or a.state == ST_FORMING or (a.arm == "artillery" and not a.limbered)
+			var b_fixed := b.state == ST_SQUARE or b.state == ST_FORMING or (b.arm == "artillery" and not b.limbered)
 			if not a_fixed:
 				a.pos = _fix_pos(a.pos - push * amount)
 			if not b_fixed:

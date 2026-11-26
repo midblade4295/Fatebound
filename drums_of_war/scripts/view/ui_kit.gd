@@ -338,15 +338,22 @@ func card_face(c: CanvasItem, rect: Rect2, def: Dictionary, art: Texture2D, can_
 	var body := rect.grow(-1.5)
 	c.draw_style_box(box("card_body", PARCHMENT, 5.0, 1.0, Color("8a6a2c")), body)
 	c.draw_rect(Rect2(body.position + Vector2(2, 2), Vector2(body.size.x - 4.0, CARD_HEAD - 3.0)), Color(PARCHMENT_LIGHT, 0.75))
-	var kind := "ORDER" if is_order else String(def["arm"]).to_upper()
-	fitted(c, Vector2(rect.position.x + rect.size.x * 0.5 + 10.0, rect.position.y + 16.0), kind, 11, BROWN_INK, rect.size.x - 32.0)
+	fitted(c, Vector2(rect.position.x + rect.size.x * 0.5 + 10.0, rect.position.y + 16.0), kind_label(def), 11, BROWN_INK, rect.size.x - 32.0)
 	var art_rect := Rect2(rect.position.x + 6.0, rect.position.y + CARD_HEAD, rect.size.x - 12.0, rect.size.y - CARD_HEAD - CARD_NAME)
 	c.draw_rect(art_rect.grow(1.5), Color("4a3215"))
 	if art != null:
 		c.draw_texture_rect_region(art, art_rect, art_window(art, art_rect.size))
 	else:
-		c.draw_rect(art_rect, (ORDER_PURPLE if is_order else TEAM_BLUE).lightened(0.55))
-		words(c, art_rect.get_center() + Vector2(0, 6), String(def["name"]), 14, INK, rect.size.x - 8.0)
+		# No picture yet: the card says what it is in words instead.
+		c.draw_rect(art_rect, (ORDER_PURPLE if is_order else TEAM_BLUE).lightened(0.62))
+		c.draw_rect(Rect2(art_rect.position, Vector2(art_rect.size.x, art_rect.size.y * 0.3)), Color(1, 1, 1, 0.18))
+		var parts := String(def["name"]).split(" ")
+		var line_y := art_rect.position.y + 20.0
+		for part: String in parts:
+			fitted(c, Vector2(art_rect.get_center().x, line_y), part, 14, INK, art_rect.size.x - 6.0)
+			line_y += 15.0
+		c.draw_multiline_string(font, Vector2(art_rect.position.x + 4.0, line_y + 4.0), String(def.get("field", "")), HORIZONTAL_ALIGNMENT_CENTER,
+				art_rect.size.x - 8.0, 9, 3, Color(INK, 0.8))
 	c.draw_rect(Rect2(art_rect.position, Vector2(art_rect.size.x, 4.0)), Color(0, 0, 0, 0.2))     # the frame's shadow on the picture
 	c.draw_rect(art_rect, Color(1, 1, 1, 0.12), false, 1.0)
 	var name_y := rect.end.y - CARD_NAME
@@ -355,6 +362,41 @@ func card_face(c: CanvasItem, rect: Rect2, def: Dictionary, art: Texture2D, can_
 	if not can_pay:
 		c.draw_style_box(box("card_dim", Color(0.07, 0.05, 0.08, 0.42), 5.0), body)
 	coin(c, rect.position + Vector2(8, 9), int(def["cost"]), can_pay)
+
+
+## The word across a card's head: its arm of service, or what sort of card it is.
+func kind_label(def: Dictionary) -> String:
+	if def["type"] == "order":
+		return "ORDER"
+	if def["type"] == "work":
+		return "WORKS"
+	return String(def.get("arm", "unit")).to_upper()
+
+
+## A push button: a brass-edged plate with bold lettering. look is "gold" (the thing to press),
+## "wood" (an ordinary choice), "on" (a choice that is switched on) or "off" (cannot be pressed).
+func button(c: CanvasItem, rect: Rect2, label: String, look: String = "wood", size: int = 18) -> void:
+	c.draw_style_box(box("btn_shadow", Color(0, 0, 0, 0.35), 9.0, 0.0, Color.BLACK, 6.0, Color(0, 0, 0, 0.45), 3.0), rect)
+	c.draw_style_box(box("btn_edge", BRASS_DARK, 9.0), rect.grow(2.5))
+	c.draw_style_box(box("btn_rim", BRASS_LIGHT if look != "off" else BRASS_MID, 8.0), rect.grow(1.0))
+	var face := Color("5a3a1d")
+	var ink := CREAM
+	match look:
+		"gold":
+			face = Color("e8a91c")
+			ink = Color("3a2206")
+		"on":
+			face = Color("2f6fd6")
+		"off":
+			face = Color("3a2a1c")
+			ink = Color(CREAM, 0.4)
+	c.draw_style_box(box("btn_face_" + look, face, 7.0, 1.0, face.darkened(0.45)), rect.grow(-1.0))
+	c.draw_rect(Rect2(rect.position + Vector2(5, 3), Vector2(rect.size.x - 10.0, rect.size.y * 0.42)), Color(1, 1, 1, 0.13 if look != "off" else 0.04))
+	c.draw_rect(Rect2(rect.position.x + 5.0, rect.end.y - 6.0, rect.size.x - 10.0, 3.0), Color(0, 0, 0, 0.18))
+	var base := rect.get_center() + Vector2(0, size * 0.36)
+	if look != "gold":
+		fitted(c, base + Vector2(0, 1.5), label, size, Color(0, 0, 0, 0.5 if look != "off" else 0.2), rect.size.x - 12.0)
+	fitted(c, base, label, size, ink, rect.size.x - 12.0)
 
 
 ## The small card that shows what comes next: gilt edge, parchment mat, picture.
@@ -367,5 +409,9 @@ func mini_card(c: CanvasItem, rect: Rect2, art: Texture2D, name: String) -> void
 	if art != null:
 		c.draw_texture_rect_region(art, inner, art_window(art, inner.size))
 	else:
-		c.draw_rect(inner, WOOD_DARK)
-		words(c, inner.get_center() + Vector2(0, 4), name, 9, CREAM, inner.size.x)
+		c.draw_rect(inner, TEAM_BLUE.lightened(0.62))
+		var parts := name.split(" ")
+		var line_y := inner.get_center().y + 3.0 - (parts.size() - 1) * 5.0
+		for part: String in parts:
+			fitted(c, Vector2(inner.get_center().x, line_y), part, 9, INK, inner.size.x - 2.0)
+			line_y += 10.0

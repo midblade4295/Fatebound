@@ -9,6 +9,7 @@ config/name="Drums of War Prototype"
 config/description="Art slice of a black-powder card battler."
 run/main_scene="res://scenes/Main.tscn"
 run/max_fps=60
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")
 
 [display]

@@ -24,8 +24,10 @@ func _initialize() -> void:
 		for part: String in OS.get_environment("CAPTURE_TIMES").split(","):
 			times.append(float(part))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(out_dir))
-	screen = load("res://scenes/Main.tscn").instantiate()
+	screen = load("res://scripts/view/battle_screen.gd").new()       # the battle alone, without the menu
 	screen.autoplay = true
+	if OS.has_environment("CAPTURE_DECK"):
+		screen.deck = Array(OS.get_environment("CAPTURE_DECK").split(","))
 	screen.match_seed = int(OS.get_environment("CAPTURE_SEED")) if OS.has_environment("CAPTURE_SEED") else 7
 	root.add_child(screen)
 

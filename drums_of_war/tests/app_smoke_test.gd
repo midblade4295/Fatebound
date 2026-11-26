@@ -1,17 +1,23 @@
 extends SceneTree
-## Drives the real battle screen: selects a card with a click, deploys it with a second click,
-## checks a bad placement is refused, then lets a full match play out on autoplay.
+## Drives the real game: through the menu and the deck builder into a battle, selects and
+## deploys cards by tap and by drag, checks a bad placement is refused, lets a full match play
+## out on autoplay, then uses the result buttons, the pause button and the way back to the menu.
 ## Run with --fixed-fps 30. Prints DRUMS_APP_PASS.
 
 const Sim = preload("res://scripts/sim/battle_sim.gd")
 
+var app: Node
 var screen: Node
+var battle_from: int = -1        # the frame the battle was entered on
+var shell_step: int = 0
 var frame: int = 0
 var failures: int = 0
 var unit_slot: int = -1
 var drag_slot: int = -1
 var before_drag: int = 0
 var finished: bool = false
+var finished_at: int = 1000000
+var paused_at: int = -1
 
 
 func check(cond: bool, what: String) -> void:
@@ -21,9 +27,10 @@ func check(cond: bool, what: String) -> void:
 
 
 func _initialize() -> void:
-	screen = load("res://scenes/Main.tscn").instantiate()
-	screen.match_seed = 5
-	root.add_child(screen)
+	app = load("res://scenes/Main.tscn").instantiate()
+	app.match_seed = 4               # the first battle is then seed 5
+	app.use_saved_profile = false    # never read or write the player's own file
+	root.add_child(app)
 
 
 func click(pos: Vector2, pressed: bool) -> void:
@@ -47,8 +54,70 @@ func tap(pos: Vector2) -> void:
 	click(pos, false)
 
 
+## The menu and the deck builder, one step every other frame, ending with TO BATTLE.
+func _shell() -> void:
+	var menu: Control = app.menu
+	var deck: Control = app.deck_screen
+	screen = app.battle
+	shell_step += 1
+	match shell_step:
+		3:
+			check(app.where == "menu" and menu.visible and screen.backdrop, "the game opens on the menu, over an idle field")
+			check(screen.sim.regiments.is_empty(), "nobody is on the field behind the menu")
+			check(menu.rect_of("battle").size.x > 100.0, "the menu has drawn its buttons")
+			tap(menu.rect_of("level2").get_center())
+		5:
+			check(app.profile.level == 2, "tapping an opponent level chooses it")
+			tap(menu.rect_of("fps").get_center())
+		7:
+			check(app.profile.show_fps and screen.show_fps, "the FPS readout can be switched on from the menu")
+			tap(menu.rect_of("deck").get_center())
+		9:
+			check(app.where == "deck" and deck.visible and not menu.visible, "CHANGE DECK opens the deck builder")
+			check(deck.deck.size() == 8 and deck.rect_of("card:zouaves").size.x > 50.0, "which shows the deck and all the cards")
+			tap(deck.rect_of("card:zouaves").get_center())
+		11:
+			check(deck.chosen == "zouaves", "tapping a card chooses it")
+			tap(deck.rect_of("toggle").get_center())
+		13:
+			check(deck.deck.size() == 8 and not deck.deck.has("zouaves"), "a ninth card is refused")
+			tap(deck.rect_of("slot:militia").get_center())
+		15:
+			check(deck.chosen == "militia", "a card in the deck can be chosen from its slot")
+			tap(deck.rect_of("toggle").get_center())
+		17:
+			check(deck.deck.size() == 7 and not deck.deck.has("militia"), "and taken out")
+			tap(deck.rect_of("done").get_center())
+		19:
+			check(app.where == "deck", "a deck of seven cannot be finished")
+			tap(deck.rect_of("card:zouaves").get_center())
+		21:
+			tap(deck.rect_of("toggle").get_center())
+		23:
+			check(deck.deck.size() == 8 and deck.deck.has("zouaves"), "a card can be added in its place")
+			tap(deck.rect_of("done").get_center())
+		25:
+			check(app.where == "menu" and app.profile.deck.has("zouaves") and not app.profile.deck.has("militia"), "DONE keeps the new deck")
+			tap(menu.rect_of("battle").get_center())
+		27:
+			check(app.where == "battle" and not screen.backdrop and not menu.visible, "TO BATTLE starts a battle")
+			check(screen.sim.decks[0].has("zouaves") and screen.bot.level == 2, "with the chosen deck against the chosen opponent")
+			check(screen.sim.decks[1].size() == 8, "who has a deck of their own")
+			battle_from = frame
+
+
 func _process(_delta: float) -> bool:
 	frame += 1
+	if battle_from < 0:
+		_shell()
+		return false
+	frame -= battle_from             # the steps below count from the start of the battle
+	var keep_going := _battle()
+	frame += battle_from
+	return keep_going
+
+
+func _battle() -> bool:
 	var sim: Sim = screen.sim
 	if frame == 5:
 		check(sim != null and sim.structures.size() == 6, "a match starts with six structures")
@@ -124,10 +193,24 @@ func _process(_delta: float) -> bool:
 				screen._take_events()
 		if sim.phase == Sim.PHASE_OVER:
 			finished = true
+			finished_at = frame
 			check(sim.winner >= 0, "the match reaches a result")
-			tap(screen.screen * 0.5)
-	elif finished:
-		check(screen.sim.phase != Sim.PHASE_OVER and screen.sim.time < 1.0, "tapping the result starts a new match")
+	elif frame == finished_at + 2:
+		check(app.profile.wins + app.profile.losses + app.profile.draws == 1, "the result goes on the record")
+		check(screen._hot.has("rematch") and screen._hot.has("leave"), "the result offers another fight or the menu")
+		tap((screen._hot["rematch"] as Rect2).get_center())
+	elif frame == finished_at + 4:
+		check(screen.sim.phase != Sim.PHASE_OVER and screen.sim.time < 1.0, "FIGHT AGAIN starts a new match")
+		tap(screen._pause_rect().get_center())
+	elif frame == finished_at + 6:
+		check(screen.paused, "the pause button stops the battle")
+		paused_at = screen.sim.tick_count
+	elif frame == finished_at + 10:
+		check(screen.sim.tick_count == paused_at, "nothing moves while it is paused")
+		tap((screen._hot["leave"] as Rect2).get_center())
+	elif frame == finished_at + 12:
+		check(app.where == "menu" and screen.backdrop and app.menu.visible, "LEAVE THE FIELD goes back to the menu")
+		check(screen.sim.regiments.is_empty(), "and the field is cleared")
 		print("frames: %d, failures: %d" % [frame, failures])
 		if failures == 0:
 			print("DRUMS_APP_PASS")

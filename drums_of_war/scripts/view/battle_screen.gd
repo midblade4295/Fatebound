@@ -1,4 +1,8 @@
 extends Node2D
+
+signal battle_over(winner: int)     # once, when a hosted battle ends
+signal rematch_requested
+signal leave_requested
 ## The battle screen: runs the rules engine and the bot, turns taps into deploys, and draws the
 ## HUD over the 3D battlefield (battle_world.gd). It also plays the sounds.
 
@@ -86,12 +90,21 @@ var _bar_flash: Dictionary = {}     # id -> seconds of white flash left on a bar
 var _melee_clock: float = 0.0
 var _curtain: float = 1.0           # 1 while the first match loads behind a wood curtain, fading to 0
 var _warmed: bool = false
+var _over_told: bool = false
 var _fps_frames: int = 0
 var _fps_since: int = 0             # real milliseconds
 var _fps_last: int = 0
 var _fps_worst: float = 0.0
 var _fps_text: String = ""
 var show_fps: bool = true
+var deck: Array = DECK.duplicate()  # the local player's eight cards
+var enemy_deck: Array = []          # the computer's; empty means the same as the player's
+var level: int = 1                  # the computer's level (see bot.gd LEVELS)
+var hosted: bool = false            # inside the app shell: results and pause offer buttons
+var backdrop: bool = false          # idling behind the menu: no armies, no HUD
+var paused: bool = false
+var _warmed_for: Dictionary = {}    # card ids already loaded and drawn once
+var _hot: Dictionary = {}           # buttons on the overlay -> where they are
 var quality: Quality
 var bench: Bench
 var _hud_hidden: bool = false
@@ -109,7 +122,7 @@ func _ready() -> void:
 	cards = Sim.load_cards()
 	if match_seed == 0:
 		match_seed = int(Time.get_unix_time_from_system()) % 1000000 + 1
-	sim = Sim.new(match_seed, cards, DECK, DECK)
+	sim = Sim.new(match_seed, cards, deck, deck)
 	world = World.new()
 	world.sim = sim
 	world.local_side = local_side
@@ -134,14 +147,44 @@ func _ready() -> void:
 	_overlay.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	_overlay.draw.connect(_draw_result)
 	add_child(_overlay)
-	start_match(match_seed)
+	if backdrop:
+		set_backdrop(true)
+	else:
+		start_match(match_seed)
+
+
+## Idling behind the menu (true), or a battle (false, followed by start_match()).
+func set_backdrop(on: bool) -> void:
+	backdrop = on
+	paused = false
+	Engine.time_scale = 1.0
+	set_hud_hidden(on)
+	if on:
+		words.clear()
+		selected = -1
+		if _music != null:
+			_music.stop()
+		if sim.phase == Sim.PHASE_OVER or not sim.regiments.is_empty() or not sim.works.is_empty():
+			# Clear the last battle off the field.
+			sim = Sim.new(match_seed, cards, deck, deck)
+			world.reset(sim)
+
+
+func toggle_pause() -> void:
+	if backdrop or sim.phase == Sim.PHASE_OVER or bench.running:
+		return
+	paused = not paused
+	_overlay.queue_redraw()
 
 
 func start_match(seed_value: int) -> void:
 	match_seed = seed_value
-	sim = Sim.new(seed_value, cards, DECK, DECK)
-	bot = Bot.new(1 - local_side, seed_value)
+	var theirs: Array = enemy_deck if enemy_deck.size() == deck.size() else deck
+	sim = Sim.new(seed_value, cards, deck if local_side == 0 else theirs, theirs if local_side == 0 else deck)
+	bot = Bot.new(1 - local_side, seed_value, level)
 	auto_bot = Bot.new(local_side, seed_value + 99) if autoplay else null
+	paused = false
+	_over_told = false
 	world.reset(sim)
 	words.clear()
 	for card: CardView in hand_cards:
@@ -153,15 +196,20 @@ func start_match(seed_value: int) -> void:
 	selected = -1
 	acc = 0.0
 	notice = ""
-	if not _warmed:
-		# First match only: load and draw one of everything behind the curtain (see _process).
-		_warmed = true
+	# Load and draw one of everything either deck can field, behind the curtain (see _step).
+	# After the first battle this only takes a moment, and only if a card is new.
+	var in_play := {}
+	var fresh := false
+	for id: String in deck + theirs:
+		in_play[id] = cards[id]
+		_art(id)
+		if not _warmed_for.has(id):
+			_warmed_for[id] = true
+			fresh = true
+	world.warm_up(in_play)
+	if fresh:
 		_curtain = 1.0
-		var in_play := {}
-		for id: String in DECK:
-			in_play[id] = cards[id]
-			_art(id)
-		world.warm_up(in_play)
+	_warmed = true
 	if _music != null and _music.stream != null and not _music.playing:
 		_music.play()
 
@@ -227,6 +275,18 @@ func _step(delta: float) -> void:
 		queue_redraw()
 		return                         # the battle starts once everything it needs is loaded
 	_curtain = maxf(0.0, _curtain - delta * 2.5)
+	if backdrop:
+		# Behind the menu: the field idles, nothing else happens here.
+		_overlay.visible = _curtain > 0.0
+		_overlay.queue_redraw()
+		return
+	if paused:
+		_overlay.visible = true
+		_overlay.queue_redraw()
+		return
+	if sim.phase == Sim.PHASE_OVER and hosted and not _over_told:
+		_over_told = true
+		battle_over.emit(sim.winner)
 	if bench.running or bench.done:
 		# The cost meter is at work (or showing its list): the battle waits.
 		bench.tick()
@@ -294,13 +354,22 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_press(p: Vector2) -> void:
-	if sim.phase == Sim.PHASE_OVER:
-		start_match(match_seed + 1)
-		return
-	if bench.running:
+	if backdrop or bench.running:
 		return
 	if bench.done:
 		bench.done = false                # the list has been read: back to the battle
+		return
+	if paused or (hosted and sim.phase == Sim.PHASE_OVER):
+		for name: String in _hot:
+			if (_hot[name] as Rect2).has_point(p):
+				_press_button(name)
+				return
+		return
+	if sim.phase == Sim.PHASE_OVER:
+		start_match(match_seed + 1)       # on its own, without the menu: a tap plays again
+		return
+	if hosted and _pause_rect().has_point(p):
+		toggle_pause()
 		return
 	if show_fps and _fps_rect().has_point(p):
 		bench.start(self)                 # tap the readout: measure what each part of the picture costs
@@ -335,10 +404,28 @@ func _on_release(p: Vector2) -> void:
 ## For the cost meter: draws nothing of the HUD and hides the cards, to see what they cost.
 func set_hud_hidden(hidden: bool) -> void:
 	_hud_hidden = hidden
+	if _chrome == null:
+		return
 	_chrome.visible = not hidden
 	_readouts.visible = not hidden
 	for card: CardView in hand_cards:
 		card.visible = not hidden
+
+
+func _press_button(name: String) -> void:
+	match name:
+		"resume":
+			paused = false
+		"leave":
+			paused = false
+			leave_requested.emit()
+		"rematch":
+			rematch_requested.emit()
+
+
+## The small pause button under the banner's right-hand end.
+func _pause_rect() -> Rect2:
+	return Rect2(banner.end.x - 38.0, plaque.end.y + 2.0, 34.0, 34.0)
 
 
 func _fps_rect() -> Rect2:
@@ -546,6 +633,26 @@ func _take_events() -> void:
 				_word(pos, "DESTROYED", Color("ff8a1f"))
 				_sfx("destroyed", 1.0)
 				_buzz(130)
+			"burst":
+				_sfx("volley_2", -9.0, 0.22)
+			"jam":
+				_word(pos, "JAMMED", Color("ff8a1f"))
+				_sfx("repelled", -6.0, 0.5)
+			"shell":
+				if e["kind"] != "barrage":
+					_sfx("redoubt_gun", -1.0, 0.2)
+			"shell_burst":
+				_sfx("cannon_big" if _stream("cannon_big") != null else "cannon", 0.0 if e["kind"] == "barrage" else -4.0, 0.15)
+				_buzz(60 if e["kind"] == "barrage" else 25)
+			"bayonet":
+				_word(pos, "BAYONETS!", Color("ff8a1f"))
+				_sfx("charge", -4.0, 0.6)
+			"dismount":
+				_word(pos, "DISMOUNT", COL_PAPER)
+			"general_down":
+				_word(pos, "THE GENERAL IS DOWN", Color("ff5a4d"))
+				_sfx("rout", 0.0, 0.5)
+				_buzz(90)
 			"overtime":
 				notice = "OVERTIME: first structure to fall decides it"
 				notice_time = 3.0
@@ -595,6 +702,13 @@ func _draw_all() -> void:
 		_draw_structure_bar(s)
 	for r: Sim.Regiment in sim.regiments:
 		_draw_regiment_bars(r)
+		if r.arm == "command" and r.state != Sim.ST_ROUT:
+			# The reach of a General's voice.
+			var ring := PackedVector2Array()
+			var reach := float(r.def.get("aura", 5.0))
+			for k in 41:
+				ring.append(to_screen(r.pos + Vector2.from_angle(TAU * k / 40.0) * reach, 0.05))
+			draw_polyline(ring, Color(1.0, 0.84, 0.3, 0.5), 1.5)
 	_draw_words()
 
 
@@ -676,7 +790,7 @@ func _draw_structure_bar(s: Sim.Structure) -> void:
 
 
 func _draw_regiment_bars(r: Sim.Regiment) -> void:
-	var tall := 3.5 if r.arm == "cavalry" else 2.6
+	var tall := 3.5 if (r.arm == "cavalry" or r.arm == "command") else 2.6
 	var p := to_screen(r.pos, tall)
 	var w := 32.0
 	var top := p + Vector2(-w * 0.5, -6.0)
@@ -712,6 +826,13 @@ func _draw_chrome() -> void:
 	kit.text(c, Vector2(banner.position.x + 32.0, base), "ENEMY", 15, Color("f29080"), HORIZONTAL_ALIGNMENT_LEFT, 120.0, true)
 	kit.text(c, Vector2(banner.end.x - 32.0, base + 1.5), "YOU", 15, Color(0, 0, 0, 0.55), HORIZONTAL_ALIGNMENT_RIGHT, 120.0, true)
 	kit.text(c, Vector2(banner.end.x - 32.0, base), "YOU", 15, Color("8ab8ff"), HORIZONTAL_ALIGNMENT_RIGHT, 120.0, true)
+	if hosted:
+		var pause := _pause_rect()
+		c.draw_circle(pause.get_center() + Vector2(0, 2), 15.0, Color(0, 0, 0, 0.4))
+		c.draw_circle(pause.get_center(), 15.0, COL_BRASS_DARK)
+		c.draw_circle(pause.get_center(), 13.0, Color("4a2f17"))
+		for bar: float in [-4.5, 2.0]:
+			c.draw_rect(Rect2(pause.get_center() + Vector2(bar, -5.5), Vector2(3.0, 11.0)), COL_CREAM)
 	kit.tray(c, tray)
 	var column := ox + 75.0                 # the centre line of NEXT and POWDER, left of the cards
 	kit.text(c, Vector2(column, hud_y + 24.0), "NEXT", 12, Color(0, 0, 0, 0.5), HORIZONTAL_ALIGNMENT_CENTER, 70.0, true)
@@ -814,11 +935,24 @@ func _draw_result() -> void:
 			c.draw_string(kit.font, panel.position + Vector2(12.0, 26.0 + i * 19.0), rows[i], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 20.0, 11,
 					Kit.CREAM if i != 2 else Kit.AMBER)
 		return
+	_hot.clear()
+	if paused:
+		c.draw_rect(Rect2(Vector2.ZERO, screen), Color(0.05, 0.03, 0.02, 0.6))
+		var box := Rect2(screen.x * 0.5 - 180.0, screen.y * 0.4 - 90.0, 360.0, 210.0)
+		kit.tray(c, box)
+		kit.outlined(c, Vector2(screen.x * 0.5, box.position.y + 56.0), "PAUSED", 34, Kit.CREAM, 340.0, 7)
+		_hot["resume"] = Rect2(box.position.x + 40.0, box.position.y + 84.0, 280.0, 48.0)
+		kit.button(c, _hot["resume"], "RESUME", "gold", 20)
+		_hot["leave"] = Rect2(box.position.x + 40.0, box.position.y + 144.0, 280.0, 42.0)
+		kit.button(c, _hot["leave"], "LEAVE THE FIELD", "wood", 16)
+		return
 	if _curtain > 0.0:
 		c.draw_rect(Rect2(Vector2.ZERO, screen), Color(0.13, 0.08, 0.04, _curtain))
 		kit.outlined(c, Vector2(screen.x * 0.5, screen.y * 0.45), "DRUMS OF WAR", 34, Color(Kit.CREAM, _curtain), 500.0, 8)
-		if sim.phase != Sim.PHASE_OVER:
+		if sim.phase != Sim.PHASE_OVER or backdrop:
 			return
+	if backdrop:
+		return
 	c.draw_rect(Rect2(Vector2.ZERO, screen), Color(0.05, 0.03, 0.02, 0.6))
 	var cx := screen.x * 0.5
 	var cy := screen.y * 0.42
@@ -841,4 +975,10 @@ func _draw_result() -> void:
 	elif sim.time > Sim.MATCH_TIME + 0.5 and sim.time < Sim.MATCH_TIME + Sim.OVERTIME:
 		how = "Decided in overtime"
 	kit.text(c, Vector2(cx, cy + 40.0), how, 18, Kit.CREAM, HORIZONTAL_ALIGNMENT_CENTER, 420.0, true)
-	kit.text(c, Vector2(cx, cy + 86.0), "Tap to play again", 17, Color(Kit.CREAM, 0.6 + 0.4 * sin(_clock * 3.0)), HORIZONTAL_ALIGNMENT_CENTER, 420.0, true)
+	if hosted:
+		_hot["rematch"] = Rect2(cx - 196.0, cy + 60.0, 186.0, 42.0)
+		kit.button(c, _hot["rematch"], "FIGHT AGAIN", "gold", 17)
+		_hot["leave"] = Rect2(cx + 10.0, cy + 60.0, 186.0, 42.0)
+		kit.button(c, _hot["leave"], "MENU", "wood", 17)
+	else:
+		kit.text(c, Vector2(cx, cy + 86.0), "Tap to play again", 17, Color(Kit.CREAM, 0.6 + 0.4 * sin(_clock * 3.0)), HORIZONTAL_ALIGNMENT_CENTER, 420.0, true)

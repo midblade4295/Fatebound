@@ -17,8 +17,23 @@ const SOLDIER_MODELS := {
 	"scouts": ["u_cav", "c_cav"],
 	"heavy_cavalry": ["u_cav", "c_cav"],
 	"field_gun": ["u_line", "c_line"],
+	# The ten later cards have no models of their own yet: they borrow the nearest existing
+	# figure, tinted (CARD_TINT) so they can be told apart on the field.
+	"sharpshooters": ["u_skirm", "c_skirm"],
+	"zouaves": ["u_line", "c_line"],
+	"dragoons": ["u_cav", "c_cav"],
+	"general": ["u_cav", "c_cav"],
+	"horse_artillery": ["u_line", "c_line"],
+	"gatling_gun": ["u_line", "c_line"],
+	"howitzer": ["u_line", "c_line"],
 }
-const HEIGHTS := {"infantry": 2.1, "artillery": 2.1, "skirmishers": 2.2, "militia": 2.0, "scouts": 2.8, "heavy_cavalry": 3.2}
+const ON_FOOT_MODELS := {"dragoons": ["u_skirm", "c_skirm"]}      # what a mounted card looks like dismounted
+const HEIGHTS := {"infantry": 2.1, "artillery": 2.1, "skirmishers": 2.2, "militia": 2.0, "scouts": 2.8, "heavy_cavalry": 3.2,
+		"sharpshooters": 2.3, "zouaves": 2.25, "dragoons": 2.9, "general": 3.5}
+const CARD_TINT := {"sharpshooters": Color(0.78, 0.95, 0.78), "zouaves": Color(1.32, 0.7, 0.64), "dragoons": Color(1.18, 1.06, 0.55),
+		"general": Color(1.3, 1.14, 0.58), "gatling_gun": Color(0.5, 0.52, 0.58), "howitzer": Color(0.78, 0.7, 0.58)}
+# Each gun card's piece: height, and how much of the barrel's length it keeps.
+const GUNS := {"field_gun": [1.8, 1.0], "horse_artillery": [1.45, 1.0], "gatling_gun": [1.5, 0.85], "howitzer": [1.75, 0.62]}
 const SHARED_CLIPS := "u_line"     # rigged characters without clips of their own borrow this one's
 # Degrees to turn each generated model about the vertical so that it faces "forward" (-Z):
 # characters and riders come facing +Z, gun muzzles along -X, bridge and fence run along X.
@@ -369,7 +384,7 @@ static func preload_card(card_id: String, arm: String) -> void:
 ## Builds one figure ahead of time and keeps it, outside the scene, until make_soldier() asks
 ## for it. Returns false once "want" are already waiting.
 static func stock_soldier(card_id: String, arm: String, team: int, world: Node3D, want: int) -> bool:
-	var key := "%s|%d" % [card_id, team]
+	var key := "%s|%s|%d" % [card_id, arm, team]
 	if not _pool.has(key):
 		_pool[key] = []
 	var waiting: Array = _pool[key]
@@ -391,7 +406,7 @@ static func clear_stock() -> void:
 ## One man (or one mounted man) for a card: one built ahead of time if there is one waiting,
 ## otherwise made on the spot.
 static func make_soldier(card_id: String, arm: String, team: int, world: Node3D) -> Node3D:
-	var waiting: Array = _pool.get("%s|%d" % [card_id, team], [])
+	var waiting: Array = _pool.get("%s|%s|%d" % [card_id, arm, team], [])
 	while not waiting.is_empty():
 		var figure: Node3D = waiting.pop_back()
 		if is_instance_valid(figure):
@@ -403,6 +418,10 @@ static func make_soldier(card_id: String, arm: String, team: int, world: Node3D)
 static func _build_soldier(card_id: String, arm: String, team: int, world: Node3D) -> Node3D:
 	var names: Array = SOLDIER_MODELS.get(card_id, [])
 	var height: float = HEIGHTS.get(card_id, HEIGHTS.get(arm, 0.98))
+	var mounted := arm == "cavalry" or arm == "command"
+	if not mounted and ON_FOOT_MODELS.has(card_id):
+		names = ON_FOOT_MODELS[card_id]
+		height = float(HEIGHTS["skirmishers"])
 	if names.size() == 2:
 		var model_name: String = names[team]
 		var made := make(model_name, team)
@@ -434,10 +453,53 @@ static func _build_soldier(card_id: String, arm: String, team: int, world: Node3
 				player.seek(randf() * 1.5, true)
 				made.set_meta("pace", randf_range(0.93, 1.07))    # so a rank is not a row of clones
 				play(made, "idle_calm", false)
-			elif arm == "cavalry":
+			elif mounted:
 				_apply_gallop(made)
+			if CARD_TINT.has(card_id):
+				_tint(made, card_id)
 			return made
 	return _stand_in_soldier(card_id, arm, team, height)
+
+
+static var _tinted: Dictionary = {}       # "card|material id" -> the tinted copy
+
+
+## Washes a figure in its card's colour. Riders use the gallop shader's own tint; everything
+## else gets tinted copies of its materials, shared between all figures of that card.
+static func _tint(made: Node3D, card_id: String) -> void:
+	var colour: Color = CARD_TINT[card_id]
+	for mi: MeshInstance3D in made.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh == null:
+			continue
+		if mi.material_override is ShaderMaterial:
+			mi.set_instance_shader_parameter("tint", Vector3(colour.r, colour.g, colour.b))
+			continue
+		for surface in mi.mesh.get_surface_count():
+			var base: Material = mi.get_surface_override_material(surface)
+			if base == null:
+				base = mi.mesh.surface_get_material(surface)
+			if not (base is BaseMaterial3D):
+				continue
+			var key := "%s|%d" % [card_id, base.get_instance_id()]
+			if not _tinted.has(key):
+				var copy: BaseMaterial3D = base.duplicate()
+				copy.albedo_color = Color(copy.albedo_color.r * colour.r, copy.albedo_color.g * colour.g, copy.albedo_color.b * colour.b)
+				_tinted[key] = copy
+			mi.set_surface_override_material(surface, _tinted[key])
+
+
+## The gun a card's crew serves: the cannon model at that card's size and colour, or the
+## primitive stand-in if there is no model.
+static func make_gun(card_id: String, team: int, world: Node3D) -> Node3D:
+	var spec: Array = GUNS.get(card_id, GUNS["field_gun"])
+	var gun := make("cannon", team)
+	if gun == null:
+		return stand_in_cannon(world)
+	fit_height(gun, float(spec[0]))
+	gun.scale.z = float(spec[1])
+	if CARD_TINT.has(card_id):
+		_tint(gun, card_id)
+	return gun
 
 
 ## Mounted figures are single unrigged models, so their legs are worked by a vertex shader:
@@ -450,6 +512,7 @@ uniform float y_min;
 uniform float y_size;
 uniform float z_mid;
 uniform float x_half;
+instance uniform vec3 tint = vec3(1.0);
 instance uniform float gallop = 0.0;
 instance uniform float phase = 0.0;
 void vertex() {
@@ -465,7 +528,7 @@ void vertex() {
 	VERTEX.y += (VERTEX.z - z_mid) * sin(t + 0.9) * 0.07 * gallop * body;
 }
 void fragment() {
-	ALBEDO = texture(albedo_tex, UV).rgb;
+	ALBEDO = texture(albedo_tex, UV).rgb * tint;
 	ROUGHNESS = 0.85;
 }
 """
@@ -645,8 +708,8 @@ static func _man_parts(card_id: String, team: int, lift: float, mounted: bool) -
 
 
 static func _stand_in_soldier(card_id: String, arm: String, team: int, height: float) -> Node3D:
-	var mounted := arm == "cavalry"
-	var key := "%s|%d" % [card_id, team]
+	var mounted := arm == "cavalry" or arm == "command"
+	var key := "%s|%s|%d" % [card_id, "m" if mounted else "f", team]
 	if not _meshes.has(key):
 		var parts: Array = []
 		if mounted:

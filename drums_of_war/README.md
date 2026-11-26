@@ -44,7 +44,11 @@ Tests: `parse_all` (every script and scene loads), `rules_test` (73 checks of th
 
 ## How to play
 
-Tap a card, then tap your half of the field (or tap a card and tap again to put it down).
+The game opens on a menu: choose the computer's level, change your deck (any eight of the
+eighteen cards), and go to battle. The pause button under the banner leaves a battle.
+
+Tap a card, then tap your half of the field (or tap a card and tap again to put it down), or
+drag a card onto the field.
 Powder refills by itself, twice as fast in the last minute. Destroy the enemy Headquarters to
 win outright; otherwise the side that has destroyed more redoubts wins on time, and a level
 match goes to one minute of sudden-death overtime.
@@ -65,10 +69,17 @@ match goes to one minute of sudden-death overtime.
 
 ## Layout
 
+- `scripts/app/app.gd`: the game around the battle. The battlefield is built once and idles
+  behind the menu; a battle is the same field with the armies let loose.
+- `scripts/app/menu.gd`, `deck_screen.gd`: the main menu (deck, opponent level, settings) and
+  the deck builder (pick eight of the eighteen cards; tap a card to read what it does).
+- `scripts/app/profile.gd`: what is remembered between launches, in `user://profile.cfg`.
+
 - `data/cards.json`: every card's numbers. Balancing is editing this file.
 - `scripts/sim/battle_sim.gd`: the rules. Pure data at a fixed 20 steps a second with its own
   seeded random source, so the same seed and the same deploys always give the same battle.
-- `scripts/sim/bot.gd`: the computer opponent. It plays through the same `deploy()` a player uses.
+- `scripts/sim/bot.gd`: the computer opponent, at three levels. It plays through the same
+  `deploy()` a player uses and sorts its hand into roles from the card data, so it can play any deck.
 - `scripts/view/battle_screen.gd`: runs the match, takes input (tap a card then the field, or
   drag a card onto the field), plays sound, and lays out the HUD over the 3D view: a floating
   banner with the clock plaque, a floating card tray, framed strength bars over the structures
@@ -152,9 +163,12 @@ is pinned to the top and bottom, clear of a notch or gesture bar, and the camera
 
 ## Not in yet
 
-The other ten cards of the 18-card launch deck, smoke as a rule (it is a visual effect only),
-deck building, a menu, and online play. Known rough edges in this stage: the sounds were chosen
-by measurement and have not been listened to; the cavalry crash sound is a stand-in mixed from other takes; the flinch and thrust clips
-start from a side-on stance, so bodies swivel slightly into them. The Android APK builds
-and is signed, but has not been run on a physical phone, and nothing here has been profiled on
-one. Balance is the stage 1 first pass, tuned on bot-versus-bot matches.
+Models and pictures for the ten later cards (they borrow the nearest existing figure, tinted,
+and their cards say what they are in words), smoke as a rule (it is a visual effect only), a
+tutorial, and online play. Known rough edges: none of the sounds has been checked by ear; the
+cavalry crash sound is a stand-in mixed from other takes, and the later cards reuse the first
+eight's sounds; the flinch and thrust clips start from a side-on stance, so bodies swivel
+slightly into them. The later cards' numbers are a first pass: they pass their rules tests and
+the computer plays them, but they have not been balanced against each other or by hand. The
+balloon cannot be shot down. Android's back gesture is handled in code but has not been tried
+on a phone.

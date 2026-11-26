@@ -48,6 +48,9 @@ var _lights: Array = []            # a small pool of glow discs for muzzle flash
 var _glow_material: ShaderMaterial
 var script_usec: int = 0           # time spent in _process since the battle screen last read it
 var frame_no: int = 0
+var _works: Dictionary = {}        # work id -> Node3D (earthworks, balloons)
+var _shells: Array = []            # shells in the air: {node, from, to, age, life, arc}
+var _marks: Array = []             # warning rings on the ground: {node, age, life}
 var _rebake_at: float = -1.0       # when to draw the baked shade again (a building fell or was rebuilt)
 var anim_stride: int = 1           # every man's clip is stepped once in this many frames
 var _chunks: Array = []            # flung clods and splinters: {node, vel, age, life}
@@ -489,7 +492,7 @@ func _update_contact_shadows() -> void:
 	var across := Vector3(-away.z, 0.0, away.x)
 	for id in _regiments:
 		var rv: RegimentView = _regiments[id]
-		var mounted := rv.arm == "cavalry"
+		var mounted := rv.mounted
 		var long := 4.2 if mounted else 3.0
 		var wide := 2.0 if mounted else 1.15
 		var patch := Basis(away * long, Vector3.UP, across * wide)
@@ -673,6 +676,15 @@ func reset(new_sim: Sim) -> void:
 		c["node"].queue_free()
 	_chunks.clear()
 	_jolts.clear()
+	for id in _works:
+		_works[id].queue_free()
+	_works.clear()
+	for sh: Dictionary in _shells:
+		sh["node"].queue_free()
+	_shells.clear()
+	for m: Dictionary in _marks:
+		m["node"].queue_free()
+	_marks.clear()
 
 
 func _process(delta: float) -> void:
@@ -714,6 +726,8 @@ func _step(delta: float) -> void:
 		if not seen.has(id):
 			_regiments[id].release()
 			_regiments.erase(id)
+	_sync_works(delta)
+	_update_shells(delta)
 	for s: Sim.Structure in sim.structures:
 		if s.dead and not _structure_dead.get(s.id, false):
 			_structure_dead[s.id] = true
@@ -759,6 +773,142 @@ func _update_leaving(delta: float) -> void:
 		else:
 			e["node"].queue_free()
 	_leaving = keep
+
+
+# --- Works, shells and warning marks ---------------------------------------------------------
+
+func _sync_works(_delta: float) -> void:
+	var seen := {}
+	for w: Sim.Work in sim.works:
+		seen[w.id] = true
+		if not _works.has(w.id):
+			var node := _build_work(w)
+			node.position = to_world(w.pos, ground_height(w.pos))
+			add_child(node)
+			_works[w.id] = node
+			dust(w.pos, 4, 0.8)
+		if w.kind == "balloon":
+			var craft: Node3D = _works[w.id].get_node("Craft")
+			craft.position.x = sin(_time * 0.7 + w.id) * 0.25
+			craft.position.y = 5.2 + sin(_time * 1.1 + w.id) * 0.12
+	for id in _works.keys():
+		if not seen.has(id):
+			_works[id].queue_free()
+			_works.erase(id)
+
+
+func _build_work(w: Sim.Work) -> Node3D:
+	var node := Node3D.new()
+	var team := team_colour(w.side)
+	if w.kind == "balloon":
+		var craft := Node3D.new()
+		craft.name = "Craft"
+		craft.position.y = 5.2
+		node.add_child(craft)
+		var bag := MeshInstance3D.new()
+		var ball := SphereMesh.new()
+		ball.radius = 1.15
+		ball.height = 2.6
+		ball.radial_segments = 16
+		ball.rings = 8
+		bag.mesh = ball
+		bag.material_override = _mat(Color("efe2c0"), 0.8)
+		craft.add_child(bag)
+		_cyl(craft, 1.17, 0.4, Vector3(0, 0.1, 0), team)                 # a band in the owner's colour
+		_box(craft, Vector3(0.6, 0.4, 0.6), Vector3(0, -1.9, 0), COL_WOOD)   # the basket
+		for corner: Vector2 in [Vector2(-0.28, -0.28), Vector2(0.28, -0.28), Vector2(-0.28, 0.28), Vector2(0.28, 0.28)]:
+			var rope := _cyl(craft, 0.02, 0.9, Vector3(corner.x * 1.4, -1.3, corner.y * 1.4), Color("5a4630"))
+			rope.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var tether := _cyl(node, 0.03, 3.2, Vector3(0, 1.6, 0), Color("5a4630"))
+		tether.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_cyl(node, 0.16, 0.3, Vector3(0, 0.15, 0), COL_WOOD.darkened(0.3))     # the winch
+		_add_blob(node, 3.4, 0.3)
+	else:
+		# A fieldwork: a bank of earth with a facing of logs toward the enemy.
+		var half := w.half_width
+		var front := -1.0 if w.side == local_side else 1.0          # world z toward the enemy
+		var bank := _box(node, Vector3(half * 2.0, 0.5, 0.9), Vector3(0, 0.22, -front * 0.2), Color("7c6540"))
+		bank.rotation.x = front * 0.35
+		var count := int(round(half * 2.0 / 0.8))
+		for i in count:
+			var x := (i - (count - 1) * 0.5) * 0.8
+			for row in 2:
+				var log_piece := _cyl(node, 0.19, 0.78, Vector3(x + row * 0.4 - 0.2, 0.2 + row * 0.34, front * (0.42 - row * 0.12)), COL_WOOD.darkened(0.1 + 0.12 * ((i + row) % 2)))
+				log_piece.rotation.z = PI * 0.5
+		for sx: float in [-1.0, 1.0]:
+			_cyl(node, 0.06, 1.0, Vector3(sx * half, 0.5, 0.0), COL_WOOD.darkened(0.35))
+		_box(node, Vector3(0.5, 0.3, 0.03), Vector3(half - 0.27, 0.86, 0.0), team)        # a pennant to say whose it is
+		_add_blob(node, half * 2.4, 0.3)
+	return node
+
+
+## A shell on its way from a gun to where it was aimed, and (for a bombardment) a ring on the
+## ground that tightens until the shot arrives.
+func _fly_shell(e: Dictionary) -> void:
+	var from: Vector2 = e["pos"]
+	var to: Vector2 = e["to"]
+	var life := float(e["time"])
+	var barrage: bool = e["kind"] == "barrage"
+	var mark := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	var radius := float(e["radius"])
+	plane.size = Vector2(radius * 2.0, radius * 2.0)
+	mark.mesh = plane
+	mark.material_override = ring_material()
+	mark.set_instance_shader_parameter("colour", Color("ff5a3c") if int(e["side"]) != local_side else Color("ffe9b0"))
+	mark.set_instance_shader_parameter("pulse", 0.0)
+	mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mark.position = to_world(to, ground_height(to) + 0.1)
+	add_child(mark)
+	_marks.append({"node": mark, "age": 0.0, "life": life})
+	for i in (5 if barrage else 1):
+		var ball := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.2
+		sphere.height = 0.4
+		sphere.radial_segments = 8
+		sphere.rings = 4
+		ball.mesh = sphere
+		ball.material_override = _mat(Color("1c1a18"), 0.5)
+		ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(ball)
+		var spread := Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * (radius * 0.6 if barrage else 0.0)
+		var start := to_world(from, 1.2)
+		if barrage:
+			# From off the field, high, and a little apart in time.
+			start = to_world(to + spread, 0.0) + Vector3(0.0, 26.0, 8.0 if int(e["side"]) == local_side else -8.0)
+		ball.position = start
+		_shells.append({"node": ball, "from": start, "to": to_world(to + spread, 0.3), "age": -0.12 * i if barrage else 0.0,
+				"life": life if not barrage else life * 0.5, "wait": life * 0.5 if barrage else 0.0, "arc": 0.0 if barrage else 6.5})
+
+
+func _update_shells(delta: float) -> void:
+	var flying: Array = []
+	for sh: Dictionary in _shells:
+		sh["age"] = float(sh["age"]) + delta
+		var node: MeshInstance3D = sh["node"]
+		var t := (float(sh["age"]) - float(sh["wait"])) / float(sh["life"])
+		if t >= 1.0:
+			node.queue_free()
+			continue
+		node.visible = t >= 0.0
+		if t >= 0.0:
+			var at: Vector3 = (sh["from"] as Vector3).lerp(sh["to"], t)
+			at.y += sin(t * PI) * float(sh["arc"])
+			node.position = at
+		flying.append(sh)
+	_shells = flying
+	var marks: Array = []
+	for m: Dictionary in _marks:
+		m["age"] = float(m["age"]) + delta
+		var node: MeshInstance3D = m["node"]
+		var t := float(m["age"]) / float(m["life"])
+		if t >= 1.0:
+			node.queue_free()
+			continue
+		node.set_instance_shader_parameter("pulse", 0.5 + 0.5 * sin(float(m["age"]) * (8.0 + 10.0 * t)))
+		marks.append(m)
+	_marks = marks
 
 
 ## A man leaves his regiment and falls. impulse throws the body along the blow that felled him.
@@ -956,7 +1106,7 @@ func _update_puffs(delta: float) -> void:
 		if float(p["age"]) < float(p["life"]):
 			p["pos"] = Vector3(p["pos"]) + Vector3(p["vel"]) * delta
 			keep.append(p)
-	_puffs = keep
+	_puffs = keep if keep.size() <= MAX_PUFFS else keep.slice(keep.size() - MAX_PUFFS)
 	mm.visible_instance_count = _puffs.size()
 	for i in _puffs.size():
 		var p: Dictionary = _puffs[i]
@@ -1122,6 +1272,56 @@ func on_event(e: Dictionary) -> void:
 				puff(pos + Vector2(cos(i * 0.9), sin(i * 0.9)) * 0.9, 0.6 + 0.12 * (i % 4), 1.1, 3.4)
 		"destroyed_regiment":
 			dust(pos, 4, 0.9)
+		"shell":
+			_fly_shell(e)
+			if e["kind"] != "barrage":
+				var aim: Vector2 = (Vector2(e["to"]) - pos).normalized()
+				for i in 5:
+					puff(pos + aim * (0.8 + 0.3 * i), 1.3 + 0.25 * i, 1.0 - 0.1 * i, 3.0)
+				flash(pos + aim * 0.9, 1.4, 1.6)
+				_light_flash(to_world(pos + aim, 1.4), 9.0, 9.0, 0.16)
+				shake(0.28)
+				var mortar := _regiment_at(pos, 0.05)
+				if mortar != null:
+					mortar.kick = 1.0
+		"shell_burst":
+			var big: bool = e["kind"] == "barrage"
+			var reach := float(e["radius"])
+			shake(0.75 if big else 0.42)
+			if big:
+				hitstop(60)
+			ring_burst(pos, reach * 1.25, Color(1.0, 0.8, 0.45, 0.95), 0.42)
+			_light_flash(to_world(pos, 1.0), 14.0, reach * 3.0, 0.3)
+			for i in (7 if big else 3):
+				var at := pos + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * reach * (0.7 if big else 0.35)
+				flash(at, 0.6, 1.6)
+				dust(at, 3, 1.0)
+				debris(at, 4, Color("5a4630"))
+				puff(at, 0.9, 1.2, 3.2, Color(0.55, 0.52, 0.48))
+		"burst":
+			var mark: Vector2 = e["to"]
+			var line_of_fire: Vector2 = (mark - pos).normalized()
+			flash(pos + line_of_fire * 1.0, 1.0, 0.5)
+			puff(pos + line_of_fire * 1.1, 1.1, 0.4, 1.6)
+			for i in 3:
+				tracer(pos + line_of_fire, mark + Vector2(randf_range(-0.6, 0.6), randf_range(-0.6, 0.6)), false, 0.05, 0.08)
+			_light_flash(to_world(pos + line_of_fire, 1.2), 3.0, 4.0, 0.1)
+			var crank := _regiment_at(pos, 0.05)
+			if crank != null:
+				crank.kick = maxf(crank.kick, 0.35)
+		"jam":
+			for i in 4:
+				puff(pos + Vector2(randf_range(-0.3, 0.3), randf_range(-0.3, 0.3)), 1.2, 0.6, 2.4, Color(0.35, 0.33, 0.32))
+		"bayonet":
+			shake(0.26)
+			ring_burst(pos, 2.2, Color(1, 1, 1, 0.9), 0.26)
+			dust(pos, 4, 0.8)
+		"general_down":
+			shake(0.55)
+			hitstop(80)
+			ring_burst(pos, 7.0, Color(0.9, 0.25, 0.2, 0.9), 0.6)
+		"dismount", "mount", "work_gone":
+			dust(pos, 5, 0.9)
 		"over":
 			cheering_side = int(e["winner"])
 		"rally":
@@ -1142,6 +1342,7 @@ class RegimentView extends RefCounted:
 	var mounts: Array = []            # per soldier: the part that bobs (horse, body) for stand-ins
 	var gun: Node3D = null
 	var arm: String
+	var mounted: bool = false         # drawn on horseback: cavalry, a General, dragoons in the saddle
 	var team: int
 	var card_id: String
 	var last_pos: Vector2
@@ -1174,7 +1375,8 @@ class RegimentView extends RefCounted:
 		phase = r.id * 1.37
 		ring = MeshInstance3D.new()
 		var disc := PlaneMesh.new()
-		var radius := 1.75 if arm != "cavalry" else 2.1
+		mounted = arm == "cavalry" or arm == "command"
+		var radius := 1.75 if not mounted else 2.1
 		disc.size = Vector2(radius * 2.0, radius * 2.0)
 		ring.mesh = disc
 		ring.position.y = 0.07
@@ -1185,17 +1387,18 @@ class RegimentView extends RefCounted:
 		root.add_child(ring)
 		pulse = 1.0
 		if arm == "artillery":
-			gun = Models.make("cannon", team)
-			if gun != null:
-				Models.fit_height(gun, 1.8)
-			else:
-				gun = Models.stand_in_cannon(w)
+			gun = Models.make_gun(card_id, team, w)
 			root.add_child(gun)
-		for i in r.men_max:
-			var s: Node3D = Models.make_soldier(card_id, arm, team, w)
+		_muster(r.men_max)
+
+	## Builds the figures: at the start, and again when dragoons get down or mount up.
+	func _muster(count: int) -> void:
+		for i in count:
+			var s: Node3D = Models.make_soldier(card_id, arm, team, world)
 			root.add_child(s)
 			soldiers.append(s)
 		uses_model = soldiers.size() > 0 and soldiers[0].has_meta("player")
+		anim = ""
 		for s: Node3D in soldiers:
 			var meshes: Array = s.find_children("*", "MeshInstance3D", true, false)
 			s.set_meta("meshes", meshes)
@@ -1257,7 +1460,7 @@ class RegimentView extends RefCounted:
 	func _offsets(r: Sim.Regiment, n: int) -> Array:
 		var out: Array = []
 		var sp: float = world.SOLDIER_SPACING
-		if arm == "cavalry":
+		if mounted:
 			for i in n:
 				out.append(Vector3((i - (n - 1) * 0.5) * 1.5, 0, 0))
 		elif arm == "artillery":
@@ -1284,6 +1487,16 @@ class RegimentView extends RefCounted:
 		return out
 
 	func sync(r: Sim.Regiment, delta: float) -> void:
+		if r.arm != arm:
+			# Dragoons getting down from, or back into, the saddle: swap the figures.
+			arm = r.arm
+			mounted = arm == "cavalry" or arm == "command"
+			for old: Node3D in soldiers:
+				old.queue_free()
+			soldiers.clear()
+			_muster(maxi(r.men, 0))
+			for i in soldiers.size():
+				(soldiers[i] as Node3D).position = _offsets(r, soldiers.size())[i]
 		# Losses: the surplus men fall where they stand.
 		while soldiers.size() > maxi(r.men, 0):
 			_fall(soldiers.pop_back())
@@ -1327,14 +1540,14 @@ class RegimentView extends RefCounted:
 		elif won:
 			clip = "cheer"
 			drill = Drill.RAISED
-		elif r.in_melee and arm != "cavalry":
+		elif r.in_melee and not mounted:
 			clip = "stab"
 			drill = Drill.CHARGE
 		elif r.state == Sim.ST_SQUARE or r.state == Sim.ST_FORMING:
 			clip = "kneel"
 			drill = Drill.CHARGE
 		elif moving:
-			clip = "run" if arm == "cavalry" else "march"
+			clip = "run" if mounted else "march"
 			drill = Drill.SHOULDER
 		elif r.reload > 0.0 and r.def.has("reload"):
 			var since := float(r.def["reload"]) - r.reload
@@ -1385,9 +1598,9 @@ class RegimentView extends RefCounted:
 				# Stand-in figures move like toys: hop when marching, rock back when firing.
 				var hop := 0.0
 				if moving:
-					var speed := 15.0 if arm == "cavalry" else 11.0
-					hop = absf(sin(t * speed + phase + i * 0.9)) * (0.16 if arm == "cavalry" else 0.08)
+					var speed := 15.0 if mounted else 11.0
+					hop = absf(sin(t * speed + phase + i * 0.9)) * (0.16 if mounted else 0.08)
 				s.position.y = lerpf(s.position.y, hop, 1.0 - exp(-20.0 * delta))
-				s.rotation.x = kick * 0.28 + (0.12 * sin(t * 15.0 + phase + i) if moving and arm == "cavalry" else 0.0)
+				s.rotation.x = kick * 0.28 + (0.12 * sin(t * 15.0 + phase + i) if moving and mounted else 0.0)
 		if gun != null:
 			gun.position.z = kick * 0.22
