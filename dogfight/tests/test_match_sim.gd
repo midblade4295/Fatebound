@@ -26,7 +26,7 @@ var _finished: bool = false
 var _max_bullets: int = 0
 var _shots: int = 0
 var _bullet_hits: int = 0
-var _parts_destroyed: Array[int] = [0, 0, 0, 0, 0]
+var _parts_destroyed: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0]
 var _parts_damaged: int = 0
 
 
@@ -145,9 +145,11 @@ func _report() -> void:
 	# One bullet can damage several parts, so accuracy counts bullets, not damage events.
 	var accuracy: float = float(_bullet_hits) / float(maxi(_shots, 1))
 	print("shots=%d bullet_hits=%d accuracy=%.1f%% hits_per_takedown=%.1f" % [_shots, _bullet_hits, accuracy * 100.0, float(_bullet_hits) / float(maxi(blue + red, 1))])
-	print("parts damaged=%d destroyed engine=%d left_wing=%d right_wing=%d tail=%d" % [_parts_damaged,
-			_parts_destroyed[PlaneActor.Part.ENGINE], _parts_destroyed[PlaneActor.Part.LEFT_WING],
-			_parts_destroyed[PlaneActor.Part.RIGHT_WING], _parts_destroyed[PlaneActor.Part.TAIL]])
+	print("parts damaged=%d destroyed engine=%d wings=%d tail=%d rudder=%d flaps=%d" % [_parts_damaged,
+			_parts_destroyed[PlaneActor.Part.ENGINE],
+			_parts_destroyed[PlaneActor.Part.LEFT_WING] + _parts_destroyed[PlaneActor.Part.RIGHT_WING],
+			_parts_destroyed[PlaneActor.Part.TAIL], _parts_destroyed[PlaneActor.Part.RUDDER],
+			_parts_destroyed[PlaneActor.Part.LEFT_FLAP] + _parts_destroyed[PlaneActor.Part.RIGHT_FLAP]])
 	for slot: PilotSlot in _manager.get_roster():
 		print("  %-5s %-14s lvl%-2d skill %.2f  K %d  D %d  %s" % [Teams.name_of(slot.team), slot.display_name,
 				slot.commander_level, slot.bot_skill, slot.kills, slot.deaths, slot.plane.plane_data.display_name])

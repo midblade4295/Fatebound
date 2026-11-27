@@ -351,7 +351,10 @@ func _human_aim_point(my_position: Vector3, distance: float) -> Vector3:
 	var stress: float = 1.0
 	if _threat_age < 1.5:
 		stress += 0.7
-	stress += 0.6 * maxf(maxf(plane.part_damage.y, plane.part_damage.z), plane.part_damage.w)
+	var worst_control_damage: float = 0.0
+	for part: PlaneActor.Part in [PlaneActor.Part.LEFT_WING, PlaneActor.Part.RIGHT_WING, PlaneActor.Part.TAIL, PlaneActor.Part.RUDDER]:
+		worst_control_damage = maxf(worst_control_damage, plane.part_damage_of(part))
+	stress += 0.6 * worst_control_damage
 	var wander: Vector2 = Vector2(
 			0.65 * sin(_wobble_phase.x) + 0.35 * sin(_wobble_phase.x * 2.7 + 1.3),
 			0.65 * sin(_wobble_phase.y) + 0.35 * sin(_wobble_phase.y * 2.3 + 0.4))

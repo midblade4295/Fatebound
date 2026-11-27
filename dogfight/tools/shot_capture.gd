@@ -11,6 +11,8 @@ var _frames: PackedInt32Array = PackedInt32Array()
 var _out: String = "user://shot"
 var _frame: int = 0
 var _fire: bool = false
+## Hold the stick over (steer=left|right|up) for the last second before each shot.
+var _steer_action: StringName = &""
 ## Frames at the start that run at `_warp_scale` x speed to reach the action.
 var _warp_frames: int = 0
 var _warp_scale: float = 6.0
@@ -35,6 +37,9 @@ func _ready() -> void:
 		elif argument.begins_with("crates="):
 			for _crate: int in range(int(argument.trim_prefix("crates="))):
 				Profile.grant_match_rewards(true, 5)
+		elif argument.begins_with("steer="):
+			_steer_action = {"left": GameSession.ACTION_STEER_LEFT, "right": GameSession.ACTION_STEER_RIGHT,
+					"up": GameSession.ACTION_PITCH_UP}.get(argument.trim_prefix("steer="), &"")
 		elif argument.begins_with("warp="):
 			_warp_frames = int(argument.trim_prefix("warp="))
 		elif argument.begins_with("spectate="):
@@ -49,6 +54,8 @@ func _process(_delta: float) -> void:
 	Engine.time_scale = _warp_scale if _frame <= _warp_frames else 1.0
 	if _fire:
 		Input.action_press(GameSession.ACTION_FIRE)
+	if _steer_action != &"" and _frame > _warp_frames:
+		Input.action_press(_steer_action)
 	var index: int = _frames.find(_frame)
 	if index == -1:
 		return

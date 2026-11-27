@@ -2,7 +2,8 @@ class_name DamageDiagram
 extends Control
 ## Small top-down silhouette of the player's plane that shows which parts are
 ## hurt: green = fine, yellow = damaged, orange (flashing) = critical,
-## red = destroyed. Nose is up, so the left wing is on the left.
+## red = destroyed. Nose is up, so the left wing is on the left. Shown: engine,
+## hull, both wings, both flaps, tail and rudder.
 ## It explains at a glance why the plane has started pulling to one side.
 
 const COLOR_OK: Color = Color(0.42, 0.88, 0.5, 0.9)
@@ -38,11 +39,16 @@ func _draw() -> void:
 	var wing_y: float = 0.36
 	_draw_part(origin, unit, Rect2(0.07, wing_y, 0.36, 0.2), _part_color(PlaneActor.Part.LEFT_WING, alive))
 	_draw_part(origin, unit, Rect2(0.57, wing_y, 0.36, 0.2), _part_color(PlaneActor.Part.RIGHT_WING, alive))
+	# Flaps sit behind the inner part of each wing.
+	_draw_part(origin, unit, Rect2(0.2, 0.57, 0.2, 0.07), _part_color(PlaneActor.Part.LEFT_FLAP, alive))
+	_draw_part(origin, unit, Rect2(0.6, 0.57, 0.2, 0.07), _part_color(PlaneActor.Part.RIGHT_FLAP, alive))
 	_draw_part(origin, unit, Rect2(0.41, 0.3, 0.18, 0.4), hull_color)
 	_draw_part(origin, unit, Rect2(0.39, 0.1, 0.22, 0.2), _part_color(PlaneActor.Part.ENGINE, alive))
 	var tail_color: Color = _part_color(PlaneActor.Part.TAIL, alive)
-	_draw_part(origin, unit, Rect2(0.44, 0.7, 0.12, 0.2), tail_color)
-	_draw_part(origin, unit, Rect2(0.3, 0.8, 0.4, 0.1), tail_color)
+	_draw_part(origin, unit, Rect2(0.44, 0.68, 0.12, 0.16), tail_color)
+	_draw_part(origin, unit, Rect2(0.3, 0.76, 0.4, 0.09), tail_color)
+	# The rudder trails behind everything else.
+	_draw_part(origin, unit, Rect2(0.46, 0.85, 0.08, 0.1), _part_color(PlaneActor.Part.RUDDER, alive))
 
 
 func _part_color(part: PlaneActor.Part, alive: bool) -> Color:

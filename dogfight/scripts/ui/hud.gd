@@ -24,6 +24,9 @@ const PART_ALERTS: Dictionary[int, Array] = {
 	PlaneActor.Part.LEFT_WING: ["LEFT WING PATCHED", "LEFT WING HIT - pulling left", "LEFT WING CRITICAL", "LEFT WING GONE"],
 	PlaneActor.Part.RIGHT_WING: ["RIGHT WING PATCHED", "RIGHT WING HIT - pulling right", "RIGHT WING CRITICAL", "RIGHT WING GONE"],
 	PlaneActor.Part.TAIL: ["TAIL PATCHED", "TAIL HIT - sluggish controls", "ELEVATOR FAILING - nose heavy", "TAIL GONE - no pitch control"],
+	PlaneActor.Part.RUDDER: ["RUDDER PATCHED", "RUDDER HIT - nose is wandering", "RUDDER FAILING", "RUDDER SHOT OFF - weak turns"],
+	PlaneActor.Part.LEFT_FLAP: ["LEFT FLAP PATCHED", "LEFT FLAP HIT", "LEFT FLAP FAILING - pulls left in hard turns", "LEFT FLAP SHOT OFF"],
+	PlaneActor.Part.RIGHT_FLAP: ["RIGHT FLAP PATCHED", "RIGHT FLAP HIT", "RIGHT FLAP FAILING - pulls right in hard turns", "RIGHT FLAP SHOT OFF"],
 }
 
 var match_manager: MatchManager5v5

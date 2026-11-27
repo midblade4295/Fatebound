@@ -139,12 +139,14 @@ HUD (CanvasLayer)                         hud.gd
   for gravity and drag (`Ballistics.step`) and its path for that tick is tested
   against the world (one physics ray) and against each enemy plane.
 - **Hits follow the bullet's path.** Every plane carries `PlaneHitboxes`: boxes
-  for the engine, cockpit/hull, tail (rear fuselage, stabiliser, fin) and each
-  wing, matching the model plus 0.3 m of padding. The bullet's path, relative
+  for the engine, cockpit/hull, tail (rear fuselage, stabiliser, front of the
+  fin), rudder, each wing and each flap, matching the model plus 0.3 m of
+  padding. The bullet's path, relative
   to the target's own motion, is traced through those boxes. The first box
   entered is the part that is hit, and the bullet carries on with reduced
-  energy into whatever lies behind (tail 50%, wing 60%, hull 30%, engine 0%).
-  So a shot from astern goes tail -> hull -> engine, a head-on shot stops in
+  energy into whatever lies behind (control surfaces 80%, wing 60%, tail 50%,
+  hull 30%, engine 0%). So a shot from astern goes rudder -> tail -> hull ->
+  engine, a head-on shot stops in
   the engine, one diving over the nose can reach the fin, and one that passes
   between the boxes misses. Bullets are never tested against the shooter's own
   team, which is how friendly fire is prevented (`PlaneActor.apply_damage`
@@ -160,14 +162,22 @@ HUD (CanvasLayer)                         hud.gd
 - **Match rules** (`MatchManager5v5`): ticket drain, every loss gives the other
   team a point, first to 25 or the higher score after 3 minutes, 5 s respawn
   above the team's base with 2.5 s spawn protection.
-- **Damage is per part.** Besides the hull, a plane has an engine, two wings and
-  a tail, each with its own smaller health pool. `apply_damage` always hurts
-  the hull and, for a part hit, that part too. What damage does:
+- **Control surfaces.** Every plane has ailerons, elevators, a rudder and
+  flaps as separate hinged pieces of the model, and they move with the stick
+  (`PlaneActor.control_state` -> `PlaneVisual.set_controls`). The flaps are
+  working combat flaps: pull past 60% stick and they drop over about half a
+  second, tightening the turn by up to 18% and costing up to 12% of top speed.
+- **Damage is per part.** Besides the hull, a plane has an engine, two wings,
+  a tail, a rudder and two flaps, each with its own smaller health pool.
+  `apply_damage` always hurts the hull and, for a part hit, that part too.
+  What damage does:
 
   | Part | As it takes damage | Destroyed |
   | --- | --- | --- |
-  | Wing | wider turns, drags and hangs toward that side, slow to turn away from it, sluggish stick, extra drag | spins in, breaks up within 2.6 s |
-  | Tail | weak pitch and rudder, sluggish stick, nose-heavy past half damage | almost no pitch control, dives |
+  | Wing (with its aileron) | wider turns, drags and hangs toward that side, slow to turn away from it, sluggish stick, extra drag | spins in, breaks up within 2.6 s |
+  | Flap | less of the turn boost; with flaps down the plane pulls toward the damaged side | shot off the model; plane stays flyable |
+  | Tail (with its elevators) | weak pitch, sluggish stick, nose-heavy past half damage | almost no pitch control, dives |
+  | Rudder | weaker turns, the nose wanders from side to side | shot off the model; turns 40% weaker, plane stays flyable |
   | Engine | lower top speed, slow to regain speed | on fire, glides, stalls unless it dives |
 
   Whoever destroys a part is credited with the takedown however the plane then
@@ -253,7 +263,7 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 | Test | What it checks |
 | --- | --- |
 | `TestProgression` | card tables, upgrade flow, Commander Level thresholds, slot rules, stat building, save/load, bullet drop and drag, lead solution checked against a simulated bullet |
-| `TestDamageModel` | bullet paths traced through the hit boxes, live bullets with drop and drag (front shot reaching the tail, head-on stopping in the engine, pass-through from astern, near miss), hull vs part damage, each damaged part changes handling against an undamaged reference, destroyed wing/engine/tail bring the plane down and credit the attacker, repair |
+| `TestDamageModel` | bullet paths traced through the hit boxes (including flap-then-wing and rudder-only paths), live bullets with drop and drag (front shot reaching the tail, head-on stopping in the engine, pass-through from astern, near miss), hull vs part damage, each damaged part changes handling against an undamaged reference (wing, tail, engine, rudder, flap), flaps and rudder move on the model and vanish when shot off, destroyed wing/engine/tail bring the plane down and credit the attacker, repair |
 | `TestPlayerFlow` | 1 player + 9 bots through Input actions: fire, roll, nitro, crash gives a ticket, 5 s respawn |
 | `TestMatchSim` (3 seeds) | full bots-only match: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, bots do not crash, bot accuracy stays in a human-like 2-30% band |
 | hangar / lobby | scenes load and the lobby hands over to the arena without script errors |

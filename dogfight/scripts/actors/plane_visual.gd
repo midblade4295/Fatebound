@@ -15,6 +15,13 @@ const SKIN_COLOR: Color = Color("f2c79a")
 const LEATHER_COLOR: Color = Color("6b4423")
 const GUNMETAL_COLOR: Color = Color("2b2f36")
 const MUZZLE_FLASH_TIME: float = 0.05
+## Full-stick deflection of each control surface, and flaps fully dropped.
+const AILERON_MAX: float = deg_to_rad(24.0)
+const ELEVATOR_MAX: float = deg_to_rad(26.0)
+const RUDDER_MAX: float = deg_to_rad(28.0)
+const FLAP_MAX: float = deg_to_rad(30.0)
+## How quickly the surfaces follow the stick (1/s).
+const CONTROL_RESPONSE: float = 14.0
 
 static var _unit_sphere: SphereMesh
 static var _unit_cylinder: CylinderMesh
@@ -33,6 +40,13 @@ var _screen_smoke: CPUParticles3D
 var _part_smoke: Array[CPUParticles3D] = []
 var _part_fire: Array[CPUParticles3D] = []
 var _gun_offsets: Array[Vector3] = []
+# Hinged control surfaces. Index 0 is the left one, 1 the right.
+var _ailerons: Array[Node3D] = []
+var _flaps: Array[Node3D] = []
+var _elevators: Array[Node3D] = []
+var _rudder: Node3D
+var _control_target: Vector3 = Vector3.ZERO
+var _control_shown: Vector3 = Vector3.ZERO
 var _prop_speed: float = 40.0
 
 
@@ -44,6 +58,7 @@ func _process(delta: float) -> void:
 			_muzzle_timers[index] -= delta
 			if _muzzle_timers[index] <= 0.0:
 				_muzzle_flashes[index].visible = false
+	_animate_controls(delta)
 
 
 ## (Re)builds the model for [param data] in [param team] colours.
@@ -55,6 +70,10 @@ func build(data: PlaneData, team: Teams.Id) -> void:
 	_muzzle_timers.clear()
 	_nitro_flames.clear()
 	_gun_offsets.clear()
+	_ailerons.clear()
+	_flaps.clear()
+	_elevators.clear()
+	_rudder = null
 	_ensure_shared_meshes()
 	scale = Vector3.ONE * VISUAL_SCALE
 
@@ -151,11 +170,35 @@ func build(data: PlaneData, team: Teams.Id) -> void:
 		flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_nitro_flames.append(flame)
 
-	# --- Tail: stabiliser + a tall team-coloured fin -------------------------
+	# --- Wing control surfaces: flap inboard, aileron outboard, each side ----
+	# Hinge lines and spans match PlaneHitboxes, so what moves is what gets hit.
+	var flap_inner: float = radius * 0.95
+	var flap_outer: float = span * PlaneHitboxes.FLAP_OUTER_SPAN
+	var flap_hinge_z: float = wing_z + chord * PlaneHitboxes.FLAP_HINGE_CHORD
+	# A shade darker than the skin, so the surfaces read as separate panels.
+	var panel: ShaderMaterial = ToonMaterials.toon(data.body_color.darkened(0.28))
+	for side: float in [-1.0, 1.0]:
+		var side_name: String = "Left" if side < 0.0 else "Right"
+		_flaps.append(_add_surface("Flap" + side_name, panel,
+				Vector3(side * (flap_inner + flap_outer) * 0.5, wing_y, flap_hinge_z),
+				Vector3(flap_outer - flap_inner - 0.08, wing_thickness * 1.08, chord * 0.27)))
+		_ailerons.append(_add_surface("Aileron" + side_name, panel,
+				Vector3(side * span * 0.355, wing_y, wing_z + chord * 0.13),
+				Vector3(span * 0.15, wing_thickness * 1.08, chord * 0.19)))
+		_elevators.append(_add_surface("Elevator" + side_name, panel,
+				Vector3(side * span * 0.1, radius * 0.1, length * 0.52 + chord * 0.1),
+				Vector3(span * 0.14, wing_thickness * 0.78, chord * 0.19)))
+
+	# --- Tail: stabiliser + a tall team-coloured fin with its rudder ---------
 	_add_part("Stabiliser", _unit_cylinder, body,
 			Transform3D(Basis.from_scale(Vector3(span * 0.4, wing_thickness * 0.7, chord * 0.62)), Vector3(0.0, radius * 0.1, length * 0.52)))
 	var fin_basis: Basis = Basis(Vector3.BACK, PI * 0.5) * Basis.from_scale(Vector3(radius * 1.9, 0.26, chord * 0.75))
 	_add_part("Fin", _unit_cylinder, team_paint, Transform3D(fin_basis, Vector3(0.0, radius * 0.78, length * 0.54)))
+	# The rudder is the rear 55% of the fin, in the darker team shade.
+	# Rounded like the fin it hangs from.
+	_rudder = _add_surface("Rudder", ToonMaterials.toon(team_dark),
+			Vector3(0.0, radius * 0.8, length * 0.54 - chord * 0.037),
+			Vector3(0.3, radius * 1.5, chord * 0.41), true)
 
 	# --- Cockpit: glass canopy over a pilot with cap and goggles -------------
 	var canopy_scale: Vector3 = Vector3(radius * 1.15, radius * 1.3, radius * (2.5 if data.bubble_canopy else 2.0))
@@ -207,12 +250,33 @@ func set_damage_state(hp_ratio: float, burning: bool) -> void:
 
 
 ## Shows where the plane is hurt: grey smoke from a damaged part, flames from
-## a destroyed one. [param damage] = (engine, left wing, right wing, tail), 0..1.
-func set_part_damage(damage: Vector4) -> void:
+## a destroyed one, and a control surface that has been shot off disappears.
+## [param damage] is PlaneActor.part_damage (0..1 per PlaneActor.Part).
+func set_part_damage(damage: PackedFloat32Array) -> void:
+	if damage.size() < PlaneActor.PART_COUNT:
+		return
+	# The emitters are in the order engine, left wing, right wing, tail,
+	# which is PlaneActor.Part 1 to 4.
 	for index: int in range(_part_smoke.size()):
-		var amount: float = damage[index]
+		var amount: float = damage[index + 1]
 		_part_smoke[index].emitting = amount >= 0.4
 		_part_fire[index].emitting = amount >= 1.0
+	if _rudder == null:
+		return
+	_rudder.visible = damage[PlaneActor.Part.RUDDER] < 1.0
+	_flaps[0].visible = damage[PlaneActor.Part.LEFT_FLAP] < 1.0
+	_flaps[1].visible = damage[PlaneActor.Part.RIGHT_FLAP] < 1.0
+	# Ailerons go with their wing, elevators with the tail.
+	_ailerons[0].visible = damage[PlaneActor.Part.LEFT_WING] < 1.0
+	_ailerons[1].visible = damage[PlaneActor.Part.RIGHT_WING] < 1.0
+	for elevator: Node3D in _elevators:
+		elevator.visible = damage[PlaneActor.Part.TAIL] < 1.0
+
+
+## Where the pilot has the controls: x = roll/yaw (-1 left .. +1 right),
+## y = pitch (-1 down .. +1 up), z = flaps (0 up .. 1 fully down).
+func set_controls(state: Vector3) -> void:
+	_control_target = state
 
 
 func set_boosting(active: bool) -> void:
@@ -227,11 +291,50 @@ func set_smoke_screen(active: bool) -> void:
 
 func stop_effects() -> void:
 	set_damage_state(1.0, false)
-	set_part_damage(Vector4.ZERO)
+	var undamaged: PackedFloat32Array = PackedFloat32Array()
+	undamaged.resize(PlaneActor.PART_COUNT)
+	set_part_damage(undamaged)
 	set_boosting(false)
 	set_smoke_screen(false)
 	for flash: MeshInstance3D in _muzzle_flashes:
 		flash.visible = false
+
+
+## Adds a hinged control surface: a pivot on the hinge line with a slab
+## trailing behind it (+Z), so rotating the pivot swings the trailing edge.
+## [param size] is width (X), height (Y), depth (Z). A [param rounded]
+## surface is an upright oval slab instead of a rectangular one.
+func _add_surface(surface_name: String, material: Material, hinge: Vector3, size: Vector3, rounded: bool = false) -> Node3D:
+	var pivot: Node3D = Node3D.new()
+	pivot.name = surface_name
+	pivot.position = hinge
+	add_child(pivot)
+	var center: Vector3 = Vector3(0.0, 0.0, size.z * 0.5)
+	if rounded:
+		# A cylinder laid on its side: its round face becomes the oval outline.
+		var oval: Basis = Basis(Vector3.BACK, PI * 0.5) * Basis.from_scale(Vector3(size.y, size.x, size.z))
+		_add_part("Panel", _unit_cylinder, material, Transform3D(oval, center), pivot)
+	else:
+		_add_part("Panel", _unit_box, material, Transform3D(Basis.from_scale(size), center), pivot)
+	return pivot
+
+
+## Eases the surfaces toward where the controls are held.
+func _animate_controls(delta: float) -> void:
+	if _rudder == null:
+		return
+	_control_shown = _control_shown.lerp(_control_target, 1.0 - exp(-CONTROL_RESPONSE * delta))
+	# A positive rotation about X swings a trailing edge down.
+	# Rolling right: left aileron down, right aileron up.
+	_ailerons[0].rotation.x = _control_shown.x * AILERON_MAX
+	_ailerons[1].rotation.x = -_control_shown.x * AILERON_MAX
+	# Nose up: elevator trailing edges up.
+	for elevator: Node3D in _elevators:
+		elevator.rotation.x = -_control_shown.y * ELEVATOR_MAX
+	# Nose right: rudder trailing edge to the right.
+	_rudder.rotation.y = _control_shown.x * RUDDER_MAX
+	for flap: Node3D in _flaps:
+		flap.rotation.x = _control_shown.z * FLAP_MAX
 
 
 func _add_part(part_name: String, mesh: Mesh, material: Material, part_transform: Transform3D, parent: Node3D = self) -> MeshInstance3D:
@@ -251,7 +354,7 @@ func _build_particles(length: float, radius: float) -> void:
 	_fire_particles.position = Vector3(0.0, radius * 0.2, -length * 0.32)
 	_screen_smoke = _make_trail("SmokeScreen", Color(0.93, 0.95, 1.0, 0.85), 48, 2.6, 3.0, 12.0)
 	_screen_smoke.position = Vector3(0.0, 0.0, length * 0.5)
-	# Same order as PlaneActor.part_damage: engine, left wing, right wing, tail.
+	# PlaneActor.Part order: engine, left wing, right wing, tail.
 	_part_smoke.clear()
 	_part_fire.clear()
 	var half_span: float = _gun_offsets[1].x / VISUAL_SCALE * 1.6 if _gun_offsets.size() > 1 else radius * 3.0

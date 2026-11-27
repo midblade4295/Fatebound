@@ -25,23 +25,33 @@ signal part_state_changed(plane: PlaneActor, part: Part, state: PartState)
 
 ## Sections of the airframe that take damage separately from the hull.
 ## HULL is everything else: cockpit, fuel tanks, the middle of the fuselage.
-enum Part { HULL, ENGINE, LEFT_WING, RIGHT_WING, TAIL }
+## TAIL is the rear fuselage, the stabiliser with its elevators and the fixed
+## front of the fin; RUDDER is the hinged surface behind the fin. A wing is the
+## wing itself with its aileron; its FLAP is the inner trailing-edge surface.
+enum Part { HULL, ENGINE, LEFT_WING, RIGHT_WING, TAIL, RUDDER, LEFT_FLAP, RIGHT_FLAP }
 enum PartState { OK, DAMAGED, CRITICAL, DESTROYED }
 
-const PART_NAMES: Array[String] = ["Hull", "Engine", "Left wing", "Right wing", "Tail"]
+const PART_COUNT: int = 8
+const PART_NAMES: Array[String] = ["Hull", "Engine", "Left wing", "Right wing", "Tail", "Rudder", "Left flap", "Right flap"]
+## Every part with its own health pool (everything except the hull).
+const DAMAGEABLE_PARTS: Array[Part] = [
+	Part.ENGINE, Part.LEFT_WING, Part.RIGHT_WING, Part.TAIL, Part.RUDDER, Part.LEFT_FLAP, Part.RIGHT_FLAP,
+]
 ## Each part's own health pool as a fraction of the plane's max HP. Smaller than
 ## the hull, so concentrated fire knocks a part out before the hull gives way.
-const PART_HEALTH_FRACTION: Array[float] = [1.0, 0.5, 0.5, 0.5, 0.45]
+## Control surfaces are light and easily shredded.
+const PART_HEALTH_FRACTION: Array[float] = [1.0, 0.5, 0.5, 0.5, 0.45, 0.3, 0.25, 0.25]
 ## Hull damage multiplier by where the bullet lands. Centre hits find the
-## pilot and the fuel tanks; wing and tail hits mostly chew up the part.
-const PART_HULL_DAMAGE: Array[float] = [1.2, 1.0, 0.9, 0.9, 0.9]
+## pilot and the fuel tanks; wing and tail hits mostly chew up the part; a hole
+## in a rudder or flap barely troubles the airframe.
+const PART_HULL_DAMAGE: Array[float] = [1.2, 1.0, 0.9, 0.9, 0.9, 0.5, 0.5, 0.5]
 ## Part damage (0 = pristine, 1 = gone) at which each PartState begins.
 const PART_DAMAGED_AT: float = 0.4
 const PART_CRITICAL_AT: float = 0.75
 ## Share of a bullet's energy that carries on after passing through each part.
-## Wings and tail surfaces are thin skin; the fuselage soaks up more; nothing
-## comes out the far side of the engine block.
-const PART_PASS_THROUGH: Array[float] = [0.3, 0.0, 0.6, 0.6, 0.5]
+## Wings and tail surfaces are thin skin, control surfaces thinner still; the
+## fuselage soaks up more; nothing comes out the far side of the engine block.
+const PART_PASS_THROUGH: Array[float] = [0.3, 0.0, 0.6, 0.6, 0.5, 0.8, 0.8, 0.8]
 ## Below this share of its energy a bullet is spent.
 const SPENT_BULLET_ENERGY: float = 0.1
 
@@ -58,7 +68,23 @@ const WING_RESPONSE_LOSS: float = 0.45
 const TAIL_RESPONSE_LOSS: float = 0.3
 const WING_DRAG: float = 0.1
 const TAIL_PITCH_LOSS: float = 0.65
-const TAIL_YAW_LOSS: float = 0.35
+## Rudder: yaw authority lost at full damage, and the nose starts to hunt
+## from side to side ("fishtailing") because nothing is damping it.
+const RUDDER_YAW_LOSS: float = 0.4
+const RUDDER_FISHTAIL_RATE: float = deg_to_rad(8.0)
+const RUDDER_FISHTAIL_HZ: float = 0.9
+## Combat flaps drop automatically when the stick is pulled past this much.
+const FLAP_DEPLOY_STICK: float = 0.6
+## Seconds^-1: flaps take about half a second to travel fully.
+const FLAP_SPEED: float = 2.2
+## Fully dropped, healthy flaps tighten the turn by this much and cost this
+## much top speed in drag.
+const FLAP_TURN_BONUS: float = 0.18
+const FLAP_DRAG: float = 0.12
+## One good flap and one shot-up flap lift unevenly: with flaps down the plane
+## pulls toward the damaged side.
+const FLAP_PULL_YAW: float = deg_to_rad(6.0)
+const FLAP_PULL_BANK: float = deg_to_rad(14.0)
 ## Past half damage the elevator can no longer hold the nose up on its own.
 const TAIL_TRIM_RATE: float = deg_to_rad(7.0)
 ## With the tail gone the nose drops this fast and the stick barely matters.
@@ -130,9 +156,13 @@ const FLAG_SPINNING: int = 64
 @export var status_flags: int = 0
 ## Extra barrel-roll angle shown by the visual during an evade.
 @export var visual_roll: float = 0.0
-## Damage per part, 0 (pristine) to 1 (destroyed):
-## x = engine, y = left wing, z = right wing, w = tail.
-@export var part_damage: Vector4 = Vector4.ZERO
+## Damage per part, 0 (pristine) to 1 (destroyed), indexed by Part. Read it
+## through part_damage_of(); entry 0 (the hull) is unused.
+@export var part_damage: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+## What the control surfaces are doing, for the model to animate on every
+## peer: x = aileron/rudder (-1 left .. +1 right), y = elevator (-1 down ..
+## +1 up), z = how far the flaps are dropped (0..1).
+@export var control_state: Vector3 = Vector3.ZERO
 
 # --- Arena limits, set by the match manager ---------------------------------
 var arena_center: Vector3 = Vector3.ZERO
@@ -175,6 +205,8 @@ var _last_attacker_age: float = INF
 var _doomed_by: PlaneActor
 var _spin_time: float = 0.0
 var _spin_direction: float = 1.0
+var _flap_deploy: float = 0.0
+var _fishtail_phase: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _rng_seeded: bool = false
 
@@ -250,6 +282,7 @@ func _process(_delta: float) -> void:
 	visual.set_roll_angle(visual_roll)
 	visual.set_damage_state(hp_ratio(), has_flag(FLAG_BURNING))
 	visual.set_part_damage(part_damage)
+	visual.set_controls(control_state)
 	visual.set_boosting(has_flag(FLAG_BOOSTING))
 	visual.set_smoke_screen(has_flag(FLAG_CONCEALED))
 
@@ -294,16 +327,12 @@ func is_spinning_out() -> bool:
 
 ## 0.0 = pristine .. 1.0 = destroyed. The hull has no part damage of its own.
 func part_damage_of(part: Part) -> float:
-	match part:
-		Part.ENGINE:
-			return part_damage.x
-		Part.LEFT_WING:
-			return part_damage.y
-		Part.RIGHT_WING:
-			return part_damage.z
-		Part.TAIL:
-			return part_damage.w
-	return 0.0
+	return part_damage[part]
+
+
+## How far the combat flaps are dropped right now, 0..1.
+func flap_deploy() -> float:
+	return _flap_deploy
 
 
 func part_state(part: Part) -> PartState:
@@ -433,7 +462,7 @@ func heal(amount: float) -> void:
 func repair_parts(amount: float) -> void:
 	if not alive or amount <= 0.0:
 		return
-	for part: Part in [Part.ENGINE, Part.LEFT_WING, Part.RIGHT_WING, Part.TAIL]:
+	for part: Part in DAMAGEABLE_PARTS:
 		var damage: float = part_damage_of(part)
 		if damage <= 0.0 or damage >= 1.0:
 			continue
@@ -466,7 +495,9 @@ func respawn(spawn_transform: Transform3D) -> void:
 	_last_attacker_age = INF
 	_doomed_by = null
 	_spin_time = 0.0
-	part_damage = Vector4.ZERO
+	part_damage.fill(0.0)
+	control_state = Vector3.ZERO
+	_flap_deploy = 0.0
 	_fire_cooldown = 0.0
 	_spawn_shield = SPAWN_SHIELD_TIME
 	visual_roll = 0.0
@@ -518,15 +549,7 @@ func _damage_part(part: Part, amount: float, attacker: PlaneActor) -> void:
 
 
 func _set_part_damage(part: Part, value: float) -> void:
-	match part:
-		Part.ENGINE:
-			part_damage.x = value
-		Part.LEFT_WING:
-			part_damage.y = value
-		Part.RIGHT_WING:
-			part_damage.z = value
-		Part.TAIL:
-			part_damage.w = value
+	part_damage[part] = value
 
 
 ## A wing has come off: the plane rolls and yaws toward the missing wing and
@@ -569,17 +592,26 @@ func _integrate_flight(delta: float) -> void:
 		_try_activate_gadget()
 
 	# --- What the damage has done to the controls ---------------------------
-	var engine_damage: float = part_damage.x
-	var left_damage: float = part_damage.y
-	var right_damage: float = part_damage.z
-	var tail_damage: float = part_damage.w
+	var engine_damage: float = part_damage[Part.ENGINE]
+	var left_damage: float = part_damage[Part.LEFT_WING]
+	var right_damage: float = part_damage[Part.RIGHT_WING]
+	var tail_damage: float = part_damage[Part.TAIL]
+	var rudder_damage: float = part_damage[Part.RUDDER]
+	var left_flap_damage: float = part_damage[Part.LEFT_FLAP]
+	var right_flap_damage: float = part_damage[Part.RIGHT_FLAP]
 	var engine_dead: bool = engine_damage >= 1.0
 	var tail_gone: bool = tail_damage >= 1.0
 	# Less wing = less lift = wider turns and weaker pull-ups.
 	var lift: float = maxf(1.0 - WING_LIFT_LOSS * (left_damage + right_damage), 0.35)
+	# Combat flaps: pulling hard drops them for a tighter turn at the cost of
+	# speed. A shot-up flap gives less, and uneven flaps pull the plane round.
+	var flap_demand: float = clampf((steer.length() - FLAP_DEPLOY_STICK) / (1.0 - FLAP_DEPLOY_STICK), 0.0, 1.0)
+	_flap_deploy = move_toward(_flap_deploy, flap_demand, FLAP_SPEED * delta)
+	lift *= 1.0 + FLAP_TURN_BONUS * _flap_deploy * (2.0 - left_flap_damage - right_flap_damage) * 0.5
+	var flap_asymmetry: float = (right_flap_damage - left_flap_damage) * _flap_deploy
 	# Positive when the right wing is worse: the plane then drags to the right.
 	var asymmetry: float = right_damage - left_damage
-	var yaw_authority: float = lift * (1.0 - TAIL_YAW_LOSS * tail_damage)
+	var yaw_authority: float = lift * (1.0 - RUDDER_YAW_LOSS * rudder_damage)
 	if steer.x * asymmetry < 0.0:
 		# Turning away from the damaged wing means lifting it with what is left of it.
 		yaw_authority *= 1.0 - WING_OPPOSITE_TURN_LOSS * absf(asymmetry)
@@ -590,7 +622,11 @@ func _integrate_flight(delta: float) -> void:
 
 	# Stick -> turn rates, eased so the plane has a little weight.
 	var response: float = 1.0 - exp(-STICK_RESPONSE * stats.roll_rate * control_feel * delta)
-	var yaw_target: float = -steer.x * stats.turn_rate * yaw_authority - asymmetry * WING_PULL_YAW
+	var yaw_target: float = -steer.x * stats.turn_rate * yaw_authority - asymmetry * WING_PULL_YAW - flap_asymmetry * FLAP_PULL_YAW
+	if rudder_damage > 0.0:
+		# Without a working rudder the nose swings from side to side.
+		_fishtail_phase = wrapf(_fishtail_phase + TAU * RUDDER_FISHTAIL_HZ * delta, 0.0, TAU)
+		yaw_target += sin(_fishtail_phase) * RUDDER_FISHTAIL_RATE * rudder_damage
 	var pitch_target: float = steer.y * stats.pitch_rate * pitch_authority
 	if tail_gone:
 		pitch_target -= TAIL_GONE_DIVE_RATE
@@ -611,13 +647,14 @@ func _integrate_flight(delta: float) -> void:
 
 	# Auto-bank into the turn (cosmetic: guns fire along the nose regardless),
 	# hanging the more damaged wing low.
-	var bank_target: float = -steer.x * MAX_BANK - asymmetry * WING_PULL_BANK
+	var bank_target: float = -steer.x * MAX_BANK - asymmetry * WING_PULL_BANK - flap_asymmetry * FLAP_PULL_BANK
 	bank = lerpf(bank, bank_target, 1.0 - exp(-BANK_RESPONSE * stats.roll_rate * control_feel * delta))
 	rotation = Vector3(pitch, yaw, bank)
 
 	# Throttle is automatic. Climbing bleeds speed, diving builds it.
 	var nitro_multiplier: float = 1.0 + stats.gadget_power if _nitro_time > 0.0 else 1.0
-	var drag: float = 1.0 - WING_DRAG * (left_damage + right_damage)
+	var drag: float = (1.0 - WING_DRAG * (left_damage + right_damage)) * (1.0 - FLAP_DRAG * _flap_deploy)
+	control_state = Vector3(steer.x, steer.y, _flap_deploy)
 	var target_speed: float = stats.top_speed * (1.0 - ENGINE_SPEED_LOSS * engine_damage) * drag * nitro_multiplier
 	if engine_dead:
 		target_speed = stats.top_speed * ENGINE_DEAD_SPEED_RATIO
@@ -647,6 +684,8 @@ func _integrate_spin_out(delta: float) -> void:
 	pitch = move_toward(pitch, -MAX_PITCH * 0.85, deg_to_rad(45.0) * delta)
 	bank = lerpf(bank, 0.0, 1.0 - exp(-4.0 * delta))
 	visual_roll = wrapf(visual_roll + _spin_direction * SPIN_ROLL_RATE * delta, -PI, PI)
+	# Controls hard over and useless.
+	control_state = Vector3(-_spin_direction, -1.0, 0.0)
 	rotation = Vector3(pitch, yaw, bank)
 	speed = move_toward(speed, stats.top_speed * 0.8, 15.0 * delta)
 	velocity = forward() * speed + Vector3.DOWN * 14.0
@@ -802,7 +841,7 @@ func _refresh_status_flags() -> void:
 		flags |= FLAG_CONCEALED
 	if _evade_time > 0.0:
 		flags |= FLAG_EVADING
-	if _burn_time > 0.0 or part_damage.x >= 1.0:
+	if _burn_time > 0.0 or part_damage[Part.ENGINE] >= 1.0:
 		flags |= FLAG_BURNING
 	if _spin_time > 0.0:
 		flags |= FLAG_SPINNING

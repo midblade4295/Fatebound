@@ -22,7 +22,7 @@ const LEAD_COLOR: Color = Color(1.0, 0.84, 0.25)
 const HIT_MARKER_TIME: float = 0.14
 const DAMAGE_FLASH_TIME: float = 0.35
 ## Short labels for damaged parts under the current target, indexed by PlaneActor.Part.
-const PART_TAGS: Array[String] = ["", "ENGINE", "L WING", "R WING", "TAIL"]
+const PART_TAGS: Array[String] = ["", "ENGINE", "L WING", "R WING", "TAIL", "RUDDER", "L FLAP", "R FLAP"]
 
 var camera: Camera3D
 var match_manager: MatchManager5v5
@@ -109,7 +109,7 @@ func _draw_enemy_marker(plane: PlaneActor, at: Vector2, distance: float, is_targ
 			at + Vector2(-150.0, -half - 30.0), 20, UiStyle.WHITE, 300.0, 5)
 	# Which of the target's parts are already hurt (shoot there to finish it).
 	var hurt: PackedStringArray = PackedStringArray()
-	for part: PlaneActor.Part in [PlaneActor.Part.ENGINE, PlaneActor.Part.LEFT_WING, PlaneActor.Part.RIGHT_WING, PlaneActor.Part.TAIL]:
+	for part: PlaneActor.Part in PlaneActor.DAMAGEABLE_PARTS:
 		if plane.part_state(part) != PlaneActor.PartState.OK:
 			hurt.append(PART_TAGS[part])
 	if not hurt.is_empty():

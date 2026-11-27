@@ -39,6 +39,7 @@ var _live_engine: float = 0.0
 var _yaw_start: Dictionary[int, float] = {}
 var _pitch_start: Dictionary[int, float] = {}
 var _wing_lost_died_at: float = -1.0
+var _rudder_wander: float = 0.0
 var _engine_lost_died_at: float = -1.0
 var _tail_lost_died_at: float = -1.0
 var _tail_lost_hp_at_death: float = -1.0
@@ -95,7 +96,10 @@ func _physics_process(delta: float) -> void:
 			_stage = 1
 		1:
 			# 1.5 s hands-off: asymmetric damage should pull the plane on its own.
+			_rudder_wander = maxf(_rudder_wander, absf(_yaw_drift(_attacker)))
 			if _clock >= 1.6:
+				_check(_rudder_wander > 0.012, "with no rudder the nose wanders from side to side (%.3f rad)" % _rudder_wander)
+				_check(absf(_attacker.bank) < 0.05, "but the wings stay level (bank %.3f rad)" % _attacker.bank)
 				_check(_wing_lost.is_spinning_out() or not _wing_lost.alive, "a plane that lost a wing spins out")
 				_check(_yaw_drift(_left_wing_hit) > 0.08, "damaged left wing drags the nose left (yaw drift %.3f rad)" % _yaw_drift(_left_wing_hit))
 				_check(absf(_yaw_drift(_reference)) < 0.02, "undamaged plane flies straight (yaw drift %.3f rad)" % _yaw_drift(_reference))
@@ -112,6 +116,11 @@ func _physics_process(delta: float) -> void:
 				var hurt_turn: float = absf(_yaw_drift(_left_wing_hit))
 				_check(clean_turn > 1.0, "reference plane turns normally (%.2f rad in 1.5 s)" % clean_turn)
 				_check(hurt_turn < clean_turn * 0.75, "turning away from a damaged wing is much slower (%.2f vs %.2f rad)" % [hurt_turn, clean_turn])
+				var rudderless_turn: float = absf(_yaw_drift(_attacker))
+				_check(rudderless_turn < clean_turn * 0.75 and rudderless_turn > clean_turn * 0.4,
+						"without a rudder the plane still turns, but weakly (%.2f vs %.2f rad)" % [rudderless_turn, clean_turn])
+				_check(_reference.flap_deploy() > 0.9, "pulling hard drops the combat flaps (%.2f)" % _reference.flap_deploy())
+				_check(_reference.control_state.x > 0.9, "and the model is told the stick is hard right")
 				_mark_pitch()
 				_set_stick(Vector2(0.0, 1.0))
 				_stage = 3
@@ -138,8 +147,32 @@ func _physics_process(delta: float) -> void:
 				_left_wing_hit.repair_parts(0.3)
 				_check(_left_wing_hit.part_state(PlaneActor.Part.LEFT_WING) == PlaneActor.PartState.OK, "repair patches a damaged wing")
 				_check(_events.has("Left wing:OK"), "repair reports the part as OK again")
+				_check(_reference.flap_deploy() < 0.05, "flaps come back up when the stick is released (%.2f)" % _reference.flap_deploy())
+				# Flaps: shoot one off and compare a hard left turn against the clean plane.
+				_hurt(_engine_hit, PlaneActor.Part.RIGHT_FLAP, 1.05, _attacker)
+				_check(_engine_hit.part_state(PlaneActor.Part.RIGHT_FLAP) == PlaneActor.PartState.DESTROYED, "a flap can be shot off")
+				_check(_engine_hit.alive and not _engine_hit.is_spinning_out(), "losing a flap does not bring the plane down")
+				_mark_yaw()
+				_reference.input.steer = Vector2(-1.0, 0.0)
+				_engine_hit.input.steer = Vector2(-1.0, 0.0)
 				_stage = 5
 		5:
+			if _clock >= 8.5:
+				var clean_left: float = absf(_yaw_drift(_reference))
+				var one_flap_left: float = absf(_yaw_drift(_engine_hit))
+				_check(one_flap_left < clean_left * 0.92, "with the right flap gone, a hard left turn is slower (%.2f vs %.2f rad)" % [one_flap_left, clean_left])
+				var flap_node: Node3D = _engine_hit.visual.get_node("FlapRight") as Node3D
+				var rudder_node: Node3D = _attacker.visual.get_node("Rudder") as Node3D
+				_check(flap_node != null and not flap_node.visible, "the shot-off flap is gone from the model")
+				_check(rudder_node != null and not rudder_node.visible, "the shot-off rudder is gone from the model")
+				var clean_flap: Node3D = _reference.visual.get_node("FlapLeft") as Node3D
+				_check(clean_flap.visible and clean_flap.rotation.x > 0.3, "the clean plane's flaps are visibly down in the turn (%.2f rad)" % clean_flap.rotation.x)
+				var clean_rudder: Node3D = _reference.visual.get_node("Rudder") as Node3D
+				_check(clean_rudder.rotation.y < -0.3, "and its rudder is over to the left (%.2f rad)" % clean_rudder.rotation.y)
+				_reference.input.steer = Vector2.ZERO
+				_engine_hit.input.steer = Vector2.ZERO
+				_stage = 6
+		6:
 			if _clock >= 13.0:
 				_final_checks()
 				_finish()
@@ -153,11 +186,14 @@ func _test_bullet_paths() -> void:
 	var none: Array[int] = []
 	var cases: Array[Array] = [
 		# [start, direction, parts in the order they are struck, description]
-		[Vector3(4.0, -0.5, 10.0), Vector3.FORWARD, [PlaneActor.Part.RIGHT_WING], "from astern, out along the right wing"],
-		[Vector3(-4.0, -0.5, 10.0), Vector3.FORWARD, [PlaneActor.Part.LEFT_WING], "from astern, out along the left wing"],
-		[Vector3(0.0, 0.0, 10.0), Vector3.FORWARD, [PlaneActor.Part.TAIL, PlaneActor.Part.HULL, PlaneActor.Part.ENGINE], "from dead astern, straight up the fuselage"],
-		[Vector3(0.0, 0.0, -10.0), Vector3.BACK, [PlaneActor.Part.ENGINE, PlaneActor.Part.HULL, PlaneActor.Part.TAIL], "head-on into the nose"],
-		[Vector3(0.0, 6.39, -10.0), Vector3(0.0, -0.328, 1.0), [PlaneActor.Part.TAIL], "from the front, diving over the nose and canopy into the fin"],
+		[Vector3(5.2, -0.5, 10.0), Vector3.FORWARD, [PlaneActor.Part.RIGHT_WING], "from astern, out along the right wing"],
+		[Vector3(-5.2, -0.5, 10.0), Vector3.FORWARD, [PlaneActor.Part.LEFT_WING], "from astern, out along the left wing"],
+		[Vector3(2.5, -0.5, 10.0), Vector3.FORWARD, [PlaneActor.Part.RIGHT_FLAP, PlaneActor.Part.RIGHT_WING], "from astern into the inner right wing: flap first, then the wing"],
+		[Vector3(-2.5, -0.5, 10.0), Vector3.FORWARD, [PlaneActor.Part.LEFT_FLAP, PlaneActor.Part.LEFT_WING], "from astern into the inner left wing"],
+		[Vector3(0.0, 0.0, 10.0), Vector3.FORWARD, [PlaneActor.Part.RUDDER, PlaneActor.Part.TAIL, PlaneActor.Part.HULL, PlaneActor.Part.ENGINE], "from dead astern, straight up the fuselage"],
+		[Vector3(0.0, 0.0, -10.0), Vector3.BACK, [PlaneActor.Part.ENGINE, PlaneActor.Part.HULL, PlaneActor.Part.TAIL, PlaneActor.Part.RUDDER], "head-on into the nose"],
+		[Vector3(0.0, 6.39, -10.0), Vector3(0.0, -0.328, 1.0), [PlaneActor.Part.TAIL, PlaneActor.Part.RUDDER], "from the front, diving over the nose and canopy into the fin and on into the rudder"],
+		[Vector3(10.0, 2.0, 6.2), Vector3.LEFT, [PlaneActor.Part.RUDDER], "from the side through the rudder alone"],
 		[Vector3(10.0, 0.3, -0.5), Vector3.LEFT, [PlaneActor.Part.HULL], "from the right side into the cockpit"],
 		[Vector3(-4.0, 10.0, -0.9), Vector3.DOWN, [PlaneActor.Part.LEFT_WING], "from above onto the left wing"],
 		[Vector3(0.0, 3.2, 10.0), Vector3.FORWARD, none, "from astern, just over the top of the fin"],
@@ -226,8 +262,9 @@ func _run_live_fire() -> void:
 			if _clock >= 5.4:
 				var tail_gain: float = victim.part_damage_of(PlaneActor.Part.TAIL) - _live_tail
 				var engine_gain: float = victim.part_damage_of(PlaneActor.Part.ENGINE) - _live_engine
-				_check(tail_gain > 0.0, "a bullet from astern hits the tail first")
-				_check(engine_gain > 0.0 and engine_gain < tail_gain * 0.4, "then carries on to the engine with much less energy (tail +%.3f, engine +%.3f)" % [tail_gain, engine_gain])
+				_check(victim.part_damage_of(PlaneActor.Part.RUDDER) > 0.0, "a bullet from astern goes through the rudder first")
+				_check(tail_gain > 0.0, "then into the tail")
+				_check(engine_gain > 0.0 and engine_gain < tail_gain * 0.4, "and carries on to the engine with much less energy (tail +%.3f, engine +%.3f)" % [tail_gain, engine_gain])
 				# A tail chase closes slowly, so each hit is softer than the head-on one.
 				_check(tail_gain * 0.45 < _live_engine * 0.5 * 0.9, "a tail-chase hit lands softer than a head-on hit")
 				_live_hp = victim.hp
@@ -283,6 +320,10 @@ func _apply_all_damage() -> void:
 	_hurt(_wing_lost, PlaneActor.Part.RIGHT_WING, 1.05, _attacker)
 	_check(_events.has("Right wing:DESTROYED"), "a wing can be shot off")
 	_check(_wing_lost.alive, "losing a wing does not kill outright")
+	# The attacker loses its rudder outright: awkward to fly, but it survives.
+	_hurt(_attacker, PlaneActor.Part.RUDDER, 1.05, _reference)
+	_check(_events.has("Rudder:DESTROYED"), "a rudder can be shot off")
+	_check(not _attacker.is_spinning_out(), "losing the rudder does not bring the plane down")
 	_hurt(_engine_lost, PlaneActor.Part.ENGINE, 1.05, _reference)
 	_hurt(_tail_lost, PlaneActor.Part.TAIL, 1.05, _reference)
 	_check(_engine_lost.alive and _tail_lost.alive, "losing the engine or tail does not kill outright")
@@ -304,6 +345,7 @@ func _final_checks() -> void:
 			"score is BLUE 2 - 1 RED (got %d - %d)" % [_manager.team_score(Teams.Id.TEAM_BLUE), _manager.team_score(Teams.Id.TEAM_RED)])
 	_check(_live_stage == 5, "the live-fire sequence ran to the end (stage %d)" % _live_stage)
 	_check(_reference.alive and _left_wing_hit.alive and _tail_hit.alive and _engine_hit.alive, "damaged-but-not-destroyed planes are still flying")
+	_check(_attacker.alive, "the plane with no rudder is still flying")
 
 
 ## Deals exactly [param fraction] of a part's health pool to it.
@@ -313,7 +355,7 @@ func _hurt(plane: PlaneActor, part: PlaneActor.Part, fraction: float, attacker: 
 
 func _set_stick(steer: Vector2) -> void:
 	# The two engine-test planes are left alone so they fly level the whole time.
-	for plane: PlaneActor in [_reference, _left_wing_hit, _tail_hit]:
+	for plane: PlaneActor in [_reference, _left_wing_hit, _tail_hit, _attacker]:
 		plane.input.steer = steer
 
 

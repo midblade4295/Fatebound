@@ -55,6 +55,9 @@ properties/11/replication_mode = 2
 properties/12/path = NodePath(".:part_damage")
 properties/12/spawn = true
 properties/12/replication_mode = 2
+properties/13/path = NodePath(".:control_state")
+properties/13/spawn = false
+properties/13/replication_mode = 1
 
 [node name="PlaneActor" type="CharacterBody3D"]
 collision_layer = 2
