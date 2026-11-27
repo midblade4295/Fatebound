@@ -291,11 +291,11 @@ func _on_gear_moved(_plane: PlaneActor, going_down: bool) -> void:
 
 
 func _on_touched_down(_plane: PlaneActor, sink_speed: float, on_wheels: bool) -> void:
-	var firmness: float = clampf(sink_speed / PlaneActor.HARD_LANDING_SINK, 0.1, 1.0)
-	if on_wheels:
+	var firmness: float = clampf(sink_speed / PlaneActor.GEAR_COLLAPSE_SINK, 0.1, 1.0)
+	if on_wheels and plane.broken_gear_mask() == 0 and not plane.is_propeller_broken():
 		_play_event(SOUND_TOUCHDOWN[_rng.randi_range(0, SOUND_TOUCHDOWN.size() - 1)], lerpf(1.1, 0.9, firmness), lerpf(-6.0, 4.0, firmness))
 	else:
-		# No wheels: metal on tarmac.
+		# Something gave way, or there were no wheels: metal on tarmac.
 		_play_event(SOUND_BREAK[_rng.randi_range(0, SOUND_BREAK.size() - 1)], 0.8, 4.0)
 
 

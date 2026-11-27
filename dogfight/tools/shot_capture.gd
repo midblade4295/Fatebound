@@ -19,6 +19,9 @@ var _damage_demo: bool = false
 ## takeoff=1 flies the player's plane off the runway: starter, full throttle,
 ## stick back at flying speed, wheels up once clear of the ground.
 var _takeoff_demo: bool = false
+## roughlanding=<m/s> drops the player's plane onto its own runway at that
+## rate of descent on frame 30, to show what a rough landing breaks.
+var _rough_landing: float = 0.0
 var _scene: Node
 ## Frames at the start that run at `_warp_scale` x speed to reach the action.
 var _warp_frames: int = 0
@@ -47,6 +50,8 @@ func _ready() -> void:
 		elif argument.begins_with("steer="):
 			_steer_action = {"left": GameSession.ACTION_STEER_LEFT, "right": GameSession.ACTION_STEER_RIGHT,
 					"up": GameSession.ACTION_PITCH_UP}.get(argument.trim_prefix("steer="), &"")
+		elif argument.begins_with("roughlanding="):
+			_rough_landing = float(argument.trim_prefix("roughlanding="))
 		elif argument.begins_with("takeoff="):
 			_takeoff_demo = argument.trim_prefix("takeoff=") == "1"
 		elif argument.begins_with("damage="):
@@ -69,6 +74,21 @@ func _apply_demo_damage() -> void:
 	for part: PlaneActor.Part in [PlaneActor.Part.RIGHT_WINGTIP, PlaneActor.Part.RUDDER]:
 		plane.apply_damage(100000.0, null, part)
 	plane.apply_damage(plane.stats.max_hp * PlaneActor.PART_STRENGTH[PlaneActor.Part.ENGINE] * 0.5, null, PlaneActor.Part.ENGINE)
+
+
+func _drop_player() -> void:
+	var manager: MatchManager5v5 = _scene.get_node_or_null("MatchManager") as MatchManager5v5
+	if manager == null or manager.local_slot() == null:
+		return
+	var plane: PlaneActor = manager.local_slot().plane
+	var field: Airfield = plane.home_airfield()
+	if field == null:
+		return
+	var direction: Vector3 = field.takeoff_direction()
+	plane.set_engine_running(true)
+	plane.speed = plane.stats.top_speed * 0.6
+	plane.teleport(Transform3D(Basis.looking_at(direction, Vector3.UP), field.runway_start() + direction * 300.0 + Vector3.UP * 20.0))
+	plane._touch_down(field, _rough_landing)
 
 
 func _fly_takeoff() -> void:
@@ -100,6 +120,8 @@ func _process(_delta: float) -> void:
 		Input.action_press(GameSession.ACTION_FIRE)
 	if _takeoff_demo:
 		_fly_takeoff()
+	if _rough_landing > 0.0 and _frame == 30:
+		_drop_player()
 	if _steer_action != &"" and _frame > _warp_frames:
 		Input.action_press(_steer_action)
 	var index: int = _frames.find(_frame)

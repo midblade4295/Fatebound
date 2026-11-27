@@ -219,25 +219,50 @@ HUD (CanvasLayer)                         hud.gd
     answers the throttle. A dead engine will not start.
   - *The take-off run.* On the ground the engine can only push so hard
     (`GROUND_THRUST`), so speed builds over a few hundred metres. The tail
-    comes up at around half flying speed. The plane stays on its wheels,
-    however hard the stick is pulled, until the wings can carry it (57% of
-    top speed with wheels and flaps down, about 170 km/h for the Hurricane)
-    *and* the stick is eased back. Running out of island first ends in the sea.
+    comes up at around half flying speed. Near flying speed, easing the stick
+    back lifts the nose while the wheels are still rolling, and the plane
+    leaves the ground once the wings can carry it (57% of top speed with
+    wheels and flaps down, about 170 km/h for the Hurricane). Without the
+    stick it stays down. Running out of island first ends in the sea.
+  - *Leaving the ground is eased in, not switched on.* The nose is already
+    up, so nothing snaps; the climb builds from zero over 1.6 s; the stick's
+    pitch authority comes up over 2.5 s; the engine's pull grows from what it
+    had on the runway over 5 s; and the landing flaps stay down after the
+    wheels come up until there is speed to spare. `TestGroundOps` measures the
+    largest tick-to-tick change in pitch, climb rate and acceleration through
+    a take-off flown with the stick held hard back.
   - *Undercarriage.* Wheels down costs 18% of top speed and brings the
     landing flaps down with it (more lift, more drag). It takes two seconds
     to travel, and goes with the wing it is bolted to.
   - *Throttle.* In the air it sets the speed the engine holds, from gliding
     speed (30% of top, well below the stall) to full. Below flying speed the
     plane sinks and its nose drops, so an approach is flown on the throttle.
-  - *Landing.* Touching the airfield is judged by rate of descent, attitude
-    and wheels. Up to 5 m/s on the wheels is a landing; 5-10 m/s damages the
-    wings and fuselage; more, or nose-first, or steeply banked, destroys the
-    plane. With no wheels it can be slid on gently (under 6 m/s) at the cost
-    of the propeller and the underside. A low wingtip gets torn.
+  - *Close to the ground.* Within 10 m of an airfield the air under the
+    wings helps: 15% more lift, and the rate of descent is softened (to 60%
+    at the surface for descents up to 10 m/s, fading to no help at 15 m/s).
+    With the wheels down the nose is also eased up toward level over the last
+    few metres, as a pilot would flare, unless the stick is held forward.
+    These are assists; the constants are at the top of the "Close to the
+    ground" block in `plane_actor.gd`.
+  - *Landing.* A rough landing breaks the aeroplane, a piece at a time,
+    instead of blowing it up. Measured at the surface (after the cushion):
+    up to 6 m/s is a landing; 6-9.5 strains the wings and fuselage; above
+    9.5 one undercarriage leg collapses and the plane slides on a wingtip,
+    swinging round; above 12.5 both go and it slides on its belly; beyond
+    that the airframe is progressively wrecked. Whenever it ends up without
+    two good legs under it, or arrives nose-low (more than 9 degrees), the
+    propeller is smashed and the engine can no longer pull. A wing more than
+    14 degrees low scrapes its tip; more than 30 tears the tip off and takes
+    that leg with it. Wheels-up landings work the same way without the legs.
+    The plane is only **destroyed** by flying into the ground: more than
+    22 m/s, more than 30 degrees nose-down, or nearly on its side. Coming in
+    a little low over the edge of the island takes the wheels off rather
+    than counting as a crash into the cliff.
   - *Repairs.* A plane standing still on its **own** airfield is repaired
-    after a moment: fires out, tank filled, holes patched, and shot-off parts
-    refitted one at a time (the model is rebuilt to show them). A
-    belly-landed plane is put back on its wheels. A plane that stops on the
+    after a moment: fires out, tank filled, holes patched, and shot-off parts,
+    collapsed legs and a smashed propeller replaced one at a time (the model
+    is rebuilt to show them). A plane on its belly is jacked up and put back
+    on its wheels. A plane that stops on the
     *enemy's* airfield is lost after six seconds.
   - *Bots* start up in turn from the front of the line, hold their own lane
     down the runway, lift off, raise the wheels and climb out before joining
@@ -365,7 +390,7 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 | `TestProgression` | card tables, upgrade flow, Commander Level thresholds, slot rules, stat building, save/load, bullet drop and drag, lead solution checked against a simulated bullet |
 | `TestDamageModel` | every part has a hit box from the model; bullet paths through them; live bullets with drop, drag and pass-through; no health value exists; shot-off parts leave the model as debris and take their attachments; each kind of damage changes handling against an undamaged reference; the pilot keeps control; planes are only lost by hitting the surface, credited to whoever crippled them |
 | `TestAudio` | every plane has its own engine loop and gun samples; the player's engine plays from the cockpit and the other nine in 3D; firing plays one of that plane's samples; a bullet passing 6 m away is heard once and one 60 m away is not; the engine note rises in a dive; a dead engine falls silent and the fire is heard. It checks wiring, not how anything sounds |
-| `TestGroundOps` | everyone starts parked on their own runway; the guns and an open throttle do nothing with the engine off; the ENGINE and throttle keys work; the plane cannot be pulled off the ground before flying speed and uses a believable length of runway; wheels-down drag; throttling back slows it until it sinks; a gentle landing, a hard one (wing damage), a nose-first one (destroyed) and a wheels-up one (survived); braking to a stop; repairs at home including refitting shot-off parts; a plane stopped on the enemy's airfield or run off the island is lost; bots left alone take off and raise their wheels |
+| `TestGroundOps` | everyone starts parked on their own runway; the guns and an open throttle do nothing with the engine off; the ENGINE and throttle keys work; the plane cannot be pulled off the ground before flying speed and uses a believable length of runway; nothing jumps at lift-off (pitch, climb rate, acceleration and height are measured tick by tick); wheels-down drag; throttling back slows it until it sinks; a gentle landing and a steep one both arrive softly; a wheels-up landing; what each rate of descent, nose angle and bank breaks (strained wings, one leg, both legs, propeller, wingtip) and where destruction starts; braking to a stop; repairs at home including new parts, legs and propeller; a plane stopped on the enemy's airfield or run off the island is lost; bots left alone take off and raise their wheels |
 | `TestCollisions` | box-overlap maths; a wingtip clip damages only the wingtips; a head-on destroys both; a pass three metres apart does nothing; team-mates can collide |
 | `TestPlayerFlow` | 1 player + 9 bots through Input actions: fire, roll, nitro, crash gives a ticket, 5 s respawn |
 | `TestMatchSim` (3 seeds) | full bots-only match: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, few uncaused losses, few collisions, bot accuracy stays in a human-like 2-25% band |

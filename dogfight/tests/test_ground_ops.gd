@@ -1,8 +1,9 @@
 extends Node
 ## Headless test of everything that happens with the wheels on the ground:
 ## the parked start, starting the engine, the take-off run, the undercarriage,
-## the throttle, landing well, landing badly, landing with no wheels, repairs
-## at the home airfield, and the bots getting themselves into the air.
+## the throttle, landing well, landing steeply, landing with no wheels, what
+## each degree of rough landing breaks, repairs at the home airfield, and the
+## bots getting themselves into the air.
 ##
 ##   godot --headless --fixed-fps 60 --path . res://tests/TestGroundOps.tscn
 ##
@@ -44,12 +45,28 @@ var _tail_pitch_at_speed: float = INF
 var _gear_moves: Array[bool] = []
 var _speed_gear_down: float = 0.0
 var _altitude_mark: float = 0.0
+# Smoothness of the take-off: the biggest change from one physics tick to the
+# next, from the start of the run until a few seconds after leaving the ground.
+var _smooth_tracking: bool = false
+var _last_pitch: float = 0.0
+var _last_climb: float = 0.0
+var _last_speed: float = 0.0
+var _last_acceleration: float = 0.0
+var _last_height: float = 0.0
+var _max_pitch_step: float = 0.0
+var _max_climb_step: float = 0.0
+var _max_acceleration_step: float = 0.0
+var _max_height_step: float = 0.0
 
 # --- Landing cases -----------------------------------------------------------
 var _cases_started: bool = false
 var _cases: Array[LandingCase] = []
 var _bots: Array[PlaneActor] = []
 var _bots_checked: bool = false
+## The plane used for the rough-landing grades, left wrecked at home at the end.
+var _wreck: PlaneActor
+var _wreck_serviced: bool = false
+var _wreck_deadline: float = 0.0
 
 
 ## One plane making one scripted approach.
@@ -73,6 +90,9 @@ class LandingCase:
 	var part_changes: int = 0
 	## Damage to the two inner wing panels straight after the first touchdown.
 	var wing_damage: Vector2 = Vector2.ZERO
+	## What was broken straight after the first touchdown.
+	var broken_legs: int = 0
+	var broken_prop: bool = false
 
 
 func _ready() -> void:
@@ -144,6 +164,7 @@ func _physics_process(delta: float) -> void:
 			plane.weapons_locked = plane != _player
 	_clock += delta
 	_stage_clock += delta
+	_track_smoothness(delta)
 	_fly_player()
 	if _clock >= LANDINGS_START and not _cases_started:
 		_cases_started = true
@@ -153,8 +174,11 @@ func _physics_process(delta: float) -> void:
 	if _clock >= 34.0 and not _bots_checked:
 		_bots_checked = true
 		_check_bots()
-	if _stage >= 100 and _cases_started and _cases_done():
+	if _stage >= 100 and _cases_started and _cases_done() and _wreck == null:
 		_check_cases()
+		_check_touchdown_grades()
+	if _wreck != null and (_wreck_serviced or _clock > _wreck_deadline):
+		_check_wreck_repaired()
 		_finish()
 	elif _clock > TEST_TIMEOUT:
 		_check(false, "the test ran out of time at stage %d (%s)" % [_stage, _unfinished_cases()])
@@ -231,6 +255,13 @@ func _fly_player() -> void:
 			input.steer = Vector2(0.0, _hold_pitch(_player, deg_to_rad(14.0)))
 			if _stage_clock >= 9.0:
 				_check(_player.alive and not _player.is_on_ground(), "it climbs away")
+				if OS.get_cmdline_user_args().has("verbose=1"):
+					print("take-off smoothness per tick: pitch %.3f deg, climb rate %.3f m/s, acceleration %.2f m/s2, height hop %.3f m" % [
+							rad_to_deg(_max_pitch_step), _max_climb_step, _max_acceleration_step, _max_height_step])
+				_check(_max_pitch_step < deg_to_rad(0.5), "the nose never snaps during the take-off (largest step %.2f degrees in a tick)" % rad_to_deg(_max_pitch_step))
+				_check(_max_climb_step < 0.35, "the climb builds smoothly from nothing (largest change %.2f m/s in a tick)" % _max_climb_step)
+				_check(_max_acceleration_step < 1.5, "the pull of the engine does not jump at lift-off (largest change %.2f m/s2 in a tick)" % _max_acceleration_step)
+				_check(_max_height_step < 0.1, "and the plane never hops (largest %.3f m)" % _max_height_step)
 				_check(_player.global_position.y > _altitude_mark + 60.0, "gaining height (%.0f m in 9 s)" % (_player.global_position.y - _altitude_mark))
 				_next_stage()
 		6:
@@ -276,6 +307,25 @@ func _fly_player() -> void:
 		_:
 			if _player.alive:
 				input.steer = Vector2(0.0, _hold_pitch(_player, deg_to_rad(3.0)))
+
+
+## Watches the player's plane for sudden changes while it takes off.
+func _track_smoothness(delta: float) -> void:
+	var watching: bool = _stage == 4 or (_stage == 5 and _stage_clock < 5.0)
+	var acceleration: float = (_player.speed - _last_speed) / delta
+	var height: float = _player.global_position.y
+	if watching and _smooth_tracking:
+		_max_pitch_step = maxf(_max_pitch_step, absf(_player.pitch - _last_pitch))
+		_max_climb_step = maxf(_max_climb_step, absf(_player.velocity.y - _last_climb))
+		_max_acceleration_step = maxf(_max_acceleration_step, absf(acceleration - _last_acceleration))
+		# Height should change by what the climb rate says, never by a hop.
+		_max_height_step = maxf(_max_height_step, absf(height - _last_height) - absf(_player.velocity.y) * delta)
+	_smooth_tracking = watching
+	_last_pitch = _player.pitch
+	_last_climb = _player.velocity.y
+	_last_speed = _player.speed
+	_last_acceleration = acceleration
+	_last_height = height
 
 
 func _on_player_lifted_off(_plane: PlaneActor) -> void:
@@ -328,8 +378,8 @@ func _start_landing_cases() -> void:
 	# label, plane, metres right of the centre line, metres along the runway,
 	# nose angle on the approach, wheels down?, heading across the island?
 	_add_case("good landing", blue[0], 0.0, 230.0, -3.0, true, false)
-	_add_case("hard landing", blue[1], 75.0, 300.0, -7.6, true, false)
-	_add_case("nose-first", blue[2], -75.0, 300.0, -17.0, true, false)
+	_add_case("steep approach", blue[1], 75.0, 300.0, -9.0, true, false)
+	_add_case("dive", blue[2], -75.0, 300.0, -45.0, true, false)
 	_add_case("belly landing", blue[3], -130.0, 100.0, -2.5, false, false)
 	_add_case("enemy airfield", red[0], 120.0, 250.0, -3.0, true, false)
 	_add_case("off the edge", red[1], -90.0, 420.0, -3.0, true, true)
@@ -356,6 +406,8 @@ func _add_case(label: String, plane: PlaneActor, across: float, along: float, pi
 			case.touchdown_point = plane.global_position
 			case.touchdown_time = _clock
 			case.wing_damage = Vector2(plane.part_damage_of(PlaneActor.Part.LEFT_WING), plane.part_damage_of(PlaneActor.Part.RIGHT_WING))
+			case.broken_legs = plane.broken_gear_mask()
+			case.broken_prop = plane.is_propeller_broken()
 		case.touchdowns.append(sink))
 	plane.died.connect(func(_victim: PlaneActor, _killer: PlaneActor) -> void:
 		if not case.died:
@@ -406,7 +458,7 @@ func _unfinished_cases() -> String:
 		match case.label:
 			"good landing":
 				done = case.damage_done and case.serviced
-			"hard landing":
+			"steep approach":
 				done = case.died or case.stopped_at >= 0.0
 			"belly landing":
 				done = case.died or (case.serviced and case.plane.gear_usable())
@@ -440,19 +492,19 @@ func _check_cases() -> void:
 				var repair_time: float = case.serviced_at - case.stopped_at
 				_check(repair_time > 3.0 and repair_time < 30.0, "repairs take a little while, not forever (%.1f s)" % repair_time)
 				_check(not plane.needs_service() and plane.engine_power() >= 1.0, "it is ready to fly again")
-			"hard landing":
-				_check(not case.touchdowns.is_empty() and not case.died, "a heavy landing is survived")
-				_check(first_sink > PlaneActor.FIRM_LANDING_SINK and first_sink <= PlaneActor.HARD_LANDING_SINK, "it really was heavy (%.1f m/s)" % first_sink)
-				_check(case.wing_damage.x > 0.02 and case.wing_damage.y > 0.02,
-						"and it damaged the wings the wheels hang from (%.2f, %.2f)" % [case.wing_damage.x, case.wing_damage.y])
-			"nose-first":
-				_check(case.died and case.touchdowns.is_empty(), "diving into the runway destroys the plane")
+			"steep approach":
+				_check(not case.touchdowns.is_empty() and not case.died, "a steep approach (nose 9 degrees down) is still a landing")
+				_check(first_sink <= PlaneActor.FIRM_LANDING_SINK, "the air under the wings and the flare soften the arrival (%.1f m/s)" % first_sink)
+				_check(case.broken_legs == 0 and not case.broken_prop and case.on_wheels, "nothing breaks")
+			"dive":
+				_check(case.died and case.touchdowns.is_empty(), "diving straight into the runway does destroy the plane")
 				_check(absf(case.death_height) < 8.0, "on the runway, not in the sea (%.1f m above it)" % case.death_height)
 			"belly landing":
-				_check(not case.touchdowns.is_empty() and not case.on_wheels and not case.died, "with the wheels up it can still be slid on gently")
+				_check(not case.touchdowns.is_empty() and not case.on_wheels and not case.died, "with the wheels up it can still be slid on")
 				_check(case.stop_distance > 20.0 and case.stop_distance < 260.0, "sliding to a stop much sooner than on wheels (%.0f m)" % case.stop_distance)
-				_check(case.part_changes > 0, "at the cost of the propeller and the underside")
+				_check(case.broken_prop, "at the cost of the propeller")
 				_check(case.serviced and plane.gear_usable() and plane.is_on_ground(), "at home it is jacked up, mended and put back on its wheels")
+				_check(not plane.is_propeller_broken() and plane.engine_power() >= 1.0, "with a new propeller")
 			"enemy airfield":
 				_check(not case.touchdowns.is_empty() and case.died, "a plane that stops on the enemy's airfield is lost")
 				_check(case.died_on_ground, "there, after landing")
@@ -460,6 +512,91 @@ func _check_cases() -> void:
 				_check(not case.touchdowns.is_empty() and case.died, "running off the edge of the island ends in the sea")
 				_check(not case.died_on_ground and case.death_height < -3.0, "it fell off rather than blowing up on the grass (%.1f m)" % case.death_height)
 	_check(_manager.team_score(Teams.Id.TEAM_BLUE) >= 2, "planes lost on the ground count as losses (blue has %d)" % _manager.team_score(Teams.Id.TEAM_BLUE))
+
+
+# ---------------------------------------------------------------------------
+# What each degree of rough landing breaks
+# ---------------------------------------------------------------------------
+
+## Puts a fresh plane just above the home runway at the given attitude and
+## lets it meet the ground at [param sink] m/s.
+func _drop(plane: PlaneActor, sink: float, pitch_deg: float, bank_deg: float, wheels: bool) -> void:
+	var direction: Vector3 = _field.takeoff_direction()
+	plane.respawn(_field.parking_transform(0), true)
+	plane.set_engine_running(true)
+	plane.set_gear_down(wheels)
+	plane.speed = plane.stats.top_speed * 0.62
+	plane.teleport(Transform3D(Basis.looking_at(direction, Vector3.UP), _field.runway_start() + direction * 380.0 + Vector3.UP * 20.0))
+	plane.pitch = deg_to_rad(pitch_deg)
+	plane.bank = deg_to_rad(bank_deg)
+	plane._touch_down(_field, sink)
+
+
+func _check_touchdown_grades() -> void:
+	var plane: PlaneActor = _cases[1].plane
+	var both: int = PlaneActor.GEAR_LEFT | PlaneActor.GEAR_RIGHT
+	var wing: PlaneActor.Part = PlaneActor.Part.LEFT_WING
+
+	_drop(plane, 4.0, 0.0, 0.0, true)
+	_check(plane.alive and plane.is_on_ground() and plane.gear_usable() and not plane.needs_service(), "4 m/s on the wheels: a landing, nothing hurt")
+
+	_drop(plane, 8.0, 0.0, 0.0, true)
+	_check(plane.alive and plane.gear_usable() and not plane.is_propeller_broken(), "8 m/s: firm, but the undercarriage holds")
+	_check(plane.part_damage_of(wing) > 0.05 and plane.part_damage_of(wing) < 0.4, "and the wings are strained (%.2f)" % plane.part_damage_of(wing))
+
+	_drop(plane, 11.0, 0.0, 0.0, true)
+	var one_leg: int = plane.broken_gear_mask()
+	_check(plane.alive and (one_leg == PlaneActor.GEAR_LEFT or one_leg == PlaneActor.GEAR_RIGHT), "11 m/s: one undercarriage leg collapses, and the plane is not destroyed (mask %d)" % one_leg)
+	_check(plane.is_propeller_broken() and plane.engine_power() <= 0.0 and not plane.is_engine_running(), "the propeller hits the runway and the engine can no longer pull")
+	_check(plane.is_on_ground() and not plane.gear_usable(), "it is down, sliding on a wingtip")
+
+	_drop(plane, 14.0, 0.0, 0.0, true)
+	_check(plane.alive and plane.broken_gear_mask() == both and plane.is_propeller_broken(), "14 m/s: both legs collapse, still not destroyed")
+
+	_drop(plane, 20.0, 0.0, 0.0, true)
+	_check(plane.alive and plane.is_on_ground(), "20 m/s: a wreck, but one the pilot walks away from")
+	_check(plane.part_damage_of(PlaneActor.Part.ENGINE) > 0.5 and plane.part_damage_of(PlaneActor.Part.FUSELAGE) > 0.5,
+			"with the engine and fuselage badly damaged (%.2f, %.2f)" % [plane.part_damage_of(PlaneActor.Part.ENGINE), plane.part_damage_of(PlaneActor.Part.FUSELAGE)])
+
+	_drop(plane, 26.0, 0.0, 0.0, true)
+	_check(not plane.alive, "26 m/s is flying into the ground: destroyed")
+
+	_drop(plane, 3.0, -12.0, 0.0, true)
+	_check(plane.alive and plane.is_propeller_broken() and plane.broken_gear_mask() == 0, "nose 12 degrees down: the propeller is smashed, the undercarriage survives")
+
+	_drop(plane, 3.0, -22.0, 0.0, true)
+	_check(plane.alive and plane.is_propeller_broken() and plane.broken_gear_mask() == both, "nose 22 degrees down: the undercarriage folds too")
+
+	_drop(plane, 3.0, -35.0, 0.0, true)
+	_check(not plane.alive, "nose 35 degrees down is a dive into the ground: destroyed")
+
+	_drop(plane, 3.0, 0.0, 20.0, true)
+	_check(plane.alive and plane.broken_gear_mask() == 0 and plane.part_damage_of(PlaneActor.Part.LEFT_WINGTIP) > 0.3 and is_zero_approx(plane.part_damage_of(PlaneActor.Part.RIGHT_WINGTIP)),
+			"left wing 20 degrees low: that wingtip scrapes (%.2f)" % plane.part_damage_of(PlaneActor.Part.LEFT_WINGTIP))
+
+	_drop(plane, 3.0, 0.0, -35.0, true)
+	_check(plane.alive and plane.is_part_gone(PlaneActor.Part.RIGHT_WINGTIP) and plane.broken_gear_mask() == PlaneActor.GEAR_RIGHT,
+			"right wing 35 degrees low: the wingtip is torn off and that leg collapses (mask %d)" % plane.broken_gear_mask())
+
+	_drop(plane, 3.0, 0.0, 80.0, true)
+	_check(not plane.alive, "arriving on a wingtip, nearly on its side: destroyed")
+
+	_drop(plane, 4.0, 0.0, 0.0, false)
+	_check(plane.alive and plane.is_propeller_broken() and plane.broken_gear_mask() == 0 and not plane.gear_usable(), "wheels up at 4 m/s: slides on its belly with a smashed propeller")
+
+	# Leave one wrecked at home, standing still, and see it mended.
+	_drop(plane, 14.0, 0.0, 0.0, true)
+	plane.speed = 0.0
+	_wreck = plane
+	_wreck_deadline = _clock + 40.0
+	plane.serviced.connect(func(_plane: PlaneActor) -> void: _wreck_serviced = true)
+
+
+func _check_wreck_repaired() -> void:
+	_check(_wreck_serviced, "a plane wrecked on its own airfield is repaired there")
+	_check(_wreck.broken_gear_mask() == 0 and not _wreck.is_propeller_broken(), "new undercarriage legs and a new propeller are fitted (mask %d)" % _wreck.broken_gear_mask())
+	_check(_wreck.gear_usable() and _wreck.engine_power() >= 1.0 and not _wreck.needs_service(), "and it is back on its wheels, ready to fly")
+	_check(_wreck.visual.has_gear_leg(0) and _wreck.visual.has_gear_leg(1), "the model shows both legs again")
 
 
 func _finish() -> void:

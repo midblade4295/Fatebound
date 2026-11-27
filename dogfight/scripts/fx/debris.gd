@@ -16,6 +16,10 @@ var _spin_axis: Vector3 = Vector3.RIGHT
 var _spin_rate: float = 0.0
 var _age: float = 0.0
 
+## Height of the ground under the piece. At sea level it sinks and is gone; on
+## anything higher (an airfield) it comes to rest instead.
+var floor_height: float = SEA_LEVEL
+
 
 func _ready() -> void:
 	# Moved every rendered frame, so the engine must not interpolate it as well.
@@ -41,5 +45,11 @@ func _process(delta: float) -> void:
 	_velocity -= _velocity * AIR_DRAG * delta
 	global_position += _velocity * delta
 	rotate(_spin_axis, _spin_rate * delta)
+	if global_position.y < floor_height and floor_height > SEA_LEVEL:
+		# On the airfield: stop falling, skid to a halt and lie there.
+		global_position.y = floor_height
+		_velocity.y = 0.0
+		_velocity -= _velocity * minf(4.0 * delta, 1.0)
+		_spin_rate = maxf(_spin_rate - 12.0 * delta, 0.0)
 	if _age >= LIFETIME or global_position.y < SEA_LEVEL:
 		queue_free()

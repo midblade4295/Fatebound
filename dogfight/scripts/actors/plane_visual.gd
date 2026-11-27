@@ -66,6 +66,8 @@ const GEAR_NODES: Array[StringName] = [&"GearL", &"GearR"]
 const TAIL_WHEEL_NODE: StringName = &"TailWheel"
 ## How far each leg swings outward to lie under its wing.
 const GEAR_RETRACT_ANGLE: float = deg_to_rad(86.0)
+## What is left of the propeller disc after it has hit the ground.
+const BROKEN_PROP_SCALE: Vector3 = Vector3(0.45, 0.45, 1.0)
 ## Big pieces cast shadows; small ones are not worth the draw calls on a phone.
 const SHADOW_CASTERS: Array[StringName] = [&"Fuselage", &"Engine", &"Tail", &"WingL", &"WingR", &"WingTipL", &"WingTipR"]
 
@@ -112,6 +114,10 @@ var _prop_target: float = 40.0
 var _gear: Array[Node3D] = []
 var _gear_rest: Array[Basis] = []
 var _gear_deploy: float = -1.0
+## Undercarriage legs that have collapsed and left the model (bit 0 = left).
+var _gear_broken: int = 0
+var _prop_broken: bool = false
+var _last_damage: PackedFloat32Array = PackedFloat32Array()
 
 
 func _process(delta: float) -> void:
@@ -164,10 +170,18 @@ func build(data: PlaneData, team: Teams.Id) -> void:
 		var leg: Node3D = _model.find_child(node_name, true, false) as Node3D
 		_gear.append(leg)
 		_gear_rest.append(leg.basis if leg != null else Basis.IDENTITY)
+	for index: int in range(_gear.size()):
+		# A leg that has collapsed stays off a rebuilt model.
+		if _gear_broken & (1 << index) != 0 and _gear[index] != null:
+			_gear[index].get_parent().remove_child(_gear[index])
+			_gear[index].queue_free()
+			_gear[index] = null
 	var shown_deploy: float = _gear_deploy
 	_gear_deploy = -1.0
-	set_gear(maxf(shown_deploy, 0.0))
+	_apply_gear(maxf(shown_deploy, 0.0))
 	_propeller = _model.find_child("PropellerMesh", true, false) as Node3D
+	if _propeller != null and _prop_broken:
+		_propeller.scale = BROKEN_PROP_SCALE
 	if _propeller != null:
 		# A faint disc where the blades blur, parented beside the propeller so
 		# it does not spin with it.
@@ -264,8 +278,42 @@ func set_propeller(ratio: float) -> void:
 	_prop_target = 0.0 if ratio <= 0.0 else lerpf(8.0, 62.0, clampf(ratio, 0.0, 1.5))
 
 
+## A smashed propeller is shown as stumps on a stopped hub.
+func set_propeller_broken(broken: bool) -> void:
+	if broken == _prop_broken:
+		return
+	_prop_broken = broken
+	if _propeller != null:
+		_propeller.scale = BROKEN_PROP_SCALE if broken else Vector3.ONE
+
+
+## Whether an undercarriage leg (0 = left, 1 = right) is still on the model.
+func has_gear_leg(index: int) -> bool:
+	return index < _gear.size() and _gear[index] != null and is_instance_valid(_gear[index]) and _model.is_ancestor_of(_gear[index])
+
+
 ## 0 = undercarriage up (and hidden inside the wings), 1 = down and locked.
-func set_gear(deploy: float) -> void:
+## [param broken_mask] says which legs have collapsed (bit 0 = left, bit 1 =
+## right): a leg that has just gone is thrown clear with [param plane_velocity],
+## and one that has been replaced comes back.
+func set_gear(deploy: float, broken_mask: int = 0, plane_velocity: Vector3 = Vector3.ZERO) -> void:
+	if broken_mask != _gear_broken:
+		var replaced: int = _gear_broken & ~broken_mask
+		var newly_broken: int = broken_mask & ~_gear_broken
+		_gear_broken = broken_mask
+		if replaced != 0 and _data != null:
+			if _last_damage.size() >= PlaneActor.PART_COUNT:
+				_rebuild_with(_last_damage)
+			else:
+				build(_data, _team)
+		for index: int in range(_gear.size()):
+			if newly_broken & (1 << index) != 0 and has_gear_leg(index):
+				_throw_clear(_gear[index], plane_velocity * 0.85 + Vector3.UP * 3.0)
+				_gear[index] = null
+	_apply_gear(deploy)
+
+
+func _apply_gear(deploy: float) -> void:
 	if is_equal_approx(deploy, _gear_deploy):
 		return
 	_gear_deploy = deploy
@@ -285,10 +333,10 @@ func set_gear(deploy: float) -> void:
 func undercarriage_contacts() -> Array[Vector3]:
 	var result: Array[Vector3] = []
 	var shown: float = _gear_deploy
-	set_gear(1.0)
+	_apply_gear(1.0)
 	var main_wheel: Vector3 = _lowest_point(GEAR_NODES[0])
 	var tail_wheel: Vector3 = _lowest_point(TAIL_WHEEL_NODE)
-	set_gear(shown)
+	_apply_gear(shown)
 	if is_finite(main_wheel.y) and is_finite(tail_wheel.y):
 		result.append(main_wheel)
 		result.append(tail_wheel)
@@ -314,6 +362,7 @@ func set_roll_angle(angle: float) -> void:
 func set_part_damage(damage: PackedFloat32Array, plane_velocity: Vector3, burning: bool) -> void:
 	if damage.size() < PlaneActor.PART_COUNT or _pieces.is_empty():
 		return
+	_last_damage = damage
 	if _any_detached and _has_refitted_part(damage):
 		# Ground crew have fitted a new part: rebuild the model, then take off
 		# again (quietly) whatever is still missing.
@@ -449,10 +498,24 @@ func _detach(part: int, plane_velocity: Vector3) -> void:
 		return
 	# Thrown outward from the plane's centre line, and a little back.
 	var outward: Vector3 = piece.global_position - global_position
+	_throw_clear(piece, plane_velocity * 0.92 + outward.normalized() * 9.0)
+
+
+## Hands a piece of the model to a Debris node in the world, moving at
+## [param start_velocity]. Over an airfield it ends up lying on the ground.
+func _throw_clear(piece: Node3D, start_velocity: Vector3) -> void:
+	var actor: PlaneActor = get_parent() as PlaneActor
+	var world: Node = actor.get_parent() if actor != null else null
+	if world == null or not piece.is_inside_tree():
+		piece.queue_free()
+		return
 	var debris: Debris = Debris.new()
 	debris.name = "Debris_%s" % piece.name
+	var field: Airfield = actor.airfield_at(piece.global_position)
+	if field != null:
+		debris.floor_height = field.surface_y() + 0.3
 	world.add_child(debris)
-	debris.launch(piece, plane_velocity * 0.92 + outward.normalized() * 9.0)
+	debris.launch(piece, start_velocity)
 
 
 ## Replaces the model's materials with the game's toon materials, chosen by

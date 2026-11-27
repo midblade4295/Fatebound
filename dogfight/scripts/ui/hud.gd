@@ -162,8 +162,12 @@ func _update_flight_panel() -> void:
 	if shown == null or not is_instance_valid(shown):
 		return
 	var readout: String = "SPD %3d km/h   ALT %4d m" % [roundi(shown.speed_kmh()), roundi(maxf(shown.altitude(), 0.0))]
-	if shown.gear_deploy > 0.02:
+	if shown.broken_gear_mask() != 0:
+		readout += "   GEAR BROKEN"
+	elif shown.gear_deploy > 0.02:
 		readout += "   GEAR %s" % ("DOWN" if shown.gear_deploy >= 0.98 else "...")
+	if shown.is_propeller_broken():
+		readout += "   NO PROP"
 	# Fuel only matters once the tank is holed, so it only shows then.
 	if shown.fuel < 0.995:
 		readout += "   FUEL %d%%" % roundi(shown.fuel * 100.0)
@@ -237,6 +241,8 @@ func _flight_guidance() -> String:
 			return "Hold still - ground crew are on their way"
 		if wants_repair and player.input.throttle <= PlaneActor.BRAKE_THROTTLE:
 			return "Braking - stop to be repaired"
+		if player.broken_gear_mask() != 0 or player.is_propeller_broken():
+			return "Wrecked away from home - this one is not flying again" if not at_home else "Sliding to a stop..."
 		if not player.is_engine_running():
 			if player.engine_power() <= 0.0:
 				return "Engine dead - stop on your own airfield to have it repaired"
@@ -254,7 +260,14 @@ func _flight_guidance() -> String:
 	if player.is_gear_down():
 		if home_distance < APPROACH_RANGE and player.height_above_ground() < 260.0:
 			var sink: float = maxf(-player.velocity.y, 0.0)
-			var verdict: String = "good" if sink <= PlaneActor.FIRM_LANDING_SINK else ("too fast!" if sink > PlaneActor.HARD_LANDING_SINK else "firm")
+			var arrival: float = player.predicted_touchdown_sink()
+			var verdict: String = "good"
+			if arrival > PlaneActor.GEAR_COLLAPSE_SINK:
+				verdict = "too steep, the gear will not take it"
+			elif arrival > PlaneActor.FIRM_LANDING_SINK:
+				verdict = "firm"
+			elif player.pitch < -PlaneActor.PROP_STRIKE_PITCH:
+				verdict = "nose too low"
 			return "Approach: %d km/h (stalls below %d)   descent %.0f m/s - %s" % [roundi(player.speed_kmh()), takeoff_kmh, sink, verdict]
 		if player.speed > player.stats.top_speed * 0.6:
 			return "Wheels are down - press GEAR to raise them"
@@ -343,13 +356,24 @@ func _on_player_damaged(_victim: PlaneActor, _amount: float, _attacker: PlaneAct
 
 
 func _on_player_touched_down(_plane: PlaneActor, sink_speed: float, on_wheels: bool) -> void:
-	if not on_wheels:
-		_alert_text = "BELLY LANDING - propeller bent"
+	var broken: PackedStringArray = PackedStringArray()
+	var legs: int = player.broken_gear_mask()
+	if legs == (PlaneActor.GEAR_LEFT | PlaneActor.GEAR_RIGHT):
+		broken.append("undercarriage collapsed")
+	elif legs != 0:
+		broken.append("%s leg collapsed" % ("left" if legs == PlaneActor.GEAR_LEFT else "right"))
+	if player.is_propeller_broken():
+		broken.append("propeller smashed")
+	if not broken.is_empty():
+		var headline: String = "ROUGH LANDING" if player.is_gear_down() else "BELLY LANDING"
+		_alert_text = "%s - %s" % [headline, ", ".join(broken)]
+	elif not on_wheels:
+		_alert_text = "BELLY LANDING"
 	elif sink_speed > PlaneActor.FIRM_LANDING_SINK:
-		_alert_text = "HARD LANDING - %.0f m/s" % sink_speed
+		_alert_text = "FIRM LANDING - the wings felt that"
 	else:
 		_alert_text = "Down safely - close the throttle to brake"
-	_alert_time = ALERT_TIME
+	_alert_time = ALERT_TIME * 1.5
 
 
 func _on_player_serviced(_plane: PlaneActor) -> void:
