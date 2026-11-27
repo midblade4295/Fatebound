@@ -25,6 +25,7 @@ var _sample_timer: float = 0.0
 var _finished: bool = false
 var _max_bullets: int = 0
 var _shots: int = 0
+var _bullet_hits: int = 0
 var _parts_destroyed: Array[int] = [0, 0, 0, 0, 0]
 var _parts_damaged: int = 0
 
@@ -48,6 +49,7 @@ func _ready() -> void:
 	add_child(arena)
 	_manager = arena.get_node("MatchManager") as MatchManager5v5
 	_manager.match_ended.connect(_on_match_ended)
+	_manager.bullet_system.bullet_hit.connect(func(_victim: PlaneActor, _shooter: PlaneActor, _at: Vector3) -> void: _bullet_hits += 1)
 	for plane: PlaneActor in _manager.get_planes():
 		plane.damaged.connect(_on_damaged)
 		plane.died.connect(_on_died)
@@ -140,8 +142,9 @@ func _report() -> void:
 	print("sim_time=%.1fs  score blue=%d red=%d  winner=%d" % [_sim_time, blue, red, _manager.winning_team])
 	print("shot_kills=%d crashes=%d respawns=%d damage_events=%d friendly_hits=%d" % [_shot_kills, _crashes, _respawns, _damage_events, _friendly_hits])
 	print("min_respawn_gap=%.2fs clump_rate=%.3f max_bullets=%d" % [_min_respawn_gap, clump_rate, _max_bullets])
-	var accuracy: float = float(_damage_events) / float(maxi(_shots, 1))
-	print("shots=%d accuracy=%.1f%% hits_per_takedown=%.1f" % [_shots, accuracy * 100.0, float(_damage_events) / float(maxi(blue + red, 1))])
+	# One bullet can damage several parts, so accuracy counts bullets, not damage events.
+	var accuracy: float = float(_bullet_hits) / float(maxi(_shots, 1))
+	print("shots=%d bullet_hits=%d accuracy=%.1f%% hits_per_takedown=%.1f" % [_shots, _bullet_hits, accuracy * 100.0, float(_bullet_hits) / float(maxi(blue + red, 1))])
 	print("parts damaged=%d destroyed engine=%d left_wing=%d right_wing=%d tail=%d" % [_parts_damaged,
 			_parts_destroyed[PlaneActor.Part.ENGINE], _parts_destroyed[PlaneActor.Part.LEFT_WING],
 			_parts_destroyed[PlaneActor.Part.RIGHT_WING], _parts_destroyed[PlaneActor.Part.TAIL]])
@@ -161,7 +164,7 @@ func _report() -> void:
 	_check(blue <= _manager.score_limit() and red <= _manager.score_limit(), "score went past the limit")
 	_check(clump_rate < 0.05, "team-mates clump: %.1f%% of samples within 25 m" % (clump_rate * 100.0))
 	_check(_max_bullets < BulletSystem.MAX_BULLETS, "bullet pool saturated")
-	_check(accuracy > 0.02 and accuracy < 0.3, "bot accuracy %.1f%% is outside the human-like 2-30%% band" % (accuracy * 100.0))
+	_check(accuracy > 0.02 and accuracy < 0.25, "bot accuracy %.1f%% is outside the human-like 2-25%% band" % (accuracy * 100.0))
 	_check(_parts_damaged > 0, "no part was ever damaged")
 
 	if _failures.is_empty():

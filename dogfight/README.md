@@ -50,7 +50,7 @@ dogfight/
 │  ├─ data/      component_card.gd, plane_data.gd, plane_stats.gd,
 │  │             commander_progression.gd, game_catalog.gd
 │  ├─ meta/      player_profile.gd (autoload Profile), match_rewards.gd
-│  ├─ actors/    plane_actor.gd, plane_input.gd, plane_visual.gd
+│  ├─ actors/    plane_actor.gd, plane_input.gd, plane_visual.gd, plane_hitboxes.gd
 │  ├─ combat/    bullet_system.gd
 │  ├─ camera/    chase_camera.gd
 │  ├─ control/   player_controller.gd, squad_ai.gd, squad_blackboard.gd
@@ -134,20 +134,35 @@ HUD (CanvasLayer)                         hud.gd
   (`assign_human` / `release_to_ai`) without touching the plane.
 - **Input goes through actions.** The touch stick and buttons press the same
   Input actions the keyboard does; `PlayerController` never references a widget.
-- **Bullets are data.** `BulletSystem` simulates every bullet in arrays, sweeps
-  one ray per bullet per tick and draws them all with one MultiMesh. A bullet's
-  ray excludes the shooter's whole team, which is how friendly fire is prevented
-  (`PlaneActor.apply_damage` rejects it again as a backstop).
+- **Bullets are data.** `BulletSystem` simulates every bullet in arrays and
+  draws them all with one MultiMesh. Each tick a bullet's velocity is updated
+  for gravity and drag (`Ballistics.step`) and its path for that tick is tested
+  against the world (one physics ray) and against each enemy plane.
+- **Hits follow the bullet's path.** Every plane carries `PlaneHitboxes`: boxes
+  for the engine, cockpit/hull, tail (rear fuselage, stabiliser, fin) and each
+  wing, matching the model plus 0.3 m of padding. The bullet's path, relative
+  to the target's own motion, is traced through those boxes. The first box
+  entered is the part that is hit, and the bullet carries on with reduced
+  energy into whatever lies behind (tail 50%, wing 60%, hull 30%, engine 0%).
+  So a shot from astern goes tail -> hull -> engine, a head-on shot stops in
+  the engine, one diving over the nose can reach the fin, and one that passes
+  between the boxes misses. Bullets are never tested against the shooter's own
+  team, which is how friendly fire is prevented (`PlaneActor.apply_damage`
+  rejects it again as a backstop).
+- **Impact energy.** Damage scales with the square of the closing speed between
+  bullet and target (clamped to 0.45x-1.5x), so head-on passes hit harder than
+  tail chases and long-range hits are softer.
 - **One lead solution.** `Ballistics.lead_point` is used by the HUD reticle, the
-  player's aim assist and the bots, and matches how bullets are actually fired
-  (they inherit the plane's velocity).
+  player's aim assist and the bots. It solves the same model the bullets fly
+  (inherited plane velocity, drag, drop), so the reticle sits ahead of and
+  slightly above the target and the gun pipper shows where bullets really are
+  at convergence range.
 - **Match rules** (`MatchManager5v5`): ticket drain, every loss gives the other
   team a point, first to 25 or the higher score after 3 minutes, 5 s respawn
   above the team's base with 2.5 s spawn protection.
 - **Damage is per part.** Besides the hull, a plane has an engine, two wings and
-  a tail, each with its own smaller health pool. `PlaneActor.locate_hit` decides
-  which one a bullet struck; `apply_damage` always hurts the hull and, for a
-  part hit, that part too. What damage does:
+  a tail, each with its own smaller health pool. `apply_damage` always hurts
+  the hull and, for a part hit, that part too. What damage does:
 
   | Part | As it takes damage | Destroyed |
   | --- | --- | --- |
@@ -237,8 +252,8 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 
 | Test | What it checks |
 | --- | --- |
-| `TestProgression` | card tables, upgrade flow, Commander Level thresholds, slot rules, stat building, save/load, lead maths |
-| `TestDamageModel` | hit location, hull vs part damage, each damaged part changes handling against an undamaged reference, destroyed wing/engine/tail bring the plane down and credit the attacker, repair |
+| `TestProgression` | card tables, upgrade flow, Commander Level thresholds, slot rules, stat building, save/load, bullet drop and drag, lead solution checked against a simulated bullet |
+| `TestDamageModel` | bullet paths traced through the hit boxes, live bullets with drop and drag (front shot reaching the tail, head-on stopping in the engine, pass-through from astern, near miss), hull vs part damage, each damaged part changes handling against an undamaged reference, destroyed wing/engine/tail bring the plane down and credit the attacker, repair |
 | `TestPlayerFlow` | 1 player + 9 bots through Input actions: fire, roll, nitro, crash gives a ticket, 5 s respawn |
 | `TestMatchSim` (3 seeds) | full bots-only match: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, bots do not crash, bot accuracy stays in a human-like 2-30% band |
 | hangar / lobby | scenes load and the lobby hands over to the arena without script errors |

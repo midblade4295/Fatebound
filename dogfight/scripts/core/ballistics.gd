@@ -1,15 +1,62 @@
 class_name Ballistics
 extends RefCounted
-## Shared gunnery maths. The HUD lead reticle, the aim assist and the AI all call
-## the same function, so "where the reticle says to shoot" is exactly where a
-## bullet fired now will meet the target.
+## How bullets fly, and the gunnery maths that goes with it.
+##
+## A bullet leaves the muzzle at the gun's muzzle speed *plus* the firing
+## plane's own velocity, then:
+##  - gravity pulls it down (it drops about 1.7 m by 250 m, 5 m by 420 m), and
+##  - air drag slows it (it has lost roughly a fifth of its speed after 1 s),
+##    which also means it hits softer at long range.
+##
+## BulletSystem integrates exactly this model every physics tick. The HUD lead
+## reticle, the player's aim assist and the bots all use lead_point() below,
+## which solves the same model, so "where the reticle says to shoot" is where
+## a bullet fired now really meets the target.
+
+## Downward acceleration on bullets, m/s^2.
+const GRAVITY: float = 9.8
+## Linear air drag: fraction of speed lost per second.
+const DRAG: float = 0.22
+## Beyond this share of the bullet's theoretical maximum reach, treat the
+## target as out of range rather than return a wild solution.
+const MAX_REACH_FRACTION: float = 0.95
 
 
-## Returns the world position to aim at so that a bullet leaving [param shooter_pos]
-## now hits a target flying in a straight line.
-## Bullets inherit the shooter's velocity (see PlaneActor._fire), so the intercept
-## is solved in the shooter's moving frame: |rel_pos + rel_vel * t| = bullet_speed * t.
-## Falls back to the target's current position when no intercept exists.
+## Advances a bullet's velocity by one time step (gravity + drag).
+static func step(velocity: Vector3, delta: float) -> Vector3:
+	return velocity + (Vector3.DOWN * GRAVITY - velocity * DRAG) * delta
+
+
+## Drag turns "seconds flown" into fewer "seconds' worth of distance". A bullet
+## launched at velocity v has moved v * drag_time(t) after t seconds (before
+## gravity). With no drag this would simply be t.
+static func drag_time(time: float) -> float:
+	return (1.0 - exp(-DRAG * time)) / DRAG
+
+
+## How far a bullet has fallen after [param time] seconds of flight.
+static func drop_after(time: float) -> float:
+	return GRAVITY * (time - drag_time(time)) / DRAG
+
+
+## Seconds for a bullet launched at [param speed] to cover [param distance],
+## or -1.0 if drag stops it first.
+static func time_to_travel(distance: float, speed: float) -> float:
+	var needed: float = distance / maxf(speed, 0.001)
+	if needed * DRAG >= MAX_REACH_FRACTION:
+		return -1.0
+	return -log(1.0 - DRAG * needed) / DRAG
+
+
+## Where a bullet is, relative to its launch point, after [param time] seconds.
+static func bullet_offset(launch_velocity: Vector3, time: float) -> Vector3:
+	return launch_velocity * drag_time(time) + Vector3.DOWN * drop_after(time)
+
+
+## Returns the world position to point the guns at so that a bullet fired now
+## hits a target flying in a straight line: ahead of it for its motion and
+## above it for bullet drop. Falls back to the target's current position when
+## the target cannot be reached.
 static func lead_point(
 		shooter_pos: Vector3,
 		shooter_vel: Vector3,
@@ -19,8 +66,7 @@ static func lead_point(
 	var time: float = intercept_time(shooter_pos, shooter_vel, target_pos, target_vel, bullet_speed)
 	if time < 0.0:
 		return target_pos
-	# In the shooter's frame the bullet flies straight at (rel_pos + rel_vel * t).
-	return target_pos + (target_vel - shooter_vel) * time
+	return shooter_pos + _muzzle_displacement(shooter_pos, shooter_vel, target_pos, target_vel, time)
 
 
 ## Time for a bullet fired now to reach the target, or -1.0 if it never can.
@@ -30,13 +76,50 @@ static func intercept_time(
 		target_pos: Vector3,
 		target_vel: Vector3,
 		bullet_speed: float) -> float:
+	# Start from the classic no-drag, no-gravity answer...
+	var time: float = _vacuum_intercept_time(shooter_pos, shooter_vel, target_pos, target_vel, bullet_speed)
+	if time < 0.0:
+		return -1.0
+	# ...then refine. Each pass asks "how far must the muzzle velocity alone
+	# carry the bullet to be at the target at this time?" and converts that
+	# distance back into a flight time under drag. Bullets are much faster
+	# than planes, so this settles within a few passes.
+	for _pass: int in range(8):
+		var needed: float = _muzzle_displacement(shooter_pos, shooter_vel, target_pos, target_vel, time).length() / maxf(bullet_speed, 0.001)
+		if needed * DRAG >= MAX_REACH_FRACTION:
+			return -1.0
+		var refined: float = -log(1.0 - DRAG * needed) / DRAG
+		var settled: bool = absf(refined - time) < 0.0005
+		time = refined
+		if settled:
+			break
+	return time
+
+
+## Angle in radians between a nose direction and the direction to a point.
+static func angle_off_nose(origin: Vector3, forward: Vector3, point: Vector3) -> float:
+	var to_point: Vector3 = point - origin
+	if to_point.length_squared() < 0.0001:
+		return 0.0
+	return forward.angle_to(to_point)
+
+
+## The displacement the *muzzle* part of the bullet's velocity has to provide
+## for the bullet to be where the target is at [param time]. Everything else
+## acting on the bullet is moved to the other side of the equation: the share
+## of the shooter's velocity it inherited, and gravity (hence the upward term).
+## Its direction is the direction to aim.
+static func _muzzle_displacement(shooter_pos: Vector3, shooter_vel: Vector3, target_pos: Vector3, target_vel: Vector3, time: float) -> Vector3:
+	return target_pos + target_vel * time - shooter_pos - shooter_vel * drag_time(time) + Vector3.UP * drop_after(time)
+
+
+static func _vacuum_intercept_time(shooter_pos: Vector3, shooter_vel: Vector3, target_pos: Vector3, target_vel: Vector3, bullet_speed: float) -> float:
 	var rel_pos: Vector3 = target_pos - shooter_pos
 	var rel_vel: Vector3 = target_vel - shooter_vel
 	var a: float = rel_vel.length_squared() - bullet_speed * bullet_speed
 	var b: float = 2.0 * rel_pos.dot(rel_vel)
 	var c: float = rel_pos.length_squared()
 	if absf(a) < 0.0001:
-		# Bullet and target equally fast: the quadratic degenerates to a line.
 		if absf(b) < 0.0001:
 			return -1.0
 		var linear_time: float = -c / b
@@ -53,11 +136,3 @@ static func intercept_time(
 	if t2 > 0.0 and (best < 0.0 or t2 < best):
 		best = t2
 	return best
-
-
-## Angle in radians between a nose direction and the direction to a point.
-static func angle_off_nose(origin: Vector3, forward: Vector3, point: Vector3) -> float:
-	var to_point: Vector3 = point - origin
-	if to_point.length_squared() < 0.0001:
-		return 0.0
-	return forward.angle_to(to_point)

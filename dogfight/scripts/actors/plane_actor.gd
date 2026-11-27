@@ -38,10 +38,12 @@ const PART_HULL_DAMAGE: Array[float] = [1.2, 1.0, 0.9, 0.9, 0.9]
 ## Part damage (0 = pristine, 1 = gone) at which each PartState begins.
 const PART_DAMAGED_AT: float = 0.4
 const PART_CRITICAL_AT: float = 0.75
-## A bullet whose path passes further than this from the centre line hit a wing.
-const HIT_WING_OFFSET: float = 1.5
-## Along the fuselage, entry points beyond this are the tail / the nose.
-const HIT_END_OFFSET: float = 1.3
+## Share of a bullet's energy that carries on after passing through each part.
+## Wings and tail surfaces are thin skin; the fuselage soaks up more; nothing
+## comes out the far side of the engine block.
+const PART_PASS_THROUGH: Array[float] = [0.3, 0.0, 0.6, 0.6, 0.5]
+## Below this share of its energy a bullet is spent.
+const SPENT_BULLET_ENERGY: float = 0.1
 
 # --- How damage changes handling (all scale with the part's damage 0..1) -----
 ## Turn and pitch authority lost per fully damaged wing.
@@ -139,6 +141,8 @@ var arena_ceiling: float = 750.0
 
 var plane_data: PlaneData
 var stats: PlaneStats
+## What bullets collide with. Built from plane_data in _ready().
+var hitboxes: PlaneHitboxes
 var bullet_system: BulletSystem
 ## While true the trigger does nothing (pre-match countdown, post-match).
 var weapons_locked: bool = false
@@ -216,6 +220,7 @@ func _ready() -> void:
 		hp = stats.max_hp
 		speed = stats.top_speed * 0.85
 	visual.build(plane_data, team)
+	hitboxes = PlaneHitboxes.build(plane_data)
 	var offsets: Array[Vector3] = visual.gun_offsets()
 	for index: int in range(mini(offsets.size(), _muzzles.size())):
 		_muzzles[index].position = offsets[index]
@@ -316,25 +321,38 @@ func is_part_destroyed(part: Part) -> bool:
 	return part_damage_of(part) >= 1.0
 
 
-## Which part a bullet struck, from where it entered the (spherical) hit volume
-## and the direction it was travelling. Bullets passing well off the centre
-## line hit a wing; the rest are sorted nose / middle / tail by entry point.
-func locate_hit(world_position: Vector3, world_direction: Vector3) -> Part:
-	var world_to_plane: Transform3D = global_transform.affine_inverse()
-	var entry: Vector3 = world_to_plane * world_position
-	var direction: Vector3 = world_to_plane.basis * world_direction
-	if direction.length_squared() < 0.000001:
-		return Part.HULL
-	direction = direction.normalized()
-	# Point on the bullet's path nearest the plane's centre.
-	var closest: Vector3 = entry - direction * entry.dot(direction)
-	if absf(closest.x) > HIT_WING_OFFSET:
-		return Part.RIGHT_WING if closest.x > 0.0 else Part.LEFT_WING
-	if entry.z > HIT_END_OFFSET:
-		return Part.TAIL
-	if entry.z < -HIT_END_OFFSET:
-		return Part.ENGINE
-	return Part.HULL
+## Traces a straight path through this plane's hit boxes (see PlaneHitboxes).
+## [param world_origin] is a point on the path and [param world_direction] its
+## normalised direction; pass the bullet's motion *relative to this plane* so a
+## moving target is handled correctly. The outputs list every part the path
+## enters within [param max_distance], nearest first. An evade roll or a
+## spin-out rolls the boxes with the plane, exactly as it looks.
+func trace_parts(world_origin: Vector3, world_direction: Vector3, max_distance: float,
+		out_parts: PackedInt32Array, out_distances: PackedFloat32Array) -> void:
+	# The body's basis has no scale, so its inverse is just its transpose.
+	var world_to_plane: Basis = (global_transform.basis * Basis(Vector3.BACK, visual_roll)).transposed()
+	hitboxes.trace(world_to_plane * (world_origin - global_position), world_to_plane * world_direction,
+			max_distance, out_parts, out_distances)
+
+
+## Applies one bullet that travelled through [param parts_in_path] in that
+## order. The first part takes the full [param damage]; each part after it
+## takes what is left of the bullet's energy once it has punched through
+## everything before. Incendiary burn is set by the first impact only.
+func take_bullet(parts_in_path: PackedInt32Array, damage: float, attacker: PlaneActor,
+		burn_dps: float = 0.0, burn_duration: float = 0.0) -> void:
+	var energy: float = 1.0
+	for index: int in range(parts_in_path.size()):
+		if not alive:
+			return
+		var part: Part = parts_in_path[index] as Part
+		if index == 0:
+			apply_damage(damage, attacker, burn_dps, burn_duration, part)
+		else:
+			apply_damage(damage * energy, attacker, 0.0, 0.0, part)
+		energy *= PART_PASS_THROUGH[part]
+		if energy < SPENT_BULLET_ENERGY:
+			return
 
 
 func is_hostile_to(other: PlaneActor) -> bool:
@@ -378,7 +396,7 @@ func is_evade_ready() -> bool:
 
 ## Server-side. Friendly fire is rejected here as a second line of defence
 ## (BulletSystem already lets bullets pass through team-mates).
-## [param part] is where the hit landed (see locate_hit). The hull always takes
+## [param part] is where the hit landed (see trace_parts). The hull always takes
 ## the damage; any other part also loses some of its own, smaller, health pool.
 func apply_damage(amount: float, attacker: PlaneActor, burn_dps: float = 0.0, burn_duration: float = 0.0,
 		part: Part = Part.HULL) -> void:
@@ -729,8 +747,10 @@ func _fire() -> void:
 	var plane_basis: Basis = global_transform.basis
 	direction = (direction + plane_basis.x * _rng.randfn(0.0, spread) + plane_basis.y * _rng.randfn(0.0, spread)).normalized()
 	# Bullets inherit the plane's velocity; Ballistics.lead_point assumes this.
+	# They live a little longer than range / speed because drag slows them.
 	bullet_system.spawn(origin, direction * stats.bullet_speed + velocity, self,
-			stats.gun_range / stats.bullet_speed, stats.bullet_damage, stats.burn_dps, stats.burn_duration)
+			stats.gun_range / stats.bullet_speed * 1.15, stats.bullet_damage, stats.bullet_speed,
+			stats.burn_dps, stats.burn_duration)
 	shot_fired.emit(self)
 
 

@@ -188,6 +188,15 @@ func _test_save_round_trip() -> void:
 
 
 func _test_ballistics() -> void:
+	# Bullets drop and slow down.
+	_check(Ballistics.drop_after(1.0) > 4.0 and Ballistics.drop_after(1.0) < 4.9, "a bullet falls 4-4.9 m in its first second (%.2f m)" % Ballistics.drop_after(1.0))
+	var level_shot: Vector3 = Vector3(0.0, 0.0, -420.0)
+	for _tick: int in range(60):
+		level_shot = Ballistics.step(level_shot, 1.0 / 60.0)
+	_check(level_shot.length() < 350.0 and level_shot.length() > 320.0, "drag takes about a fifth of a bullet's speed in a second (%.0f m/s)" % level_shot.length())
+	_check(level_shot.y < -8.0, "and gravity has it falling by then (%.1f m/s)" % level_shot.y)
+
+	# The lead solution must agree with how BulletSystem really flies a bullet.
 	var shooter: Vector3 = Vector3(0.0, 200.0, 0.0)
 	var shooter_velocity: Vector3 = Vector3(0.0, 0.0, -80.0)
 	var target: Vector3 = Vector3(120.0, 230.0, -300.0)
@@ -196,13 +205,23 @@ func _test_ballistics() -> void:
 	var time: float = Ballistics.intercept_time(shooter, shooter_velocity, target, target_velocity, bullet_speed)
 	_check(time > 0.0, "an intercept exists for a crossing target")
 	var lead: Vector3 = Ballistics.lead_point(shooter, shooter_velocity, target, target_velocity, bullet_speed)
-	# Fire a bullet the way PlaneActor does and see where both end up.
+	_check(lead.y > (target + target_velocity * time).y, "the aim point is above the meeting point, to allow for drop")
+	# Fire the way PlaneActor does and step the way BulletSystem does.
+	var bullet_position: Vector3 = shooter
 	var bullet_velocity: Vector3 = (lead - shooter).normalized() * bullet_speed + shooter_velocity
-	var bullet_at_time: Vector3 = shooter + bullet_velocity * time
-	var target_at_time: Vector3 = target + target_velocity * time
-	_check(bullet_at_time.distance_to(target_at_time) < 0.05, "a bullet aimed at the lead point hits (miss %.3f m)" % bullet_at_time.distance_to(target_at_time))
+	var tick: float = 1.0 / 240.0
+	var flown: float = 0.0
+	while flown < time:
+		var slice: float = minf(tick, time - flown)
+		bullet_velocity = Ballistics.step(bullet_velocity, slice)
+		bullet_position += bullet_velocity * slice
+		flown += slice
+	var miss: float = bullet_position.distance_to(target + target_velocity * time)
+	_check(miss < 0.3, "a bullet aimed at the lead point hits (miss %.3f m)" % miss)
 	_check(Ballistics.intercept_time(Vector3.ZERO, Vector3.ZERO, Vector3(0.0, 0.0, -100.0), Vector3(0.0, 0.0, -500.0), 420.0) < 0.0,
 			"no intercept on a target that outruns the bullet")
+	_check(Ballistics.intercept_time(Vector3.ZERO, Vector3.ZERO, Vector3(0.0, 0.0, -5000.0), Vector3.ZERO, 420.0) < 0.0,
+			"no intercept on a target beyond the bullet's reach")
 	_near(Ballistics.angle_off_nose(Vector3.ZERO, Vector3.FORWARD, Vector3(0.0, 0.0, -50.0)), 0.0, "dead ahead is 0 angle off")
 
 

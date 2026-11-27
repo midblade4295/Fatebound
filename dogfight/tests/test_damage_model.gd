@@ -3,6 +3,10 @@ extends Node
 ##
 ##   godot --headless --fixed-fps 60 --path . res://tests/TestDamageModel.tscn
 ##
+## Three layers: bullet paths traced through the hit boxes; real bullets flown
+## by BulletSystem (drop, drag, pass-through) at a cruising plane; and how each
+## kind of damage changes the way a plane flies.
+##
 ## Ten bot planes with their brains switched off are used as test subjects:
 ## each gets one kind of damage and the same stick inputs as an undamaged
 ## reference, and the test checks the damaged plane really flies differently.
@@ -26,6 +30,11 @@ var _attacker: PlaneActor
 var _engine_lost: PlaneActor
 var _tail_lost: PlaneActor
 var _speed_reference: PlaneActor
+var _bullet_target: PlaneActor
+var _live_stage: int = 0
+var _live_hp: float = 0.0
+var _live_tail: float = 0.0
+var _live_engine: float = 0.0
 
 var _yaw_start: Dictionary[int, float] = {}
 var _pitch_start: Dictionary[int, float] = {}
@@ -63,10 +72,11 @@ func _ready() -> void:
 	_engine_lost = red[1]
 	_tail_lost = red[2]
 	_speed_reference = red[3]
+	_bullet_target = red[4]
 	_wing_lost.died.connect(func(_victim: PlaneActor, _killer: PlaneActor) -> void: _wing_lost_died_at = _clock)
 	_engine_lost.died.connect(func(_victim: PlaneActor, _killer: PlaneActor) -> void: _engine_lost_died_at = _clock)
 	_tail_lost.died.connect(_on_tail_lost_died)
-	_test_hit_location()
+	_test_bullet_paths()
 
 
 func _physics_process(delta: float) -> void:
@@ -77,8 +87,10 @@ func _physics_process(delta: float) -> void:
 	if _clock < 0.0:
 		_clock = 0.0
 	_clock += delta
+	_run_live_fire()
 	match _stage:
 		0:
+			_test_pass_through()
 			_apply_all_damage()
 			_stage = 1
 		1:
@@ -133,28 +145,117 @@ func _physics_process(delta: float) -> void:
 				_finish()
 
 
-## locate_hit() is pure geometry, so it can be checked without firing a shot.
-func _test_hit_location() -> void:
-	var plane: PlaneActor = _reference
-	var frame: Transform3D = plane.global_transform
-	var ahead: Vector3 = -frame.basis.z
+## The path a bullet takes through the airframe decides what it hits. These
+## are straight lines in the plane's own space (-Z nose, +X right, +Y up),
+## traced through the hit boxes with no bullets fired.
+func _test_bullet_paths() -> void:
+	var boxes: PlaneHitboxes = _reference.hitboxes
+	var none: Array[int] = []
 	var cases: Array[Array] = [
-		# [entry point (local), bullet direction (local), expected part, description]
-		[Vector3(3.0, 0.0, 3.3), Vector3.FORWARD, PlaneActor.Part.RIGHT_WING, "from astern, off to the right"],
-		[Vector3(-3.0, 0.0, 3.3), Vector3.FORWARD, PlaneActor.Part.LEFT_WING, "from astern, off to the left"],
-		[Vector3(0.3, 0.2, 4.4), Vector3.FORWARD, PlaneActor.Part.TAIL, "from dead astern"],
-		[Vector3(0.0, 0.3, -4.4), Vector3.BACK, PlaneActor.Part.ENGINE, "head-on"],
-		[Vector3(4.5, 0.0, 0.0), Vector3.LEFT, PlaneActor.Part.HULL, "beam shot at the cockpit"],
-		[Vector3(-3.0, 3.3, 0.0), Vector3.DOWN, PlaneActor.Part.LEFT_WING, "from above onto the left wing"],
-		[Vector3(0.0, 3.0, 3.3), Vector3.DOWN, PlaneActor.Part.TAIL, "from above onto the tail"],
+		# [start, direction, parts in the order they are struck, description]
+		[Vector3(4.0, -0.5, 10.0), Vector3.FORWARD, [PlaneActor.Part.RIGHT_WING], "from astern, out along the right wing"],
+		[Vector3(-4.0, -0.5, 10.0), Vector3.FORWARD, [PlaneActor.Part.LEFT_WING], "from astern, out along the left wing"],
+		[Vector3(0.0, 0.0, 10.0), Vector3.FORWARD, [PlaneActor.Part.TAIL, PlaneActor.Part.HULL, PlaneActor.Part.ENGINE], "from dead astern, straight up the fuselage"],
+		[Vector3(0.0, 0.0, -10.0), Vector3.BACK, [PlaneActor.Part.ENGINE, PlaneActor.Part.HULL, PlaneActor.Part.TAIL], "head-on into the nose"],
+		[Vector3(0.0, 6.39, -10.0), Vector3(0.0, -0.328, 1.0), [PlaneActor.Part.TAIL], "from the front, diving over the nose and canopy into the fin"],
+		[Vector3(10.0, 0.3, -0.5), Vector3.LEFT, [PlaneActor.Part.HULL], "from the right side into the cockpit"],
+		[Vector3(-4.0, 10.0, -0.9), Vector3.DOWN, [PlaneActor.Part.LEFT_WING], "from above onto the left wing"],
+		[Vector3(0.0, 3.2, 10.0), Vector3.FORWARD, none, "from astern, just over the top of the fin"],
+		[Vector3(2.2, 1.5, 10.0), Vector3.FORWARD, none, "from astern, between the fuselage and the wing"],
 	]
+	var found_parts: PackedInt32Array = PackedInt32Array()
+	var found_distances: PackedFloat32Array = PackedFloat32Array()
 	for case: Array in cases:
-		var entry: Vector3 = case[0]
+		var start: Vector3 = case[0]
 		var direction: Vector3 = case[1]
-		var expected: PlaneActor.Part = case[2]
-		var found: PlaneActor.Part = plane.locate_hit(frame * entry, frame.basis * direction)
-		_check(found == expected, "hit %s lands on %s (got %s)" % [case[3], PlaneActor.PART_NAMES[expected], PlaneActor.PART_NAMES[found]])
-	_check(ahead.length() > 0.9, "sanity: plane has a forward axis")
+		var expected: Array = case[2]
+		boxes.trace(start, direction.normalized(), 40.0, found_parts, found_distances)
+		_check(Array(found_parts) == expected, "path %s strikes %s (got %s)" % [case[3], _part_list(expected), _part_list(Array(found_parts))])
+	_check(boxes.bounding_radius > 6.5 and boxes.bounding_radius < 9.0, "the bounding radius covers the wingtips (%.1f m)" % boxes.bounding_radius)
+
+
+
+## Energy carried through each part: what lies behind takes less. Run once the
+## match is live, because planes shrug off everything while spawn-shielded.
+func _test_pass_through() -> void:
+	var victim: PlaneActor = _bullet_target
+	var hp_before: float = victim.hp
+	victim.take_bullet(PackedInt32Array([PlaneActor.Part.TAIL, PlaneActor.Part.HULL, PlaneActor.Part.ENGINE]), 100.0, _reference)
+	var tail_pool: float = victim.stats.max_hp * 0.45
+	var engine_pool: float = victim.stats.max_hp * 0.5
+	_near(victim.part_damage_of(PlaneActor.Part.TAIL), 100.0 / tail_pool, "a through-and-through shot hits the tail at full energy")
+	_near(victim.part_damage_of(PlaneActor.Part.ENGINE), 15.0 / engine_pool, "and reaches the engine with 15% left (tail 50% x hull 30%)")
+	_near(hp_before - victim.hp, 90.0 + 60.0 + 15.0, "hull loss is the sum along the path")
+	hp_before = victim.hp
+	victim.take_bullet(PackedInt32Array([PlaneActor.Part.ENGINE, PlaneActor.Part.HULL, PlaneActor.Part.TAIL]), 100.0, _reference)
+	_near(hp_before - victim.hp, 100.0, "nothing comes out the back of the engine")
+	victim.respawn(victim.global_transform)  # Clean slate (and spawn shield) before the live-fire test.
+
+
+## Real bullets from a fixed gun, flown by BulletSystem with drop and drag at
+## a plane cruising past. Called every tick; fires and checks on a timetable.
+func _run_live_fire() -> void:
+	var victim: PlaneActor = _bullet_target
+	var ahead: Vector3 = victim.forward()
+	match _live_stage:
+		0:
+			if _clock >= 2.7:  # The spawn shield from the respawn above has run out.
+				# From ahead and above, aimed at the fin: must clear the nose and canopy.
+				_live_hp = victim.hp
+				_fire_at(victim, victim.global_position + ahead * 150.0 + Vector3.UP * 60.0, -ahead * 4.6 + Vector3.UP * 1.6)
+				_live_stage = 1
+		1:
+			if _clock >= 3.5:
+				_check(victim.part_damage_of(PlaneActor.Part.TAIL) > 0.0, "a bullet from the front, over the nose, damages the tail")
+				_check(is_zero_approx(victim.part_damage_of(PlaneActor.Part.ENGINE)), "and does not touch the engine it flew over")
+				_check(victim.hp < _live_hp, "and costs the plane hull health")
+				_live_tail = victim.part_damage_of(PlaneActor.Part.TAIL)
+				# Level, from dead ahead, at the centre of the plane.
+				_fire_at(victim, victim.global_position + ahead * 150.0, Vector3.ZERO)
+				_live_stage = 2
+		2:
+			if _clock >= 4.3:
+				_check(victim.part_damage_of(PlaneActor.Part.ENGINE) > 0.0, "a head-on bullet hits the engine")
+				_near(victim.part_damage_of(PlaneActor.Part.TAIL), _live_tail, "and stops there: the tail is untouched")
+				_live_engine = victim.part_damage_of(PlaneActor.Part.ENGINE)
+				_live_tail = victim.part_damage_of(PlaneActor.Part.TAIL)
+				# Level, from dead astern.
+				_fire_at(victim, victim.global_position - ahead * 150.0, Vector3.ZERO)
+				_live_stage = 3
+		3:
+			if _clock >= 5.4:
+				var tail_gain: float = victim.part_damage_of(PlaneActor.Part.TAIL) - _live_tail
+				var engine_gain: float = victim.part_damage_of(PlaneActor.Part.ENGINE) - _live_engine
+				_check(tail_gain > 0.0, "a bullet from astern hits the tail first")
+				_check(engine_gain > 0.0 and engine_gain < tail_gain * 0.4, "then carries on to the engine with much less energy (tail +%.3f, engine +%.3f)" % [tail_gain, engine_gain])
+				# A tail chase closes slowly, so each hit is softer than the head-on one.
+				_check(tail_gain * 0.45 < _live_engine * 0.5 * 0.9, "a tail-chase hit lands softer than a head-on hit")
+				_live_hp = victim.hp
+				# Aimed 3.6 m above the plane: inside the old hit sphere, outside the airframe.
+				_fire_at(victim, victim.global_position - ahead * 150.0, Vector3.UP * 3.6)
+				_live_stage = 4
+		4:
+			if _clock >= 6.5:
+				_near(victim.hp, _live_hp, "a bullet that passes over the plane does no damage")
+				_live_stage = 5
+
+
+## Fires one bullet from a stationary gun at [param gun_position] so that it
+## meets [param offset] from the victim's centre, allowing for the victim's
+## motion and for bullet drop.
+func _fire_at(victim: PlaneActor, gun_position: Vector3, offset: Vector3) -> void:
+	var muzzle_speed: float = 420.0
+	var aim: Vector3 = Ballistics.lead_point(gun_position, Vector3.ZERO, victim.global_position + offset, victim.velocity, muzzle_speed)
+	_manager.bullet_system.spawn(gun_position, (aim - gun_position).normalized() * muzzle_speed, _reference, 2.0, 100.0, muzzle_speed)
+
+
+func _part_list(part_ids: Array) -> String:
+	if part_ids.is_empty():
+		return "nothing"
+	var names: PackedStringArray = PackedStringArray()
+	for part_id: int in part_ids:
+		names.append(PlaneActor.PART_NAMES[part_id])
+	return " -> ".join(names)
 
 
 func _apply_all_damage() -> void:
@@ -201,6 +302,7 @@ func _final_checks() -> void:
 	_check(_manager.slot_for_plane(_reference).kills == 2, "engine and tail kills are credited too (kills %d)" % _manager.slot_for_plane(_reference).kills)
 	_check(_manager.team_score(Teams.Id.TEAM_RED) == 1 and _manager.team_score(Teams.Id.TEAM_BLUE) == 2,
 			"score is BLUE 2 - 1 RED (got %d - %d)" % [_manager.team_score(Teams.Id.TEAM_BLUE), _manager.team_score(Teams.Id.TEAM_RED)])
+	_check(_live_stage == 5, "the live-fire sequence ran to the end (stage %d)" % _live_stage)
 	_check(_reference.alive and _left_wing_hit.alive and _tail_hit.alive and _engine_hit.alive, "damaged-but-not-destroyed planes are still flying")
 
 

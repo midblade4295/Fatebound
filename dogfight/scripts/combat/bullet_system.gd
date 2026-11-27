@@ -2,13 +2,27 @@ class_name BulletSystem
 extends Node3D
 ## Every bullet in the match, simulated as plain data and drawn with a single
 ## MultiMesh. No bullet nodes, no Area3Ds: ten planes firing at once is one
-## draw call and at most a few hundred short ray casts per physics tick.
+## draw call.
 ##
-## Each tick a bullet sweeps a ray from where it was to where it will be, so
-## fast bullets can never tunnel through a plane. Rays hit the "world" layer
-## (cliffs block shots) and the "planes" layer. Friendly fire is prevented by
-## excluding the shooter's whole team from the ray, so bullets pass through
-## wingmen instead of being wasted on them.
+## Flight: each physics tick a bullet's velocity is updated for gravity and
+## drag (Ballistics.step), then it sweeps from where it was to where it will
+## be, so fast bullets can never tunnel through anything.
+##
+## Hits are decided by where the bullet actually goes:
+##  - against the world (cliffs, carrier, sea) with one physics ray;
+##  - against each enemy plane by tracing the bullet's path, relative to that
+##    plane's own motion, through its per-part hit boxes (PlaneHitboxes). The
+##    first box entered is the part that is hit, and the trace carries on
+##    through the airframe so the same bullet can damage what lies behind it.
+##    A path that passes between the boxes is a miss.
+## Whichever is nearer along the path, world or plane, is what the bullet hits.
+##
+## Impact energy: damage scales with the square of the closing speed between
+## bullet and target, so a head-on pass hits harder than a tail chase and a
+## bullet slowed by drag at long range hits softer.
+##
+## Friendly fire cannot happen: bullets are never tested against the
+## shooter's own team.
 ##
 ## Networking: run this on the server only. Clients can render their own
 ## cosmetic tracers from PlaneActor.shot_fired.
@@ -21,22 +35,28 @@ const TRACER_WIDTH: float = 0.32
 const SPARK_POOL_SIZE: int = 12
 const SPARK_TIME: float = 0.16
 const TRACER_COLORS: Array[Color] = [Color(0.75, 0.92, 1.0), Color(1.0, 0.84, 0.35)]
+## Limits on the impact-energy damage multiplier (closing speed squared).
+const MIN_IMPACT_ENERGY: float = 0.45
+const MAX_IMPACT_ENERGY: float = 1.5
 
 var _positions: PackedVector3Array = PackedVector3Array()
 var _velocities: PackedVector3Array = PackedVector3Array()
 var _lifetimes: PackedFloat32Array = PackedFloat32Array()
 var _damages: PackedFloat32Array = PackedFloat32Array()
+var _muzzle_speeds: PackedFloat32Array = PackedFloat32Array()
 var _burn_dps: PackedFloat32Array = PackedFloat32Array()
 var _burn_durations: PackedFloat32Array = PackedFloat32Array()
 var _shooters: Array[PlaneActor] = []
 var _teams: PackedInt32Array = PackedInt32Array()
 var _count: int = 0
 
-## Collision RIDs per team, used as the ray "exclude" list.
-var _blue_rids: Array[RID] = []
-var _red_rids: Array[RID] = []
+var _planes: Array[PlaneActor] = []
 var _multimesh: MultiMesh
 var _query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.new()
+# Scratch arrays reused for every trace so the hot loop never allocates.
+var _trace_parts: PackedInt32Array = PackedInt32Array()
+var _trace_distances: PackedFloat32Array = PackedFloat32Array()
+var _hit_parts: PackedInt32Array = PackedInt32Array()
 var _sparks: Array[MeshInstance3D] = []
 var _spark_timers: PackedFloat32Array = PackedFloat32Array()
 var _next_spark: int = 0
@@ -47,29 +67,25 @@ func _ready() -> void:
 	_velocities.resize(MAX_BULLETS)
 	_lifetimes.resize(MAX_BULLETS)
 	_damages.resize(MAX_BULLETS)
+	_muzzle_speeds.resize(MAX_BULLETS)
 	_burn_dps.resize(MAX_BULLETS)
 	_burn_durations.resize(MAX_BULLETS)
 	_teams.resize(MAX_BULLETS)
 	_shooters.resize(MAX_BULLETS)
-	_query.collision_mask = PlaneActor.COLLISION_LAYER_WORLD | PlaneActor.COLLISION_LAYER_PLANES
+	# Planes are handled by the box trace, so the physics ray only sees the world.
+	_query.collision_mask = PlaneActor.COLLISION_LAYER_WORLD
 	_build_tracer_multimesh()
 	_build_spark_pool()
 
 
-## Registers a plane so its team-mates' bullets ignore it.
+## Registers a plane as something bullets can hit.
 func register_plane(plane: PlaneActor) -> void:
-	var rids: Array[RID] = _rids_for(plane.team)
-	if not rids.has(plane.get_rid()):
-		rids.append(plane.get_rid())
+	if not _planes.has(plane):
+		_planes.append(plane)
 
 
 func unregister_plane(plane: PlaneActor) -> void:
-	_blue_rids.erase(plane.get_rid())
-	_red_rids.erase(plane.get_rid())
-
-
-func _rids_for(team: int) -> Array[RID]:
-	return _blue_rids if team == Teams.Id.TEAM_BLUE else _red_rids
+	_planes.erase(plane)
 
 
 func active_bullet_count() -> int:
@@ -81,9 +97,11 @@ func clear() -> void:
 	_multimesh.visible_instance_count = 0
 
 
-## Adds one bullet. Silently drops it when the pool is full (never allocates).
+## Adds one bullet. [param muzzle_speed] is the gun's own muzzle speed (not
+## including the firing plane's velocity); impact energy is measured against
+## it. Silently drops the bullet when the pool is full (never allocates).
 func spawn(origin: Vector3, bullet_velocity: Vector3, shooter: PlaneActor, lifetime: float,
-		damage: float, burn_dps: float = 0.0, burn_duration: float = 0.0) -> void:
+		damage: float, muzzle_speed: float, burn_dps: float = 0.0, burn_duration: float = 0.0) -> void:
 	if _count >= MAX_BULLETS or shooter == null:
 		return
 	var index: int = _count
@@ -91,6 +109,7 @@ func spawn(origin: Vector3, bullet_velocity: Vector3, shooter: PlaneActor, lifet
 	_velocities[index] = bullet_velocity
 	_lifetimes[index] = lifetime
 	_damages[index] = damage
+	_muzzle_speeds[index] = maxf(muzzle_speed, 1.0)
 	_burn_dps[index] = burn_dps
 	_burn_durations[index] = burn_duration
 	_shooters[index] = shooter
@@ -121,21 +140,67 @@ func _step_bullets(delta: float) -> void:
 	var index: int = _count - 1
 	# Iterate backwards so swap-removal never skips a bullet.
 	while index >= 0:
+		var velocity: Vector3 = Ballistics.step(_velocities[index], delta)
+		_velocities[index] = velocity
 		var from: Vector3 = _positions[index]
-		var to: Vector3 = from + _velocities[index] * delta
+		var to: Vector3 = from + velocity * delta
+		var step_length: float = from.distance_to(to)
+
+		# World: how far along this step, if at all, something solid is in the way.
 		_query.from = from
 		_query.to = to
-		_query.exclude = _rids_for(_teams[index])
-		var hit: Dictionary = space.intersect_ray(_query)
-		if not hit.is_empty():
-			var hit_position: Vector3 = hit["position"]
-			var victim: PlaneActor = hit["collider"] as PlaneActor
+		var world_hit: Dictionary = space.intersect_ray(_query)
+		var nearest: float = step_length
+		var hit_world: bool = not world_hit.is_empty()
+		if hit_world:
+			var world_point: Vector3 = world_hit["position"]
+			nearest = from.distance_to(world_point)
+
+		# Planes: the nearest enemy airframe this step's path really passes through.
+		var victim: PlaneActor = null
+		var victim_closing_speed: float = 0.0
+		var team: int = _teams[index]
+		for plane: PlaneActor in _planes:
+			if not plane.alive or plane.team == team:
+				continue
+			# Work in the plane's moving frame: there the bullet covers this much.
+			var relative_step: Vector3 = (velocity - plane.velocity) * delta
+			var relative_length: float = relative_step.length()
+			if relative_length < 0.0001:
+				continue
+			var direction: Vector3 = relative_step / relative_length
+			# Cheap reject: does the step come anywhere near the plane at all?
+			var to_plane: Vector3 = plane.global_position - from
+			var along: float = clampf(to_plane.dot(direction), 0.0, relative_length)
+			var reach: float = plane.hitboxes.bounding_radius
+			if (to_plane - direction * along).length_squared() > reach * reach:
+				continue
+			# Trace on past the end of this step so the list holds everything
+			# the bullet would go on to pass through inside the airframe.
+			plane.trace_parts(from, direction, relative_length + reach * 2.0, _trace_parts, _trace_distances)
+			if _trace_parts.is_empty() or _trace_distances[0] > relative_length:
+				continue  # Missed the boxes, or will not reach them until a later tick.
+			# Convert "how far in the plane's frame" back to distance along the real path.
+			var distance: float = _trace_distances[0] / relative_length * step_length
+			if distance <= nearest:
+				nearest = distance
+				victim = plane
+				victim_closing_speed = relative_length / delta
+				_hit_parts = _trace_parts.duplicate()
+
+		if victim != null:
 			var shooter: PlaneActor = _shooters[index]
-			if victim != null and is_instance_valid(shooter):
-				victim.apply_damage(_damages[index], shooter, _burn_dps[index], _burn_durations[index],
-						victim.locate_hit(hit_position, _velocities[index]))
+			var hit_position: Vector3 = from + (to - from).normalized() * nearest
+			if is_instance_valid(shooter):
+				var speed_ratio: float = victim_closing_speed / _muzzle_speeds[index]
+				var impact_energy: float = clampf(speed_ratio * speed_ratio, MIN_IMPACT_ENERGY, MAX_IMPACT_ENERGY)
+				victim.take_bullet(_hit_parts, _damages[index] * impact_energy, shooter, _burn_dps[index], _burn_durations[index])
 				bullet_hit.emit(victim, shooter, hit_position)
 			_show_spark(hit_position)
+			_remove(index)
+		elif hit_world:
+			var world_position: Vector3 = world_hit["position"]
+			_show_spark(world_position)
 			_remove(index)
 		else:
 			_positions[index] = to
@@ -152,6 +217,7 @@ func _remove(index: int) -> void:
 		_velocities[index] = _velocities[last]
 		_lifetimes[index] = _lifetimes[last]
 		_damages[index] = _damages[last]
+		_muzzle_speeds[index] = _muzzle_speeds[last]
 		_burn_dps[index] = _burn_dps[last]
 		_burn_durations[index] = _burn_durations[last]
 		_shooters[index] = _shooters[last]
