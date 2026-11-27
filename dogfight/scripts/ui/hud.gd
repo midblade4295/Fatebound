@@ -2,8 +2,9 @@ class_name Hud
 extends CanvasLayer
 ## In-match HUD for landscape phones (scenes/hud/HUD.tscn).
 ##
-##   top-left     Commander Level badge, Hangar XP, speed / altitude, hull bar,
-##                and under it the damage diagram (engine, wings, tail)
+##   top-left     Commander Level badge, Hangar XP, speed / altitude / fuel,
+##                and under it the damage diagram: the only "health" display
+##                there is, because planes have no health bar
 ##   top-centre   compact score bar:  BLUE score | 5v5 + clock | RED score
 ##   top-right    circular radar
 ##   bottom-left  virtual flight stick
@@ -17,17 +18,14 @@ extends CanvasLayer
 const KILL_FEED_LINES: int = 4
 const KILL_FEED_TIME: float = 5.0
 const ALERT_TIME: float = 2.8
-## What to tell the player when one of *their* parts changes state:
-## [part][state] with state 0 = repaired, 1 = damaged, 2 = critical, 3 = destroyed.
-const PART_ALERTS: Dictionary[int, Array] = {
-	PlaneActor.Part.ENGINE: ["ENGINE REPAIRED", "ENGINE HIT - losing power", "ENGINE FAILING", "ENGINE DEAD - you are gliding"],
-	PlaneActor.Part.LEFT_WING: ["LEFT WING PATCHED", "LEFT WING HIT - pulling left", "LEFT WING CRITICAL", "LEFT WING GONE"],
-	PlaneActor.Part.RIGHT_WING: ["RIGHT WING PATCHED", "RIGHT WING HIT - pulling right", "RIGHT WING CRITICAL", "RIGHT WING GONE"],
-	PlaneActor.Part.TAIL: ["TAIL PATCHED", "TAIL HIT - sluggish controls", "ELEVATOR FAILING - nose heavy", "TAIL GONE - no pitch control"],
-	PlaneActor.Part.RUDDER: ["RUDDER PATCHED", "RUDDER HIT - nose is wandering", "RUDDER FAILING", "RUDDER SHOT OFF - weak turns"],
-	PlaneActor.Part.LEFT_FLAP: ["LEFT FLAP PATCHED", "LEFT FLAP HIT", "LEFT FLAP FAILING - pulls left in hard turns", "LEFT FLAP SHOT OFF"],
-	PlaneActor.Part.RIGHT_FLAP: ["RIGHT FLAP PATCHED", "RIGHT FLAP HIT", "RIGHT FLAP FAILING - pulls right in hard turns", "RIGHT FLAP SHOT OFF"],
-}
+## What losing or hurting each part means for the pilot, indexed by PlaneActor.Part.
+const PART_EFFECTS: Array[String] = [
+	"leaking fuel", "losing power", "pulling left", "pulling right", "pulling left", "pulling right",
+	"nose heavy", "nose wandering", "weak turns", "uneven in hard turns", "uneven in hard turns",
+	"weak roll", "weak roll", "weak pitch", "weak pitch",
+]
+## Headline for each PlaneActor.PartState (0 = repaired).
+const STATE_WORDS: Array[String] = ["PATCHED", "HIT", "CRITICAL", "SHOT OFF"]
 
 var match_manager: MatchManager5v5
 var player: PlaneActor
@@ -44,7 +42,6 @@ var _alert_time: float = 0.0
 @onready var _title_label: Label = %TitleLabel
 @onready var _xp_bar: ProgressBar = %XpBar
 @onready var _flight_label: Label = %FlightLabel
-@onready var _hp_bar: ProgressBar = %HpBar
 @onready var _blue_score: Label = %BlueScore
 @onready var _red_score: Label = %RedScore
 @onready var _mode_label: Label = %ModeLabel
@@ -139,8 +136,11 @@ func _update_flight_panel() -> void:
 	var shown: PlaneActor = player if player != null else camera.target
 	if shown == null or not is_instance_valid(shown):
 		return
-	_flight_label.text = "SPD %3d km/h   ALT %4d m" % [roundi(shown.speed_kmh()), roundi(maxf(shown.altitude(), 0.0))]
-	_hp_bar.value = shown.hp_ratio() * 100.0
+	var readout: String = "SPD %3d km/h   ALT %4d m" % [roundi(shown.speed_kmh()), roundi(maxf(shown.altitude(), 0.0))]
+	# Fuel only matters once the tank is holed, so it only shows then.
+	if shown.fuel < 0.995:
+		readout += "   FUEL %d%%" % roundi(shown.fuel * 100.0)
+	_flight_label.text = readout
 
 
 func _update_buttons() -> void:
@@ -169,14 +169,13 @@ func _update_messages() -> void:
 			if slot != null and slot.respawn_timer > 0.0:
 				headline = "SHOT DOWN"
 				detail = "Back in the air in %d" % ceili(slot.respawn_timer)
-			elif player != null and player.alive and player.is_spinning_out():
-				headline = "GOING DOWN"
-				detail = "Wing shot off"
 			elif player != null and player.alive and player.is_out_of_bounds():
 				headline = "RETURN TO BATTLE"
 				detail = "Autopilot is turning you around"
 			elif _alert_time > 0.0:
 				detail = _alert_text
+			elif player != null and player.alive and player.is_going_down():
+				detail = "You are going down - fly it as far as you can"
 		MatchManager5v5.Phase.FINISHED:
 			pass
 	if _center_message.text != headline:
@@ -230,15 +229,30 @@ func _on_bullet_hit(_victim: PlaneActor, shooter: PlaneActor, _world_position: V
 
 ## Damage reports: the player's own parts, and enemy parts the player shot off.
 func _on_part_state_changed(plane: PlaneActor, part: PlaneActor.Part, state: PlaneActor.PartState) -> void:
-	if player == null or not PART_ALERTS.has(part):
+	if player == null:
 		return
+	var part_name: String = PlaneActor.PART_NAMES[part]
 	if plane == player:
-		var lines: Array = PART_ALERTS[part]
-		_alert_text = str(lines[state])
+		_alert_text = _describe_own_damage(part, state)
 		_alert_time = ALERT_TIME
 	elif state == PlaneActor.PartState.DESTROYED and plane.recent_attacker() == player:
-		_alert_text = "%s: %s shot off!" % [plane.pilot_name, PlaneActor.PART_NAMES[part].to_lower()]
+		_alert_text = "%s: %s shot off!" % [plane.pilot_name, part_name.to_lower()]
+		if not PlaneActor.PART_DETACHES[part]:
+			_alert_text = "%s: %s knocked out!" % [plane.pilot_name, part_name.to_lower()]
 		_alert_time = ALERT_TIME
+
+
+func _describe_own_damage(part: PlaneActor.Part, state: PlaneActor.PartState) -> String:
+	var part_name: String = PlaneActor.PART_NAMES[part].to_upper()
+	if state == PlaneActor.PartState.DESTROYED:
+		match part:
+			PlaneActor.Part.ENGINE:
+				return "ENGINE DEAD - you are gliding"
+			PlaneActor.Part.FUSELAGE:
+				return "FUEL TANK RUPTURED - engine will stop"
+	if state == PlaneActor.PartState.OK:
+		return "%s %s" % [part_name, STATE_WORDS[state]]
+	return "%s %s - %s" % [part_name, STATE_WORDS[state], PART_EFFECTS[part]]
 
 
 func _on_player_damaged(_victim: PlaneActor, _amount: float, _attacker: PlaneActor) -> void:
@@ -296,7 +310,6 @@ func _apply_style() -> void:
 	UiStyle.style_label(_title_label, 24)
 	UiStyle.style_label(_flight_label, 22, Color(0.82, 0.93, 1.0), 6)
 	UiStyle.style_bar(_xp_bar, UiStyle.XP_CYAN, 18.0)
-	UiStyle.style_bar(_hp_bar, UiStyle.HP_GREEN, 20.0)
 
 	(%BluePanel as PanelContainer).add_theme_stylebox_override(&"panel", UiStyle.panel(Teams.COLOR_BLUE, 18))
 	(%RedPanel as PanelContainer).add_theme_stylebox_override(&"panel", UiStyle.panel(Teams.COLOR_RED, 18))

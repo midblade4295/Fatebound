@@ -61,6 +61,7 @@ run() {   # run <name> <marker> <timeout> <scene> [user args...]
 run progression        PROGRESSION_OK  60 res://tests/TestProgression.tscn
 run player_flow        PLAYER_FLOW_OK  90 res://tests/TestPlayerFlow.tscn
 run damage_model       DAMAGE_MODEL_OK 90 res://tests/TestDamageModel.tscn
+run collisions         COLLISIONS_OK   60 res://tests/TestCollisions.tscn
 for seed in 1 7 42; do
   run "match_sim_seed_$seed" MATCH_SIM_OK 120 res://tests/TestMatchSim.tscn "seed=$seed"
 done

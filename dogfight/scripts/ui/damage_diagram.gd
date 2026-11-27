@@ -1,15 +1,37 @@
 class_name DamageDiagram
 extends Control
-## Small top-down silhouette of the player's plane that shows which parts are
-## hurt: green = fine, yellow = damaged, orange (flashing) = critical,
-## red = destroyed. Nose is up, so the left wing is on the left. Shown: engine,
-## hull, both wings, both flaps, tail and rudder.
-## It explains at a glance why the plane has started pulling to one side.
+## Top-down drawing of the player's plane showing the state of every part:
+## green = fine, yellow = damaged, orange (flashing) = critical, and a part
+## that has been shot off is simply missing, with a red stump where it joined.
+## Nose is up, so the left wing is on the left.
+##
+## This is the game's only damage display. There is no health bar, because
+## there is no health: what matters is which parts you still have.
 
-const COLOR_OK: Color = Color(0.42, 0.88, 0.5, 0.9)
+const COLOR_OK: Color = Color(0.42, 0.88, 0.5, 0.92)
 const COLOR_DAMAGED: Color = Color(1.0, 0.85, 0.25, 0.95)
 const COLOR_CRITICAL: Color = Color(1.0, 0.5, 0.15, 1.0)
-const COLOR_DESTROYED: Color = Color(0.75, 0.12, 0.1, 1.0)
+const COLOR_DESTROYED: Color = Color(0.8, 0.14, 0.1, 1.0)
+const COLOR_GONE: Color = Color(0.8, 0.14, 0.1, 0.28)
+
+## Where each PlaneActor.Part is drawn, as a rectangle on a unit square.
+const PART_SHAPES: Array[Rect2] = [
+	Rect2(0.42, 0.26, 0.16, 0.36),   # Fuselage
+	Rect2(0.41, 0.08, 0.18, 0.18),   # Engine
+	Rect2(0.24, 0.32, 0.18, 0.15),   # Left wing (inner panel)
+	Rect2(0.58, 0.32, 0.18, 0.15),   # Right wing
+	Rect2(0.04, 0.33, 0.2, 0.12),    # Left wingtip
+	Rect2(0.76, 0.33, 0.2, 0.12),    # Right wingtip
+	Rect2(0.445, 0.62, 0.11, 0.2),   # Tail
+	Rect2(0.475, 0.74, 0.05, 0.1),   # Fin
+	Rect2(0.475, 0.85, 0.05, 0.1),   # Rudder
+	Rect2(0.25, 0.48, 0.16, 0.055),  # Left flap
+	Rect2(0.59, 0.48, 0.16, 0.055),  # Right flap
+	Rect2(0.06, 0.46, 0.17, 0.05),   # Left aileron
+	Rect2(0.77, 0.46, 0.17, 0.05),   # Right aileron
+	Rect2(0.3, 0.76, 0.145, 0.07),   # Left elevator
+	Rect2(0.555, 0.76, 0.145, 0.07), # Right elevator
+]
 
 var plane: PlaneActor
 
@@ -33,26 +55,27 @@ func _draw() -> void:
 	# Everything is laid out on a unit square and scaled to the control.
 	var unit: float = minf(size.x, size.y)
 	var origin: Vector2 = (size - Vector2(unit, unit)) * 0.5
-	var alive: bool = plane.alive
+	for index: int in range(PlaneActor.PART_COUNT):
+		var part: PlaneActor.Part = index as PlaneActor.Part
+		var shape: Rect2 = PART_SHAPES[index]
+		var rect: Rect2 = Rect2(origin + shape.position * unit, shape.size * unit)
+		var gone: bool = plane.alive and plane.is_part_gone(part)
+		var style: StyleBoxFlat = StyleBoxFlat.new()
+		style.set_corner_radius_all(int(minf(rect.size.x, rect.size.y) * 0.35))
+		if gone:
+			# Shot off: just a faint outline of where it used to be.
+			style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+			style.border_color = COLOR_GONE
+			style.set_border_width_all(2)
+		else:
+			style.bg_color = _part_color(part)
+			style.border_color = UiStyle.OUTLINE
+			style.set_border_width_all(2)
+		draw_style_box(style, rect)
 
-	var hull_color: Color = COLOR_OK.lerp(COLOR_DESTROYED, 1.0 - plane.hp_ratio()) if alive else COLOR_DESTROYED
-	var wing_y: float = 0.36
-	_draw_part(origin, unit, Rect2(0.07, wing_y, 0.36, 0.2), _part_color(PlaneActor.Part.LEFT_WING, alive))
-	_draw_part(origin, unit, Rect2(0.57, wing_y, 0.36, 0.2), _part_color(PlaneActor.Part.RIGHT_WING, alive))
-	# Flaps sit behind the inner part of each wing.
-	_draw_part(origin, unit, Rect2(0.2, 0.57, 0.2, 0.07), _part_color(PlaneActor.Part.LEFT_FLAP, alive))
-	_draw_part(origin, unit, Rect2(0.6, 0.57, 0.2, 0.07), _part_color(PlaneActor.Part.RIGHT_FLAP, alive))
-	_draw_part(origin, unit, Rect2(0.41, 0.3, 0.18, 0.4), hull_color)
-	_draw_part(origin, unit, Rect2(0.39, 0.1, 0.22, 0.2), _part_color(PlaneActor.Part.ENGINE, alive))
-	var tail_color: Color = _part_color(PlaneActor.Part.TAIL, alive)
-	_draw_part(origin, unit, Rect2(0.44, 0.68, 0.12, 0.16), tail_color)
-	_draw_part(origin, unit, Rect2(0.3, 0.76, 0.4, 0.09), tail_color)
-	# The rudder trails behind everything else.
-	_draw_part(origin, unit, Rect2(0.46, 0.85, 0.08, 0.1), _part_color(PlaneActor.Part.RUDDER, alive))
 
-
-func _part_color(part: PlaneActor.Part, alive: bool) -> Color:
-	if not alive:
+func _part_color(part: PlaneActor.Part) -> Color:
+	if not plane.alive:
 		return COLOR_DESTROYED
 	match plane.part_state(part):
 		PlaneActor.PartState.DAMAGED:
@@ -63,13 +86,3 @@ func _part_color(part: PlaneActor.Part, alive: bool) -> Color:
 		PlaneActor.PartState.DESTROYED:
 			return COLOR_DESTROYED
 	return COLOR_OK
-
-
-func _draw_part(origin: Vector2, unit: float, shape: Rect2, color: Color) -> void:
-	var rect: Rect2 = Rect2(origin + shape.position * unit, shape.size * unit)
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = color
-	style.border_color = UiStyle.OUTLINE
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(int(minf(rect.size.x, rect.size.y) * 0.4))
-	draw_style_box(style, rect)

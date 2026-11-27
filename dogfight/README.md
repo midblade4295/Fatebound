@@ -51,12 +51,12 @@ dogfight/
 │  │             commander_progression.gd, game_catalog.gd
 │  ├─ meta/      player_profile.gd (autoload Profile), match_rewards.gd
 │  ├─ actors/    plane_actor.gd, plane_input.gd, plane_visual.gd, plane_hitboxes.gd
-│  ├─ combat/    bullet_system.gd
+│  ├─ combat/    bullet_system.gd, midair_collisions.gd
 │  ├─ camera/    chase_camera.gd
 │  ├─ control/   player_controller.gd, squad_ai.gd, squad_blackboard.gd
 │  ├─ match/     match_manager_5v5.gd, pilot_slot.gd, dogfight_arena.gd
 │  ├─ world/     arena_builder.gd
-│  ├─ fx/        toon_materials.gd, explosion_fx.gd
+│  ├─ fx/        toon_materials.gd, explosion_fx.gd, debris.gd
 │  ├─ ui/        hud.gd, hud_world_overlay.gd, radar.gd, touch_flight_stick.gd,
 │  │             action_button.gd, ui_style.gd
 │  └─ menu/      main_menu.gd, card_view.gd, match_lobby.gd
@@ -97,6 +97,7 @@ DogfightArena5v5 (Node3D)                 dogfight_arena.gd (wires camera + HUD)
 ├─ Planes                                 every PlaneActor (the spawner's spawn path)
 ├─ PlaneSpawner (MultiplayerSpawner)
 ├─ BulletSystem                           bullet_system.gd
+├─ MidairCollisions                       midair_collisions.gd
 ├─ Controllers                            one PlayerController or SquadAIController per seat
 ├─ MatchManager                           match_manager_5v5.gd
 ├─ ChaseCamera (instance)
@@ -104,7 +105,7 @@ DogfightArena5v5 (Node3D)                 dogfight_arena.gd (wires camera + HUD)
 
 PlaneActor (CharacterBody3D)              plane_actor.gd  (layer "planes", collides with "world")
 ├─ CollisionShape3D                       generous hit sphere
-├─ VisualRoot                             plane_visual.gd: primitives, prop, smoke, muzzle flashes
+├─ VisualRoot                             plane_visual.gd: the Blender model's pieces, prop, smoke, debris
 ├─ Muzzles ─ MuzzleL, MuzzleR
 ├─ PlaneInput                             plane_input.gd: the only thing a pilot writes to
 │  └─ InputSync (MultiplayerSynchronizer) steer + firing, authority = owning peer
@@ -116,7 +117,8 @@ ChaseCamera (Node3D)                      chase_camera.gd
 HUD (CanvasLayer)                         hud.gd
 └─ Root (Control)
    ├─ WorldOverlay                        hud_world_overlay.gd: diamonds, threat arrows, gun pipper
-   ├─ TopLeft                             level badge, XP bar, speed/altitude, hull bar
+   ├─ TopLeft                             level badge, XP bar, speed/altitude/fuel
+   ├─ DamageDiagram                       damage_diagram.gd: state of every part
    ├─ ScoreBar                            BLUE | 5v5 + clock | RED
    ├─ KillFeed
    ├─ Radar                               radar.gd
@@ -134,23 +136,51 @@ HUD (CanvasLayer)                         hud.gd
   (`assign_human` / `release_to_ai`) without touching the plane.
 - **Input goes through actions.** The touch stick and buttons press the same
   Input actions the keyboard does; `PlayerController` never references a widget.
+- **The plane is a model made of parts.** `PlaneVisual` loads the Blender model
+  (`assets/models/spitfire_stylized.glb`), which is a tree of 19 separate
+  pieces: fuselage, engine, propeller, canopy, two inner wing panels, two
+  wingtips, flaps, ailerons, tail, stabilisers, elevators, fin and rudder.
+  Control surfaces are cut out of the wing and tail and hinged; they follow the
+  stick. All three plane types currently share this one model, repainted and
+  rescaled.
+- **There is no health.** `PlaneActor` has fifteen damageable parts and nothing
+  else. Each part does a job and does it worse as it is damaged; a destroyed
+  part comes off the model as falling debris, together with whatever is
+  attached to it (a wing takes its tip, flap and aileron; the tail takes the
+  fin, rudder and elevators).
+
+  | Part | What damage does | When it is gone |
+  | --- | --- | --- |
+  | Inner wing panel | less lift, drags toward that side | half the plane's lift gone: it rolls hard that way and sinks; its gun goes too |
+  | Wingtip | a little less lift | drags and sinks gently; flyable with back stick |
+  | Aileron | weaker roll, wider turns | turns at 40% if both go; no evade roll |
+  | Flap | less turn boost, pulls round with flaps down | no boost on that side |
+  | Tail | sluggish stick, nose-heavy | no pitch or yaw control; it dives |
+  | Fin / rudder | weaker turns, nose wanders | nose swings widely |
+  | Elevator | weaker pitch | almost no pitch control if both go |
+  | Engine | slower, slow to accelerate | dead: on fire, gliding |
+  | Fuselage | sluggish stick, leaks fuel | tank ruptured: engine stops when the fuel is gone |
+
+  On top of the arcade flight model sits a lift check: lift comes from the
+  wing panels still attached and from speed (it falls away below 60% of top
+  speed). Short of lift, the plane sinks and its nose drops whatever the stick
+  says, which is what brings a crippled plane down. The pilot keeps whatever
+  control the remaining parts give, all the way to the ground.
+- **A plane is only lost when it hits something:** the sea, an island, a ship,
+  or another aircraft hard enough. Whoever crippled it is credited (the enemy
+  who destroyed a part, else the last enemy to hit it within 45 s).
 - **Bullets are data.** `BulletSystem` simulates every bullet in arrays and
   draws them all with one MultiMesh. Each tick a bullet's velocity is updated
   for gravity and drag (`Ballistics.step`) and its path for that tick is tested
   against the world (one physics ray) and against each enemy plane.
-- **Hits follow the bullet's path.** Every plane carries `PlaneHitboxes`: boxes
-  for the engine, cockpit/hull, tail (rear fuselage, stabiliser, front of the
-  fin), rudder, each wing and each flap, matching the model plus 0.3 m of
-  padding. The bullet's path, relative
-  to the target's own motion, is traced through those boxes. The first box
-  entered is the part that is hit, and the bullet carries on with reduced
-  energy into whatever lies behind (control surfaces 80%, wing 60%, tail 50%,
-  hull 30%, engine 0%). So a shot from astern goes rudder -> tail -> hull ->
-  engine, a head-on shot stops in
-  the engine, one diving over the nose can reach the fin, and one that passes
-  between the boxes misses. Bullets are never tested against the shooter's own
-  team, which is how friendly fire is prevented (`PlaneActor.apply_damage`
-  rejects it again as a backstop).
+- **Hits follow the bullet's path.** `PlaneHitboxes` is read from the model:
+  one or more boxes per piece (long pieces are measured in slices, and a
+  panel's box is cut short where its control surface begins), padded by 0.3 m
+  for bullets. The bullet's path, relative to the target's own motion, is
+  traced through them. The first box entered is the part that is hit, and the
+  bullet carries on with reduced energy into whatever lies behind. A path
+  between the boxes misses, and a part that has been shot off is no longer
+  there to hit. Bullets are never tested against the shooter's own team.
 - **Impact energy.** Damage scales with the square of the closing speed between
   bullet and target (clamped to 0.45x-1.5x), so head-on passes hit harder than
   tail chases and long-range hits are softer.
@@ -159,31 +189,20 @@ HUD (CanvasLayer)                         hud.gd
   no lead-prediction reticle, and `PlayerController.aim_assist_enabled` is off
   by default. `Ballistics.lead_point` solves the same model the bullets fly
   (inherited plane velocity, drag, drop) and is what the bots aim with.
-- **Match rules** (`MatchManager5v5`): ticket drain, every loss gives the other
-  team a point, first to 25 or the higher score after 3 minutes, 5 s respawn
-  above the team's base with 2.5 s spawn protection.
-- **Control surfaces.** Every plane has ailerons, elevators, a rudder and
-  flaps as separate hinged pieces of the model, and they move with the stick
-  (`PlaneActor.control_state` -> `PlaneVisual.set_controls`). The flaps are
-  working combat flaps: pull past 60% stick and they drop over about half a
-  second, tightening the turn by up to 18% and costing up to 12% of top speed.
-- **Damage is per part.** Besides the hull, a plane has an engine, two wings,
-  a tail, a rudder and two flaps, each with its own smaller health pool.
-  `apply_damage` always hurts the hull and, for a part hit, that part too.
-  What damage does:
-
-  | Part | As it takes damage | Destroyed |
-  | --- | --- | --- |
-  | Wing (with its aileron) | wider turns, drags and hangs toward that side, slow to turn away from it, sluggish stick, extra drag | spins in, breaks up within 2.6 s |
-  | Flap | less of the turn boost; with flaps down the plane pulls toward the damaged side | shot off the model; plane stays flyable |
-  | Tail (with its elevators) | weak pitch, sluggish stick, nose-heavy past half damage | almost no pitch control, dives |
-  | Rudder | weaker turns, the nose wanders from side to side | shot off the model; turns 40% weaker, plane stays flyable |
-  | Engine | lower top speed, slow to regain speed | on fire, glides, stalls unless it dives |
-
-  Whoever destroys a part is credited with the takedown however the plane then
-  dies. The Squad Repair Pulse patches damaged parts but not destroyed ones.
-  The HUD shows the player's parts on a small diagram under the commander panel
-  and names damaged parts under the current target.
+- **Planes can hit each other.** `MidairCollisions` tests nearby planes part
+  against part with the true-size boxes, so a wingtip can clip a tail and
+  nothing else is touched. Each part involved takes damage in proportion to
+  the closing speed (about one bullet's worth at 10 m/s), both planes are
+  shoved apart, and above 95 m/s a blow to the fuselage or engine destroys the
+  plane outright. Team-mates can collide too. Bots steer away from anything
+  they are about to hit.
+- **Match rules** (`MatchManager5v5`): ticket drain, every plane lost gives the
+  other team a point, first to 25 or the higher score after 3 minutes, 5 s
+  respawn above the team's base with 2.5 s spawn protection.
+- **HUD.** No health bars anywhere. The player has a diagram of their own
+  plane showing each part's state (missing parts are drawn as outlines), a
+  fuel readout once the tank is holed, and a message when a part is hit. The
+  current target shows its name, range and what is already wrong with it.
 - **Bots** are tuned to fly like people: they aim at where the target was a
   reaction time ago (so jinking throws them off), their aim wanders, they
   misjudge lead, their stick movement is rate-limited and they fire in bursts.
@@ -220,26 +239,29 @@ All tuning numbers (costs, XP, damage, turn rates) are first-pass values.
   screen or depth textures.
 - Lighting: warm `Sun` with shadows, cool unshadowed `RimLight` from the
   opposite side, sky ambient, light fog, mild glow, +20% saturation.
-- Planes, islands, the carrier and clouds are primitive meshes built in code
-  (`plane_visual.gd`, `arena_builder.gd`). `PlaneVisual` is the single place to
-  swap in authored models.
+- Islands, the carrier and clouds are primitive meshes built in code
+  (`arena_builder.gd`). Planes are the Blender model described below.
 
-## Authored plane model
+## The plane model
 
-`tools/blender/spitfire_stylized.py` is a Blender 4.x script that models a
-chunky Spitfire and exports `assets/models/spitfire_stylized.glb`:
+`tools/blender/spitfire_stylized.py` is a Blender 4.x script that models the
+plane and cuts it into the pieces the game breaks apart. It exports
+`assets/models/spitfire_stylized.glb`:
 
 ```
-blender --background --python tools/blender/spitfire_stylized.py -- assets/models/spitfire_stylized.glb
+blender --background --python tools/blender/spitfire_stylized.py -- assets/models/spitfire_stylized.glb hero=1
 ```
 
-The model faces -Z. `SpitfireBody/PropellerMesh` has its origin on the hub, so
-`rotate_z()` spins it. Surfaces are named `BodyPrimary`,
-`WingAccent_TeamColor`, `CanopyGlass`, `MetalDark` and `PropellerWood`;
-override `WingAccent_TeamColor` to repaint a team. It is **not wired into
-`PlaneVisual` yet**: the game still flies the primitive planes.
+`hero=1` is the lighter in-game level of detail (about 12,000 triangles in 19
+pieces); leave it off for the smoother close-up version. The model faces -Z.
+Hinged pieces have their local X axis along the hinge line (local Y for the
+rudder) with the origin on it. Surfaces are named `BodyPrimary`,
+`WingAccent_TeamColor`, `CanopyGlass`, `MetalDark`, `PropellerWood`,
+`PilotSkin` and `PilotLeather`; `PlaneVisual` swaps each for a toon material.
+Node names are what tie a piece to a `PlaneActor.Part` (`PlaneVisual.PART_NODES`),
+so a new model with the same node names drops straight in.
 
-Preview it with `res://tools/ModelPreview.tscn`.
+Preview it with `res://tools/ModelPreview.tscn` (`explode=1` pulls the pieces apart).
 
 ## Android test build
 
@@ -263,9 +285,10 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 | Test | What it checks |
 | --- | --- |
 | `TestProgression` | card tables, upgrade flow, Commander Level thresholds, slot rules, stat building, save/load, bullet drop and drag, lead solution checked against a simulated bullet |
-| `TestDamageModel` | bullet paths traced through the hit boxes (including flap-then-wing and rudder-only paths), live bullets with drop and drag (front shot reaching the tail, head-on stopping in the engine, pass-through from astern, near miss), hull vs part damage, each damaged part changes handling against an undamaged reference (wing, tail, engine, rudder, flap), flaps and rudder move on the model and vanish when shot off, destroyed wing/engine/tail bring the plane down and credit the attacker, repair |
+| `TestDamageModel` | every part has a hit box from the model; bullet paths through them; live bullets with drop, drag and pass-through; no health value exists; shot-off parts leave the model as debris and take their attachments; each kind of damage changes handling against an undamaged reference; the pilot keeps control; planes are only lost by hitting the surface, credited to whoever crippled them |
+| `TestCollisions` | box-overlap maths; a wingtip clip damages only the wingtips; a head-on destroys both; a pass three metres apart does nothing; team-mates can collide |
 | `TestPlayerFlow` | 1 player + 9 bots through Input actions: fire, roll, nitro, crash gives a ticket, 5 s respawn |
-| `TestMatchSim` (3 seeds) | full bots-only match: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, bots do not crash, bot accuracy stays in a human-like 2-30% band |
+| `TestMatchSim` (3 seeds) | full bots-only match: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, few uncaused losses, few collisions, bot accuracy stays in a human-like 2-25% band |
 | hangar / lobby | scenes load and the lobby hands over to the arena without script errors |
 
 These run headless, so they prove rules and wiring, not feel. Screens were also

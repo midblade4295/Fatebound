@@ -13,6 +13,10 @@ var _frame: int = 0
 var _fire: bool = false
 ## Hold the stick over (steer=left|right|up) for the last second before each shot.
 var _steer_action: StringName = &""
+## damage=1 shoots the right wingtip and the rudder off the player's plane
+## once the fast-forward ends, to show break-up and debris.
+var _damage_demo: bool = false
+var _scene: Node
 ## Frames at the start that run at `_warp_scale` x speed to reach the action.
 var _warp_frames: int = 0
 var _warp_scale: float = 6.0
@@ -40,18 +44,33 @@ func _ready() -> void:
 		elif argument.begins_with("steer="):
 			_steer_action = {"left": GameSession.ACTION_STEER_LEFT, "right": GameSession.ACTION_STEER_RIGHT,
 					"up": GameSession.ACTION_PITCH_UP}.get(argument.trim_prefix("steer="), &"")
+		elif argument.begins_with("damage="):
+			_damage_demo = argument.trim_prefix("damage=") == "1"
 		elif argument.begins_with("warp="):
 			_warp_frames = int(argument.trim_prefix("warp="))
 		elif argument.begins_with("spectate="):
 			GameSession.local_player_enabled = argument.trim_prefix("spectate=") != "1"
 	if _frames.is_empty():
 		_frames.append(120)
-	add_child((load(scene_path) as PackedScene).instantiate())
+	_scene = (load(scene_path) as PackedScene).instantiate()
+	add_child(_scene)
+
+
+func _apply_demo_damage() -> void:
+	var manager: MatchManager5v5 = _scene.get_node_or_null("MatchManager") as MatchManager5v5
+	if manager == null or manager.local_slot() == null:
+		return
+	var plane: PlaneActor = manager.local_slot().plane
+	for part: PlaneActor.Part in [PlaneActor.Part.RIGHT_WINGTIP, PlaneActor.Part.RUDDER]:
+		plane.apply_damage(100000.0, null, part)
+	plane.apply_damage(plane.stats.max_hp * PlaneActor.PART_STRENGTH[PlaneActor.Part.ENGINE] * 0.5, null, PlaneActor.Part.ENGINE)
 
 
 func _process(_delta: float) -> void:
 	_frame += 1
 	Engine.time_scale = _warp_scale if _frame <= _warp_frames else 1.0
+	if _damage_demo and _frame == _warp_frames + 2:
+		_apply_demo_damage()
 	if _fire:
 		Input.action_press(GameSession.ACTION_FIRE)
 	if _steer_action != &"" and _frame > _warp_frames:

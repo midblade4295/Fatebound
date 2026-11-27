@@ -41,7 +41,7 @@ anchor_bottom = 0
 offset_left = 28.0
 offset_top = 22.0
 offset_right = 508.0
-offset_bottom = 162.0
+offset_bottom = 138.0
 mouse_filter = 2
 
 [node name="Row" type="HBoxContainer" parent="Root/TopLeft"]
@@ -84,21 +84,15 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "SPD 300 km/h   ALT 250 m"
 
-[node name="HpBar" type="ProgressBar" parent="Root/TopLeft/Row/Info"]
-unique_name_in_owner = true
-layout_mode = 2
-mouse_filter = 2
-value = 100.0
-
 [node name="DamageDiagram" type="Control" parent="Root"]
 unique_name_in_owner = true
 script = ExtResource("6_damage")
 layout_mode = 1
 anchors_preset = -1
 offset_left = 28.0
-offset_top = 174.0
-offset_right = 178.0
-offset_bottom = 324.0
+offset_top = 150.0
+offset_right = 228.0
+offset_bottom = 350.0
 mouse_filter = 2
 
 [node name="ScoreBar" type="HBoxContainer" parent="Root"]

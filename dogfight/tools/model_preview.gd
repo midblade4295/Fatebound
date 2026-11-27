@@ -14,6 +14,9 @@ var _propeller: Node3D
 var _out: String = ""
 var _frame: int = 0
 var _view: int = 0
+## explode=1 pulls every piece away from its parent and deflects the hinged
+## surfaces, to show what is a separate part.
+var _explode: bool = false
 
 @onready var _camera: Camera3D = $Camera3D
 
@@ -25,10 +28,14 @@ func _ready() -> void:
 			model_path = argument.trim_prefix("model=")
 		elif argument.begins_with("out="):
 			_out = argument.trim_prefix("out=")
+		elif argument.begins_with("explode="):
+			_explode = argument.trim_prefix("explode=") == "1"
 	_model = (load(model_path) as PackedScene).instantiate() as Node3D
 	add_child(_model)
 	_propeller = _model.find_child("PropellerMesh", true, false) as Node3D
 	_report(_model, 0)
+	if _explode:
+		_explode_pieces(_model)
 	if _propeller != null:
 		var nose: Vector3 = _propeller.global_position
 		print("PropellerMesh pivot at ", nose, "  -> faces -Z: ", nose.z < -0.5 and absf(nose.x) < 0.01)
@@ -53,6 +60,24 @@ func _process(delta: float) -> void:
 		get_tree().quit()
 		return
 	_aim(VIEWS[_view])
+
+
+func _explode_pieces(node: Node) -> void:
+	for child: Node in node.get_children():
+		var piece: Node3D = child as Node3D
+		if piece == null:
+			continue
+		_explode_pieces(piece)
+		var parent: Node3D = piece.get_parent() as Node3D
+		if parent == null or parent == _model:
+			continue
+		var hinged: bool = piece.name.begins_with("Flap") or piece.name.begins_with("Aileron") or piece.name.begins_with("Elevator")
+		if hinged:
+			piece.basis = piece.basis * Basis(Vector3.RIGHT, deg_to_rad(30.0))
+		elif piece.name == "Rudder":
+			piece.basis = piece.basis * Basis(Vector3.UP, deg_to_rad(30.0))
+		elif piece.position.length() > 0.01:
+			piece.position += piece.position.normalized() * 0.7
 
 
 func _aim(eye: Vector3) -> void:

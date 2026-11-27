@@ -118,7 +118,11 @@ func _physics_process(delta: float) -> void:
 			if _player.alive:
 				var waited: float = _clock - _death_time
 				_check(absf(waited - GameSession.respawn_delay) < 0.1, "respawned after %.2fs (expected %.1f)" % [waited, GameSession.respawn_delay])
-				_check(is_equal_approx(_player.hp, _player.stats.max_hp), "respawned at full health")
+				var worst: float = 0.0
+				for part_index: int in range(PlaneActor.PART_COUNT):
+					worst = maxf(worst, _player.part_damage_of(part_index as PlaneActor.Part))
+				_check(is_zero_approx(worst) and is_equal_approx(_player.fuel, 1.0), "respawned with every part intact and a full tank")
+				_check(_player.visual.has_piece(PlaneActor.Part.LEFT_WING) and _player.visual.has_piece(PlaneActor.Part.RUDDER), "the model is whole again")
 				_check(_player.global_position.z > 1000.0, "respawned over the BLUE carrier")
 				_check(_player.has_flag(PlaneActor.FLAG_SHIELDED), "spawn protection is active")
 				_finish()

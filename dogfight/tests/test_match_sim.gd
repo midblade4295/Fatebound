@@ -26,7 +26,11 @@ var _finished: bool = false
 var _max_bullets: int = 0
 var _shots: int = 0
 var _bullet_hits: int = 0
-var _parts_destroyed: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0]
+var _parts_destroyed: Array[int] = []
+var _collisions: int = 0
+var _collision_speeds: Array[float] = []
+var _fall_times: Array[float] = []
+var _first_loss_time: Dictionary[int, float] = {}
 var _parts_damaged: int = 0
 
 
@@ -49,6 +53,9 @@ func _ready() -> void:
 	add_child(arena)
 	_manager = arena.get_node("MatchManager") as MatchManager5v5
 	_manager.match_ended.connect(_on_match_ended)
+	_parts_destroyed.resize(PlaneActor.PART_COUNT)
+	_parts_destroyed.fill(0)
+	_manager.midair_collisions.planes_collided.connect(_on_planes_collided)
 	_manager.bullet_system.bullet_hit.connect(func(_victim: PlaneActor, _shooter: PlaneActor, _at: Vector3) -> void: _bullet_hits += 1)
 	for plane: PlaneActor in _manager.get_planes():
 		plane.damaged.connect(_on_damaged)
@@ -85,15 +92,26 @@ func _on_damaged(victim: PlaneActor, _amount: float, attacker: PlaneActor) -> vo
 		_friendly_hits += 1
 
 
-func _on_part_state_changed(_plane: PlaneActor, part: PlaneActor.Part, state: PlaneActor.PartState) -> void:
+func _on_planes_collided(_first: PlaneActor, _second: PlaneActor, _first_part: int, _second_part: int, closing_speed: float) -> void:
+	_collisions += 1
+	_collision_speeds.append(closing_speed)
+
+
+func _on_part_state_changed(plane: PlaneActor, part: PlaneActor.Part, state: PlaneActor.PartState) -> void:
 	if state == PlaneActor.PartState.DESTROYED:
 		_parts_destroyed[part] += 1
+		# Remember when each plane first lost a part, to time how long it then flew.
+		if not _first_loss_time.has(plane.get_instance_id()):
+			_first_loss_time[plane.get_instance_id()] = _sim_time
 	elif state == PlaneActor.PartState.DAMAGED:
 		_parts_damaged += 1
 
 
 func _on_died(victim: PlaneActor, killer: PlaneActor) -> void:
 	_death_times[victim.get_instance_id()] = _sim_time
+	if _first_loss_time.has(victim.get_instance_id()):
+		_fall_times.append(_sim_time - _first_loss_time[victim.get_instance_id()])
+		_first_loss_time.erase(victim.get_instance_id())
 	if _manager.phase != MatchManager5v5.Phase.ACTIVE:
 		return
 	if killer != null:
@@ -145,21 +163,30 @@ func _report() -> void:
 	# One bullet can damage several parts, so accuracy counts bullets, not damage events.
 	var accuracy: float = float(_bullet_hits) / float(maxi(_shots, 1))
 	print("shots=%d bullet_hits=%d accuracy=%.1f%% hits_per_takedown=%.1f" % [_shots, _bullet_hits, accuracy * 100.0, float(_bullet_hits) / float(maxi(blue + red, 1))])
-	print("parts damaged=%d destroyed engine=%d wings=%d tail=%d rudder=%d flaps=%d" % [_parts_damaged,
-			_parts_destroyed[PlaneActor.Part.ENGINE],
-			_parts_destroyed[PlaneActor.Part.LEFT_WING] + _parts_destroyed[PlaneActor.Part.RIGHT_WING],
-			_parts_destroyed[PlaneActor.Part.TAIL], _parts_destroyed[PlaneActor.Part.RUDDER],
-			_parts_destroyed[PlaneActor.Part.LEFT_FLAP] + _parts_destroyed[PlaneActor.Part.RIGHT_FLAP]])
+	var lost: PackedStringArray = PackedStringArray()
+	for index: int in range(PlaneActor.PART_COUNT):
+		if _parts_destroyed[index] > 0:
+			lost.append("%s %d" % [PlaneActor.PART_NAMES[index], _parts_destroyed[index]])
+	print("parts damaged=%d destroyed: %s" % [_parts_damaged, ", ".join(lost)])
+	var average_fall: float = 0.0
+	for fall: float in _fall_times:
+		average_fall += fall / float(_fall_times.size())
+	var fastest_collision: float = 0.0
+	for collision_speed: float in _collision_speeds:
+		fastest_collision = maxf(fastest_collision, collision_speed)
+	print("collisions=%d (fastest %.0f m/s)  crippled planes flew on for %.1fs on average before going in" % [_collisions, fastest_collision, average_fall])
 	for slot: PilotSlot in _manager.get_roster():
 		print("  %-5s %-14s lvl%-2d skill %.2f  K %d  D %d  %s" % [Teams.name_of(slot.team), slot.display_name,
 				slot.commander_level, slot.bot_skill, slot.kills, slot.deaths, slot.plane.plane_data.display_name])
 
 	_check(_manager.phase == MatchManager5v5.Phase.FINISHED, "match is not in the FINISHED phase")
 	_check(blue + red == total_deaths, "score %d does not equal total deaths %d" % [blue + red, total_deaths])
-	_check(total_kills == _shot_kills, "credited kills %d != shot kills %d" % [total_kills, _shot_kills])
+	_check(total_kills == _shot_kills, "credited kills %d != credited deaths %d" % [total_kills, _shot_kills])
 	_check(blue + red >= 8, "too little combat: only %d takedowns" % (blue + red))
 	_check(_friendly_hits == 0, "%d friendly-fire hits got through" % _friendly_hits)
-	_check(_crashes <= maxi(floori(float(blue + red) / 3.0), 2), "bots crash too often: %d of %d losses" % [_crashes, blue + red])
+	# Every loss is now a crash; "uncredited" ones are those nobody caused.
+	_check(_crashes <= maxi(floori(float(blue + red) / 3.0), 2), "too many losses nobody caused: %d of %d" % [_crashes, blue + red])
+	_check(_collisions <= maxi(blue + red, 6), "bots collide too often: %d collisions" % _collisions)
 	_check(_respawns > 0, "nobody respawned")
 	var delay: float = GameSession.respawn_delay
 	_check(_min_respawn_gap >= delay - 0.05, "a respawn took %.2fs, less than the %.1fs delay" % [_min_respawn_gap, delay])

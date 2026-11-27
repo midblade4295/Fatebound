@@ -5,8 +5,9 @@ extends Node
 ## Rules (all read from GameSession so the lobby can change them):
 ##  - Two teams of five. Every seat is always filled; seats without a human
 ##    get a SquadAIController, so 1 player + 9 bots works out of the box.
-##  - Ticket drain: every plane lost gives the *other* team one point, whether
-##    it was shot down or flew into a cliff.
+##  - Ticket drain: every plane lost gives the *other* team one point. Planes
+##    have no health: one is lost when it hits the sea, the ground, a ship, or
+##    another aircraft too hard to survive. Whoever crippled it gets the credit.
 ##  - First team to the score limit wins, otherwise the higher score when the
 ##    clock runs out. Equal scores are a draw.
 ##  - A downed pilot respawns above their own carrier/airfield after a delay,
@@ -40,6 +41,7 @@ const BOT_NAMES: Array[String] = [
 @export var planes_root: Node3D
 @export var controllers_root: Node
 @export var bullet_system: BulletSystem
+@export var midair_collisions: MidairCollisions
 @export var blue_spawns: Node3D
 @export var red_spawns: Node3D
 @export var arena_center: Vector3 = Vector3.ZERO
@@ -232,6 +234,8 @@ func _spawn_plane(slot: PilotSlot) -> void:
 	slot.plane = plane
 	_planes.append(plane)
 	bullet_system.register_plane(plane)
+	if midair_collisions != null:
+		midair_collisions.register_plane(plane)
 	plane.died.connect(_on_plane_died)
 	plane.respawn(_spawn_transform(slot))
 	_attach_controller(slot)

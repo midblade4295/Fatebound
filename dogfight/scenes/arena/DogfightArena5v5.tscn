@@ -1,9 +1,10 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/match/dogfight_arena.gd" id="1_arena"]
 [ext_resource type="Environment" path="res://resources/env/arena_environment.tres" id="2_env"]
 [ext_resource type="Script" path="res://scripts/world/arena_builder.gd" id="3_world"]
 [ext_resource type="Script" path="res://scripts/combat/bullet_system.gd" id="4_bullets"]
+[ext_resource type="Script" path="res://scripts/combat/midair_collisions.gd" id="9_collisions"]
 [ext_resource type="Script" path="res://scripts/match/match_manager_5v5.gd" id="5_match"]
 [ext_resource type="PackedScene" path="res://scenes/actors/PlaneActor.tscn" id="6_plane"]
 [ext_resource type="PackedScene" path="res://scenes/camera/ChaseCamera.tscn" id="7_camera"]
@@ -86,14 +87,18 @@ spawn_path = NodePath("../Planes")
 [node name="BulletSystem" type="Node3D" parent="."]
 script = ExtResource("4_bullets")
 
+[node name="MidairCollisions" type="Node" parent="."]
+script = ExtResource("9_collisions")
+
 [node name="Controllers" type="Node" parent="."]
 
-[node name="MatchManager" type="Node" parent="." node_paths=PackedStringArray("planes_root", "controllers_root", "bullet_system", "blue_spawns", "red_spawns")]
+[node name="MatchManager" type="Node" parent="." node_paths=PackedStringArray("planes_root", "controllers_root", "bullet_system", "midair_collisions", "blue_spawns", "red_spawns")]
 script = ExtResource("5_match")
 plane_scene = ExtResource("6_plane")
 planes_root = NodePath("../Planes")
 controllers_root = NodePath("../Controllers")
 bullet_system = NodePath("../BulletSystem")
+midair_collisions = NodePath("../MidairCollisions")
 blue_spawns = NodePath("../SpawnPoints/Blue")
 red_spawns = NodePath("../SpawnPoints/Red")
 

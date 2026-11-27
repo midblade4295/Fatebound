@@ -37,6 +37,12 @@ const SEPARATION_WEIGHT: float = 1.4
 ## Closer than this to the target the bot breaks off instead of ramming it.
 const BREAK_OFF_RANGE: float = 55.0
 const BREAK_OFF_TIME: float = 1.3
+## In a fast closing pass, break away when this many seconds from the merge.
+const HEAD_ON_BREAK_TIME: float = 0.6
+## Any plane that will pass within this distance inside AVOID_LOOKAHEAD
+## seconds is dodged, friend or foe.
+const AVOID_MISS_DISTANCE: float = 14.0
+const AVOID_LOOKAHEAD: float = 0.8
 const MIN_SAFE_ALTITUDE: float = 70.0
 ## Seconds of look-ahead used for the "am I about to hit something" checks.
 const TERRAIN_LOOKAHEAD: float = 2.6
@@ -206,7 +212,10 @@ func _score_target(enemy: PlaneActor) -> float:
 	# Prefer enemies already in front of the nose: less turning, faster shots.
 	score += plane.forward().dot(offset / maxf(distance, 0.01)) * 260.0
 	# Finish off the wounded.
-	score += (1.0 - enemy.hp_ratio()) * 220.0
+	score += (1.0 - enemy.condition()) * 220.0
+	# A plane that is already on its way down is not worth the ammunition.
+	if enemy.is_going_down():
+		score -= 650.0
 	# Spread out: each team-mate already on this enemy makes it less attractive.
 	var others_on_it: int = blackboard.claim_count(enemy)
 	if enemy == target:
@@ -250,10 +259,10 @@ func _consider_gadget() -> void:
 					and Ballistics.angle_off_nose(plane.global_position, plane.forward(), target.global_position) < 0.5:
 				plane.input.press_gadget()
 		ComponentCard.GadgetType.REPAIR_PULSE:
-			if plane.hp_ratio() < 0.55:
+			if plane.condition() < 0.8:
 				plane.input.press_gadget()
 		ComponentCard.GadgetType.SMOKE_SCREEN:
-			if _threat_age < 1.0 and plane.hp_ratio() < 0.6:
+			if _threat_age < 1.0 and plane.condition() < 0.85:
 				plane.input.press_gadget()
 
 
@@ -264,6 +273,11 @@ func _consider_gadget() -> void:
 func _fly() -> void:
 	var input: PlaneInput = plane.input
 	input.firing = false
+	# Not flying into another aircraft comes before everything except the ground.
+	var hazard: PlaneActor = _imminent_collision()
+	if hazard != null and state != State.RECOVER:
+		_fly_avoid(input, hazard)
+		return
 	match state:
 		State.RECOVER:
 			_fly_recover(input)
@@ -284,6 +298,36 @@ func _fly_recover(input: PlaneInput) -> void:
 	input.steer = steer
 
 
+## The plane, if any, that this one will pass dangerously close to very soon
+## if both carry on as they are.
+func _imminent_collision() -> PlaneActor:
+	var my_position: Vector3 = plane.global_position
+	for other: PlaneActor in match_manager.get_planes():
+		if other == plane or not other.alive:
+			continue
+		var offset: Vector3 = other.global_position - my_position
+		var relative_velocity: Vector3 = other.velocity - plane.velocity
+		var closing_squared: float = relative_velocity.length_squared()
+		if closing_squared < 1.0:
+			continue
+		# Time at which the two are closest, on straight paths.
+		var time: float = -offset.dot(relative_velocity) / closing_squared
+		if time <= 0.0 or time > AVOID_LOOKAHEAD:
+			continue
+		if (offset + relative_velocity * time).length() < AVOID_MISS_DISTANCE:
+			return other
+	return null
+
+
+## Turn and pull away from [param hazard]: to whichever side and height it is not.
+func _fly_avoid(input: PlaneInput, hazard: PlaneActor) -> void:
+	var offset: Vector3 = hazard.global_position - plane.global_position
+	var right: Vector3 = Vector3(cos(plane.yaw), 0.0, -sin(plane.yaw))
+	var turn: float = -1.0 if offset.dot(right) > 0.0 else 1.0
+	var pull: float = -0.7 if offset.y > 0.0 else 0.7
+	input.steer = Vector2(turn, pull)
+
+
 func _fly_evade(input: PlaneInput) -> void:
 	# Break turn, climbing or diving toward open sky; roll if the attacker is
 	# close on our tail.
@@ -301,8 +345,11 @@ func _fly_engage(input: PlaneInput) -> void:
 	var my_position: Vector3 = plane.global_position
 	var distance: float = my_position.distance_to(target.global_position)
 
-	# Too close: peel away for a moment so we do not fly through the target.
-	if distance < BREAK_OFF_RANGE and _break_timer <= 0.0:
+	# Too close, or closing too fast to pull out later: peel away for a moment
+	# so we do not fly through the target.
+	var closing_speed: float = (plane.velocity - target.velocity).dot((target.global_position - my_position) / maxf(distance, 0.01))
+	var about_to_ram: bool = distance < BREAK_OFF_RANGE or (closing_speed > 60.0 and distance < closing_speed * HEAD_ON_BREAK_TIME)
+	if about_to_ram and _break_timer <= 0.0:
 		_break_timer = BREAK_OFF_TIME
 		_break_side = 1.0 if _rng.randf() > 0.5 else -1.0
 	if _break_timer > 0.0:
@@ -351,10 +398,8 @@ func _human_aim_point(my_position: Vector3, distance: float) -> Vector3:
 	var stress: float = 1.0
 	if _threat_age < 1.5:
 		stress += 0.7
-	var worst_control_damage: float = 0.0
-	for part: PlaneActor.Part in [PlaneActor.Part.LEFT_WING, PlaneActor.Part.RIGHT_WING, PlaneActor.Part.TAIL, PlaneActor.Part.RUDDER]:
-		worst_control_damage = maxf(worst_control_damage, plane.part_damage_of(part))
-	stress += 0.6 * worst_control_damage
+	# A plane with missing lift or surfaces is hard to hold steady.
+	stress += 0.6 * (1.0 - plane.condition())
 	var wander: Vector2 = Vector2(
 			0.65 * sin(_wobble_phase.x) + 0.35 * sin(_wobble_phase.x * 2.7 + 1.3),
 			0.65 * sin(_wobble_phase.y) + 0.35 * sin(_wobble_phase.y * 2.3 + 0.4))
@@ -502,7 +547,7 @@ func _on_plane_damaged(_victim: PlaneActor, _amount: float, attacker: PlaneActor
 	# Only break when the attacker is behind us; if it is in front we would
 	# rather keep our guns on it. Better pilots react more often.
 	var attacker_behind: bool = plane.forward().dot(attacker.global_position - plane.global_position) < 0.0
-	if attacker_behind and _rng.randf() < lerpf(0.25, 0.7, skill) * (1.5 - plane.hp_ratio()):
+	if attacker_behind and _rng.randf() < lerpf(0.25, 0.7, skill) * (1.5 - plane.condition()):
 		_evade_timer = _rng.randf_range(1.4, 2.6)
 		_evade_side = 1.0 if _rng.randf() > 0.5 else -1.0
 

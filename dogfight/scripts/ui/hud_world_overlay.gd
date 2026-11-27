@@ -22,7 +22,11 @@ const LEAD_COLOR: Color = Color(1.0, 0.84, 0.25)
 const HIT_MARKER_TIME: float = 0.14
 const DAMAGE_FLASH_TIME: float = 0.35
 ## Short labels for damaged parts under the current target, indexed by PlaneActor.Part.
-const PART_TAGS: Array[String] = ["", "ENGINE", "L WING", "R WING", "TAIL", "RUDDER", "L FLAP", "R FLAP"]
+const PART_TAGS: Array[String] = [
+	"FUEL", "ENGINE", "L WING", "R WING", "L TIP", "R TIP", "TAIL", "FIN", "RUDDER",
+	"L FLAP", "R FLAP", "L AIL", "R AIL", "L ELEV", "R ELEV",
+]
+const MAX_TARGET_TAGS: int = 4
 
 var camera: Camera3D
 var match_manager: MatchManager5v5
@@ -100,20 +104,25 @@ func _draw_enemy_marker(plane: PlaneActor, at: Vector2, distance: float, is_targ
 	draw_polyline(diamond, ENEMY_COLOR, 4.0 if is_target else 3.0, true)
 	if not is_target:
 		return
-	# The current target also gets a health bar, name and range.
-	var bar_width: float = 76.0
-	var bar_origin: Vector2 = at + Vector2(-bar_width * 0.5, -half - 20.0)
-	draw_rect(Rect2(bar_origin - Vector2(3.0, 3.0), Vector2(bar_width + 6.0, 14.0)), UiStyle.OUTLINE)
-	draw_rect(Rect2(bar_origin, Vector2(bar_width * plane.hp_ratio(), 8.0)), ENEMY_COLOR)
+	# The current target also gets its name and range, and a list of what is
+	# already wrong with it. There is no health bar because there is no health.
 	UiStyle.draw_outlined_text(self, "%s  %dm" % [plane.pilot_name, roundi(distance)],
-			at + Vector2(-150.0, -half - 30.0), 20, UiStyle.WHITE, 300.0, 5)
-	# Which of the target's parts are already hurt (shoot there to finish it).
+			at + Vector2(-150.0, -half - 14.0), 20, UiStyle.WHITE, 300.0, 5)
 	var hurt: PackedStringArray = PackedStringArray()
-	for part: PlaneActor.Part in PlaneActor.DAMAGEABLE_PARTS:
+	if plane.is_going_down():
+		hurt.append("GOING DOWN")
+	for index: int in range(PlaneActor.PART_COUNT):
+		if hurt.size() >= MAX_TARGET_TAGS:
+			break
+		var part: PlaneActor.Part = index as PlaneActor.Part
+		# A part that left with its parent is not listed again.
+		var parent: int = PlaneActor.PART_PARENT[index]
+		if parent >= 0 and plane.is_part_gone(parent as PlaneActor.Part):
+			continue
 		if plane.part_state(part) != PlaneActor.PartState.OK:
-			hurt.append(PART_TAGS[part])
+			hurt.append(PART_TAGS[index] + (" OFF" if plane.is_part_gone(part) else ""))
 	if not hurt.is_empty():
-		UiStyle.draw_outlined_text(self, "  ".join(hurt), at + Vector2(-150.0, half + 26.0), 18, LEAD_COLOR, 300.0, 5)
+		UiStyle.draw_outlined_text(self, "  ".join(hurt), at + Vector2(-200.0, half + 26.0), 18, LEAD_COLOR, 400.0, 5)
 
 
 func _draw_ally_marker(at: Vector2, distance: float) -> void:
