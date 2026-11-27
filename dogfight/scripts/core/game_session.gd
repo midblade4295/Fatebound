@@ -37,6 +37,7 @@ var match_seed: int = 0
 
 func _ready() -> void:
 	_register_default_actions()
+	_protect_master_bus()
 
 
 func goto_hangar() -> void:
@@ -49,6 +50,20 @@ func goto_lobby() -> void:
 
 func goto_arena() -> void:
 	get_tree().change_scene_to_file(SCENE_ARENA)
+
+
+## Ten engines, forty guns and an explosion can add up to far more than full
+## scale. A limiter on the master bus turns that into "loud" instead of
+## crackling distortion.
+func _protect_master_bus() -> void:
+	var master: int = AudioServer.get_bus_index(&"Master")
+	if master < 0 or AudioServer.get_bus_effect_count(master) > 0:
+		return
+	if ClassDB.class_exists(&"AudioEffectHardLimiter"):
+		var limiter: AudioEffect = ClassDB.instantiate(&"AudioEffectHardLimiter") as AudioEffect
+		limiter.set(&"ceiling_db", -1.0)
+		limiter.set(&"pre_gain_db", -3.0)
+		AudioServer.add_bus_effect(master, limiter)
 
 
 func _register_default_actions() -> void:

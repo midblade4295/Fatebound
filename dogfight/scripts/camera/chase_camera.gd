@@ -81,6 +81,9 @@ func _ready() -> void:
 	_arm.collision_mask = PlaneActor.COLLISION_LAYER_WORLD
 	camera.fov = base_fov
 	camera.current = true
+	# The camera is the ears. Tracking its velocity lets planes that pass it
+	# drop in pitch as they go by.
+	camera.doppler_tracking = Camera3D.DOPPLER_TRACKING_IDLE_STEP
 
 
 ## Starts following [param plane] and hooks its fire/hit events up to the shake.

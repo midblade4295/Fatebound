@@ -251,6 +251,9 @@ var _gone_mask: int = 0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _rng_seeded: bool = false
 
+## This plane's engine, guns and break-up sounds.
+var audio: PlaneAudio
+
 @onready var input: PlaneInput = $PlaneInput
 @onready var visual: PlaneVisual = $VisualRoot
 @onready var _collision_shape: CollisionShape3D = $CollisionShape3D
@@ -297,6 +300,10 @@ func _ready() -> void:
 		_muzzles[index].position = offsets[index]
 	input.set_multiplayer_authority(owner_peer_id)
 	_read_angles_from_transform()
+	audio = PlaneAudio.new()
+	audio.name = "Audio"
+	add_child(audio)
+	audio.setup(self)
 
 
 func _physics_process(delta: float) -> void:

@@ -1,9 +1,16 @@
-[gd_resource type="Resource" script_class="PlaneData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="PlaneData" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/data/plane_data.gd" id="1_plane"]
+[ext_resource type="AudioStream" path="res://assets/audio/engine_mustang.wav" id="2_engine"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_fifty_1.wav" id="3_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_fifty_2.wav" id="4_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_fifty_3.wav" id="5_gun"]
 
 [resource]
 script = ExtResource("1_plane")
+engine_sound = ExtResource("2_engine")
+gun_sounds = Array[AudioStream]([ExtResource("3_gun"), ExtResource("4_gun"), ExtResource("5_gun")])
+gun_pitch = 1.0
 id = &"mustang"
 display_name = "P-51 Mustang"
 description = "Fast, tough and long-legged. Dives on a fight and leaves when it likes."

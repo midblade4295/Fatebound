@@ -28,6 +28,9 @@ extends Node3D
 ## cosmetic tracers from PlaneActor.shot_fired.
 
 signal bullet_hit(victim: PlaneActor, shooter: PlaneActor, world_position: Vector3)
+## A bullet that was not fired by `listener` passed close to it without
+## hitting. [param world_position] is where it was nearest. Sound only.
+signal bullet_whizzed(world_position: Vector3)
 
 const MAX_BULLETS: int = 512
 const TRACER_LENGTH: float = 9.0
@@ -38,6 +41,8 @@ const TRACER_COLORS: Array[Color] = [Color(0.75, 0.92, 1.0), Color(1.0, 0.84, 0.
 ## Limits on the impact-energy damage multiplier (closing speed squared).
 const MIN_IMPACT_ENERGY: float = 0.45
 const MAX_IMPACT_ENERGY: float = 1.5
+## A bullet passing within this many metres of the listener is heard going by.
+const WHIZ_RADIUS: float = 16.0
 
 var _positions: PackedVector3Array = PackedVector3Array()
 var _velocities: PackedVector3Array = PackedVector3Array()
@@ -48,7 +53,12 @@ var _burn_dps: PackedFloat32Array = PackedFloat32Array()
 var _burn_durations: PackedFloat32Array = PackedFloat32Array()
 var _shooters: Array[PlaneActor] = []
 var _teams: PackedInt32Array = PackedInt32Array()
+## 1 once a bullet has already been heard going past, so it is heard once.
+var _whizzed: PackedByteArray = PackedByteArray()
 var _count: int = 0
+
+## The plane whose pilot hears near misses (the local player), or null.
+var listener: PlaneActor
 
 var _planes: Array[PlaneActor] = []
 var _multimesh: MultiMesh
@@ -71,6 +81,7 @@ func _ready() -> void:
 	_burn_dps.resize(MAX_BULLETS)
 	_burn_durations.resize(MAX_BULLETS)
 	_teams.resize(MAX_BULLETS)
+	_whizzed.resize(MAX_BULLETS)
 	_shooters.resize(MAX_BULLETS)
 	# Planes are handled by the box trace, so the physics ray only sees the world.
 	_query.collision_mask = PlaneActor.COLLISION_LAYER_WORLD
@@ -114,6 +125,7 @@ func spawn(origin: Vector3, bullet_velocity: Vector3, shooter: PlaneActor, lifet
 	_burn_durations[index] = burn_duration
 	_shooters[index] = shooter
 	_teams[index] = shooter.team
+	_whizzed[index] = 0
 	_count += 1
 
 
@@ -203,11 +215,34 @@ func _step_bullets(delta: float) -> void:
 			_show_spark(world_position)
 			_remove(index)
 		else:
+			if listener != null and _whizzed[index] == 0:
+				_check_whiz(index, from, velocity, delta)
 			_positions[index] = to
 			_lifetimes[index] -= delta
 			if _lifetimes[index] <= 0.0:
 				_remove(index)
 		index -= 1
+
+
+## Reports a bullet that is passing close to the listener this tick. It only
+## counts at the moment of closest approach (the bullet is beside the plane,
+## not still coming or already gone), and only for other people's bullets.
+func _check_whiz(index: int, from: Vector3, velocity: Vector3, delta: float) -> void:
+	if not is_instance_valid(listener) or not listener.alive or _shooters[index] == listener:
+		return
+	var relative_step: Vector3 = (velocity - listener.velocity) * delta
+	var step_length: float = relative_step.length()
+	if step_length < 0.0001:
+		return
+	var direction: Vector3 = relative_step / step_length
+	var to_listener: Vector3 = listener.global_position - from
+	var along: float = to_listener.dot(direction)
+	if along < 0.0 or along > step_length:
+		return  # Nearest point is not within this tick's travel.
+	var nearest: Vector3 = from + direction * along
+	if nearest.distance_squared_to(listener.global_position) <= WHIZ_RADIUS * WHIZ_RADIUS:
+		_whizzed[index] = 1
+		bullet_whizzed.emit(nearest)
 
 
 func _remove(index: int) -> void:
@@ -222,6 +257,7 @@ func _remove(index: int) -> void:
 		_burn_durations[index] = _burn_durations[last]
 		_shooters[index] = _shooters[last]
 		_teams[index] = _teams[last]
+		_whizzed[index] = _whizzed[last]
 	_shooters[last] = null
 	_count = last
 

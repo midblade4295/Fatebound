@@ -1,9 +1,16 @@
-[gd_resource type="Resource" script_class="PlaneData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="PlaneData" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/data/plane_data.gd" id="1_plane"]
+[ext_resource type="AudioStream" path="res://assets/audio/engine_hurricane.wav" id="2_engine"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_browning_1.wav" id="3_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_browning_2.wav" id="4_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_browning_3.wav" id="5_gun"]
 
 [resource]
 script = ExtResource("1_plane")
+engine_sound = ExtResource("2_engine")
+gun_sounds = Array[AudioStream]([ExtResource("3_gun"), ExtResource("4_gun"), ExtResource("5_gun")])
+gun_pitch = 1.0
 id = &"hurricane"
 display_name = "Hurricane"
 description = "Sturdy, forgiving and always available. The squadron workhorse."

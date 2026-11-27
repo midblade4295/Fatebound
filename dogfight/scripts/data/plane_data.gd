@@ -29,6 +29,15 @@ extends Resource
 @export var gun_range: float = 480.0
 @export var gun_spread_deg: float = 0.6
 
+@export_group("Sound")
+## Seamless loop of this aircraft's engine at cruise power.
+@export var engine_sound: AudioStream
+## One-shot samples for a single round from this aircraft's guns. One is
+## picked at random for every round fired.
+@export var gun_sounds: Array[AudioStream] = []
+## Pitch the gun samples are played at (1.0 = as recorded).
+@export_range(0.5, 2.0, 0.01) var gun_pitch: float = 1.0
+
 @export_group("Visuals")
 @export var body_color: Color = Color("6f8f5a")
 @export var camo_color: Color = Color("8a6f4a")

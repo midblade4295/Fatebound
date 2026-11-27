@@ -1,10 +1,11 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/match/dogfight_arena.gd" id="1_arena"]
 [ext_resource type="Environment" path="res://resources/env/arena_environment.tres" id="2_env"]
 [ext_resource type="Script" path="res://scripts/world/arena_builder.gd" id="3_world"]
 [ext_resource type="Script" path="res://scripts/combat/bullet_system.gd" id="4_bullets"]
 [ext_resource type="Script" path="res://scripts/combat/midair_collisions.gd" id="9_collisions"]
+[ext_resource type="Script" path="res://scripts/audio/battle_audio.gd" id="10_audio"]
 [ext_resource type="Script" path="res://scripts/match/match_manager_5v5.gd" id="5_match"]
 [ext_resource type="PackedScene" path="res://scenes/actors/PlaneActor.tscn" id="6_plane"]
 [ext_resource type="PackedScene" path="res://scenes/camera/ChaseCamera.tscn" id="7_camera"]
@@ -101,6 +102,9 @@ bullet_system = NodePath("../BulletSystem")
 midair_collisions = NodePath("../MidairCollisions")
 blue_spawns = NodePath("../SpawnPoints/Blue")
 red_spawns = NodePath("../SpawnPoints/Red")
+
+[node name="BattleAudio" type="Node" parent="."]
+script = ExtResource("10_audio")
 
 [node name="ChaseCamera" parent="." instance=ExtResource("7_camera")]
 

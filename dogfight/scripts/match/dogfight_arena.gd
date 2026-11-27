@@ -13,6 +13,7 @@ var _spectate_index: int = 0
 @onready var match_manager: MatchManager5v5 = $MatchManager
 @onready var chase_camera: ChaseCamera = $ChaseCamera
 @onready var hud: Hud = $HUD
+@onready var battle_audio: BattleAudio = $BattleAudio
 
 
 func _ready() -> void:
@@ -25,6 +26,10 @@ func _ready() -> void:
 		follow = planes[0]
 	chase_camera.set_target(follow)
 	hud.bind(match_manager, chase_camera, local_plane)
+	battle_audio.bind(match_manager, local_plane)
+	if local_plane != null:
+		# The player's own engine and guns are heard from the cockpit.
+		local_plane.audio.cockpit = true
 
 
 func _process(delta: float) -> void:
