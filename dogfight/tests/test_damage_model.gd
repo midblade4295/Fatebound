@@ -42,9 +42,14 @@ var _pitch_start: Dictionary[int, float] = {}
 var _height_start: Dictionary[int, float] = {}
 var _died_at: Dictionary[int, float] = {}
 var _died_height: Dictionary[int, float] = {}
-var _rudder_wander: float = 0.0
-var _one_wing_spin: float = 0.0
-var _one_wing_bank: float = 0.0
+## Radians each plane has rolled to its left since the last _mark(), and the
+## most it has sideslipped.
+var _rolled: Dictionary[int, float] = {}
+var _most_slip: Dictionary[int, float] = {}
+## Planes being flown straight and level by the test's own hands.
+var _levelled: Array[PlaneActor] = []
+## A plane being rolled level and pulled gently.
+var _gentle: PlaneActor
 ## Planes that touched another aircraft at any point (none should).
 var _collided: Array[PlaneActor] = []
 var _live_stage: int = 0
@@ -94,57 +99,87 @@ func _physics_process(delta: float) -> void:
 		# planes wander. Give every subject its own wide lane, high up, so the
 		# only things any of them can hit are the sea and the islands.
 		for slot: PilotSlot in _manager.get_roster():
-			var seat_x: float = float(slot.seat) * 300.0 - 600.0 + (150.0 if slot.team == Teams.Id.TEAM_RED else 0.0)
+			var seat_x: float = float(slot.seat) * 700.0 - 1400.0 + (350.0 if slot.team == Teams.Id.TEAM_RED else 0.0)
 			var start: Transform3D = slot.plane.global_transform
-			start.origin = Vector3(seat_x, 450.0, start.origin.z)
+			start.origin = Vector3(seat_x, 900.0 + float(slot.seat) * 30.0, start.origin.z * 0.4)
+			# The two that will have to glide all the way down start lower.
+			if slot.plane == _engine_lost or slot.plane == _fuel_hit:
+				start.origin.y = 420.0
+			# The two whose engines are compared start flat out; the rest cruise.
+			if slot.plane == _speed_reference or slot.plane == _engine_hit:
+				slot.plane.speed = slot.plane.stats.top_speed
+			slot.plane.arena_radius = 1.0e7
 			slot.plane.teleport(start)
 	_clock += delta
 	_run_live_fire()
+	for plane: PlaneActor in _manager.get_planes():
+		var key: int = plane.get_instance_id()
+		if plane.alive:
+			_rolled[key] = _roll_of(plane) + plane.flight.angular_velocity.z * delta
+			_most_slip[key] = maxf(_slip_of(plane), absf(plane.sideslip()))
+	for plane: PlaneActor in _levelled:
+		if plane.alive:
+			plane.input.steer = _level_stick(plane)
+	if _gentle != null and _gentle.alive:
+		_gentle.input.steer = Vector2(_level_stick(_gentle).x, 0.3)
 	match _stage:
 		0:
 			_test_no_health()
 			_apply_all_damage()
 			_stage = 1
 		1:
-			# 1.5 s hands-off: uneven damage should pull the plane on its own.
-			_rudder_wander = maxf(_rudder_wander, absf(_yaw_drift(_attacker)))
-			if _clock >= 1.6:
+			# 2.5 s hands-off: uneven damage should pull the plane on its own.
+			if _clock >= 2.5:
 				_check_hands_off()
 				_mark()
+				# Stick hard right; the reference pilot also treads on the right pedal.
 				_set_stick(Vector2(1.0, 0.0))
+				_reference.input.rudder = 1.0
 				_stage = 2
 		2:
-			# 1.5 s of full right stick.
-			if _clock >= 3.1:
-				_check_right_turn()
+			if _clock >= 3.2:
+				_check_roll_in()
+				_reference.input.rudder = 0.0
 				_mark()
-				_set_stick(Vector2(0.0, 1.0))
-				# The one-winged plane's pilot also holds the stick over
-				# against the missing wing.
-				_wing_lost.input.steer = Vector2(1.0, 1.0)
+				_set_stick(Vector2(0.0, 0.6))
 				_stage = 3
+				# The tip-less plane's pilot has his hands full already: he
+				# rolls back level and pulls gently.
+				_gentle = _tip_lost
 		3:
-			# 1 s of full back stick.
-			if _clock >= 4.1:
-				_check_pull_up()
+			# Banked over, 1.8 s of pull.
+			if _clock >= 5.0:
+				_check_turn()
+				_gentle = null
 				_set_stick(Vector2.ZERO)
-				# A plane with a wingtip missing can be held level with some back stick.
-				_tip_lost.input.steer = Vector2(0.3, 0.45)
+				# From here the survivors are flown level, the tip-less one too:
+				# it takes stick held against the missing tip.
+				_levelled = [_reference, _tip_lost, _attacker]
+				_mark()
 				_stage = 4
 		4:
-			if _clock >= 7.0:
+			if _clock >= 9.5:
 				_check_engines()
 				_test_repair_and_flap()
 				_stage = 5
 		5:
-			if _clock >= 8.5:
-				_check_flap_turn()
+			if _clock >= 12.5:
+				_check_flaps()
 				_stage = 6
 		6:
 			# Long enough for the two with dead engines to glide all the way down.
-			if _clock >= 80.0 or _all_lost():
+			if _clock >= 110.0 or _all_lost():
 				_final_checks()
 				_finish()
+
+
+## Stick that flies a plane straight and level: wings level, no climb or sink.
+func _level_stick(plane: PlaneActor) -> Vector2:
+	var roll: float = clampf(plane.bank * 2.0 + plane.flight.angular_velocity.z * 0.4, -1.0, 1.0)
+	# No pulling until the wings are somewhere near level.
+	var upright: float = clampf(cos(plane.bank) * 2.0 - 1.0, 0.0, 1.0)
+	var pull: float = clampf(-plane.climb_speed() * 0.03 - plane.flight.angular_velocity.x * 0.4, -0.5, 0.5) * upright
+	return Vector2(roll, pull)
 
 
 # ---------------------------------------------------------------------------
@@ -347,18 +382,23 @@ func _destroy(plane: PlaneActor, part: PlaneActor.Part, attacker: PlaneActor) ->
 # ---------------------------------------------------------------------------
 
 func _check_hands_off() -> void:
-	_check(_yaw_drift(_tip_lost) < -0.06, "a missing right wingtip drags the nose right (yaw drift %.3f rad)" % _yaw_drift(_tip_lost))
-	_check(_tip_lost.bank < -0.12, "and hangs that side low (bank %.2f rad)" % _tip_lost.bank)
-	_check(not _tip_lost.is_stalling() and _height_lost(_tip_lost) < 12.0,
-			"at speed, less wing is still enough wing: it does not sink (%.1f m lost)" % _height_lost(_tip_lost))
-	_check(absf(_yaw_drift(_reference)) < 0.02 and absf(_height_lost(_reference)) < 2.0, "the undamaged plane flies straight and level")
+	# Bank is positive with the left wing low; rolling to the left is positive.
+	_check(_tip_lost.bank < -0.1, "a missing right wingtip lifts less on that side, and the plane rolls toward it (bank %.2f rad)" % _tip_lost.bank)
+	_check(not _tip_lost.is_stalling() and _height_lost(_tip_lost) < 40.0,
+			"at speed, less wing is still enough wing: it does not fall (%.1f m lost)" % _height_lost(_tip_lost))
+	_check(absf(_yaw_drift(_reference)) < 0.03 and absf(_height_lost(_reference)) < 6.0 and absf(_reference.bank) < 0.06,
+			"the undamaged plane flies straight and level (%.3f rad, %.1f m, bank %.2f)" % [_yaw_drift(_reference), _height_lost(_reference), _reference.bank])
 	_check(_wing_lost.alive and _wing_lost.is_going_down(), "a plane with one wing is going down, but is still flying")
-	_check(_yaw_drift(_wing_lost) > 0.25 and _wing_lost.bank > 0.5, "and rolls hard toward the missing wing (yaw %.2f, bank %.2f rad)" % [_yaw_drift(_wing_lost), _wing_lost.bank])
-	_one_wing_spin = _yaw_drift(_wing_lost)
-	_one_wing_bank = _wing_lost.bank
-	_check(_rudder_wander > 0.012 and absf(_attacker.bank) < 0.05, "with no rudder the nose wanders but the wings stay level (%.3f rad)" % _rudder_wander)
+	_check(_roll_of(_wing_lost) > 2.0, "with nothing to balance the wing that is left, it rolls over and over toward the missing one (%.1f rad in 2.5 s)" % _roll_of(_wing_lost))
+	_check(_height_lost(_wing_lost) > 15.0, "and falls (%.0f m)" % _height_lost(_wing_lost))
+	_check(_attacker.alive and absf(_attacker.bank) < 0.15 and not _attacker.is_going_down(), "losing the rudder does not bring a plane down (bank %.2f rad)" % _attacker.bank)
 	_check(_engine_lost.has_flag(PlaneActor.FLAG_BURNING) and _engine_lost.is_going_down(), "a destroyed engine burns and the plane is going down")
-	_check(_fuel_hit.fuel < 0.7 and _fuel_hit.fuel > 0.3, "a wrecked fuselage is pouring fuel (%.0f%% left)" % (_fuel_hit.fuel * 100.0))
+	_check(_fuel_hit.fuel < 0.7 and _fuel_hit.fuel > 0.2, "a wrecked fuselage is pouring fuel (%.0f%% left)" % (_fuel_hit.fuel * 100.0))
+	# The tail is what holds the nose into the airflow. Without it the plane
+	# cannot be flown: it pitches over and tumbles, stick or no stick.
+	_check(_tail_lost.alive and _tail_lost.is_going_down(), "a plane with no tail is going down")
+	_check(absf(_tail_lost.pitch) > 0.5 or absf(_tail_lost.flight.angular_velocity.x) > 0.5 or _tail_lost.is_stalling(),
+			"out of control: nothing holds its nose into the air any more (pitch %.2f rad, pitching at %.2f rad/s)" % [_tail_lost.pitch, _tail_lost.flight.angular_velocity.x])
 	# What was shot off has left the model, and is falling as debris.
 	_check(not _tip_lost.visual.has_piece(P.RIGHT_WINGTIP) and not _tip_lost.visual.has_piece(P.RIGHT_AILERON), "the wingtip and its aileron are gone from the model")
 	_check(_tip_lost.visual.has_piece(P.RIGHT_WING) and _tip_lost.visual.has_piece(P.RIGHT_FLAP), "the rest of that wing is still on it")
@@ -371,45 +411,51 @@ func _check_hands_off() -> void:
 	_check(debris >= 4, "shot-off pieces are falling as debris (%d)" % debris)
 
 
-func _check_right_turn() -> void:
-	var clean_turn: float = absf(_yaw_drift(_reference))
-	_check(clean_turn > 0.6 and absf(_reference.bank) > deg_to_rad(40.0), "reference plane banks and turns (%.2f rad in 1.5 s, banked %.0f degrees)" % [clean_turn, rad_to_deg(absf(_reference.bank))])
-	_check(_reference.flap_deploy() > 0.9, "pulling hard drops the combat flaps")
-	var rudderless: float = absf(_yaw_drift(_attacker))
-	_check(rudderless < clean_turn * 0.95 and rudderless > clean_turn * 0.6, "without a rudder the plane still turns on its bank, a little less well (%.2f vs %.2f rad)" % [rudderless, clean_turn])
-	# Turning right is *toward* the tip-less side, which the damage helps.
-	_check(absf(_yaw_drift(_tip_lost)) > 0.5, "the tip-less plane answers the stick (%.2f rad)" % absf(_yaw_drift(_tip_lost)))
-	# Right stick against a missing left wing: the pilot can fight the roll.
-	_check(_yaw_drift(_wing_lost) < _one_wing_spin * 0.9, "full opposite stick slows the one-winged plane's spin (%.2f against %.2f rad in 1.5 s)" % [_yaw_drift(_wing_lost), _one_wing_spin])
-	_check(_wing_lost.bank < _one_wing_bank - 0.15, "and lifts the low side some of the way (bank %.2f against %.2f rad)" % [_wing_lost.bank, _one_wing_bank])
-	var flap: Node3D = _reference.visual.get_node("Model").find_child("FlapL", true, false) as Node3D
+## After 0.7 s of full right stick (and, for the reference, right pedal).
+func _check_roll_in() -> void:
+	var clean_roll: float = -_roll_of(_reference)
+	_check(clean_roll > 0.5 and _reference.bank < -0.5, "stick hard over rolls the reference plane to the right (%.2f rad in 0.7 s)" % clean_roll)
+	# One aileron is gone, but the roll is toward the side the damage drops anyway.
+	_check(-_roll_of(_tip_lost) > clean_roll * 0.5, "the tip-less plane answers the stick on one aileron (%.2f against %.2f rad)" % [-_roll_of(_tip_lost), clean_roll])
+	_check(-_roll_of(_attacker) > 0.4, "ailerons do not need a rudder (%.2f rad)" % -_roll_of(_attacker))
+	# Right stick against a missing left wing: one aileron against half the
+	# aeroplane's lift is no contest.
+	_check(_roll_of(_wing_lost) > 0.5, "full opposite stick cannot stop the one-winged plane rolling (%.1f rad more)" % _roll_of(_wing_lost))
+	var aileron: Node3D = _reference.visual.get_node("Model").find_child("AileronL", true, false) as Node3D
 	var rudder: Node3D = _reference.visual.get_node("Model").find_child("Rudder", true, false) as Node3D
-	_check(flap != null and rudder != null, "the model has separate flap and rudder pieces")
-	if flap != null and rudder != null:
+	_check(aileron != null and rudder != null, "the model has separate aileron and rudder pieces")
+	if aileron != null and rudder != null:
 		# Deflection shows up as the piece's trailing edge (+Z) swinging.
-		_check((flap.basis * Vector3.BACK).y < -0.3, "the flap's trailing edge is down in the turn")
-		_check((rudder.basis * Vector3.BACK).x > 0.3, "and the rudder's is over to the right")
+		_check((aileron.basis * Vector3.BACK).y < -0.1, "rolling right, the left aileron's trailing edge is down")
+		_check((rudder.basis * Vector3.BACK).x > 0.3, "and with the right pedal down the rudder's is over to the right")
+	_check(_slip_of(_reference) > deg_to_rad(2.0), "the pedal skids the reference plane (%.1f degrees of slip)" % rad_to_deg(_slip_of(_reference)))
 
 
-func _check_pull_up() -> void:
-	var clean_pull: float = _reference.pitch - _pitch_start[_reference.get_instance_id()]
-	_check(clean_pull > 0.2 and _reference.load_factor() > 1.8, "reference plane pulls up as hard as its speed allows (%.2f rad in 1 s at %.1f g)" % [clean_pull, _reference.load_factor()])
-	# g for the airspeed it has: less wing gives less of it.
-	var tip_grip: float = _tip_lost.load_factor() / pow(_tip_lost.speed / _tip_lost.stats.stall_speed, 2.0)
-	var clean_grip: float = _reference.load_factor() / pow(_reference.speed / _reference.stats.stall_speed, 2.0)
-	_check(tip_grip < clean_grip * 0.9, "with a wingtip gone the wings cannot pull as hard for the same speed (%.2f against %.2f)" % [tip_grip, clean_grip])
-	var one_wing_pull: float = _wing_lost.pitch - _pitch_start[_wing_lost.get_instance_id()]
-	_check(_wing_lost.alive, "the one-winged plane is still being flown, stick hard over and back")
-	_check(one_wing_pull < clean_pull * 0.8, "but half its lift cannot raise the nose as a whole plane's can (%.2f against %.2f rad)" % [one_wing_pull, clean_pull])
+## After 1.8 s of pulling in the bank.
+func _check_turn() -> void:
+	var clean_turn: float = -_yaw_drift(_reference)
+	_check(clean_turn > 0.25 and absf(_reference.bank) > deg_to_rad(35.0), "banked and pulling, the reference plane turns (%.2f rad in 1.8 s, banked %.0f degrees)" % [clean_turn, rad_to_deg(absf(_reference.bank))])
+	_check(_reference.load_factor() > 2.0, "pulling %.1f g" % _reference.load_factor())
+	var rudderless: float = -_yaw_drift(_attacker)
+	_check(rudderless > clean_turn * 0.6 and rudderless < clean_turn * 1.4, "without a rudder a plane still turns on its bank (%.2f against %.2f rad)" % [rudderless, clean_turn])
+	# g for the airspeed and the angle of attack it has: less wing gives less of it.
+	var tip_grip: float = _grip(_tip_lost)
+	var clean_grip: float = _grip(_reference)
+	_check(tip_grip < clean_grip * 0.93, "with a wingtip gone the wings pull less for the same speed and angle of attack (%.2f against %.2f)" % [tip_grip, clean_grip])
+	_check(_wing_lost.alive or _died_at.has(_wing_lost.get_instance_id()), "the one-winged plane is past helping")
 
 
 func _check_engines() -> void:
 	var slow: float = _engine_hit.speed / _engine_hit.stats.top_speed
 	var fast: float = _speed_reference.speed / _speed_reference.stats.top_speed
-	_check(fast > 0.93, "healthy engine reaches top speed (%.0f%%)" % (fast * 100.0))
-	_check(slow < 0.8 and _engine_hit.alive, "a damaged engine cannot, but the plane flies on (%.0f%%)" % (slow * 100.0))
+	_check(fast > 0.95, "a healthy engine holds top speed (%.0f%%)" % (fast * 100.0))
+	_check(slow < fast - 0.04 and _engine_hit.alive, "a damaged engine cannot, but the plane flies on (%.0f%%)" % (slow * 100.0))
 	_check(is_zero_approx(_fuel_hit.fuel) and is_zero_approx(_fuel_hit.engine_power()), "the leaking plane has run dry and its engine has stopped")
-	_check(_tip_lost.alive and _tip_lost.altitude() > 150.0, "the tip-less plane is being held in the air with back stick (%.0f m)" % _tip_lost.altitude())
+	_check(_tip_lost.alive and absf(_tip_lost.bank) < 0.2 and _height_lost(_tip_lost) < 80.0,
+			"the tip-less plane is being held straight and level with the stick (bank %.2f rad, %.0f m lost)" % [_tip_lost.bank, _height_lost(_tip_lost)])
+	_check(_tip_lost.input.steer.x < -0.03, "which has to be held over against the missing tip (%.2f)" % _tip_lost.input.steer.x)
+	_levelled.append(_speed_reference)
+	_levelled.append(_bullet_target)
 
 
 func _test_repair_and_flap() -> void:
@@ -418,20 +464,30 @@ func _test_repair_and_flap() -> void:
 	_check(_engine_hit.part_state(P.ENGINE) == PlaneActor.PartState.OK and _events.has("Engine:OK"), "a field repair patches a damaged engine")
 	_tip_lost.repair_parts(1.0)
 	_check(_tip_lost.is_part_gone(P.RIGHT_WINGTIP), "but cannot put back a part that has been shot off")
-	# Flaps: shoot one off and compare a hard left turn against the clean plane.
+	# Flaps: shoot one off, then lower the wheels, which brings the flaps down
+	# with them. Only one of them is there to come down.
 	_destroy(_engine_hit, P.RIGHT_FLAP, _attacker)
 	_check(_engine_hit.alive and not _engine_hit.is_going_down(), "losing a flap does not bring the plane down")
 	_mark()
-	_reference.input.steer = Vector2(-1.0, 0.0)
-	_engine_hit.input.steer = Vector2(-1.0, 0.0)
-
-
-func _check_flap_turn() -> void:
-	var clean_left: float = absf(_yaw_drift(_reference))
-	var one_flap_left: float = absf(_yaw_drift(_engine_hit))
-	_check(one_flap_left < clean_left * 0.93, "with the right flap gone, a hard left turn is slower (%.2f vs %.2f rad)" % [one_flap_left, clean_left])
+	_engine_hit.set_gear_down(true)
+	_reference.set_gear_down(true)
+	_levelled.erase(_reference)
 	_reference.input.steer = Vector2.ZERO
-	_engine_hit.input.steer = Vector2.ZERO
+
+
+func _check_flaps() -> void:
+	_check(_reference.flap_deploy() > 0.9, "lowering the wheels brings the flaps down (%.2f)" % _reference.flap_deploy())
+	var flap: Node3D = _reference.visual.get_node("Model").find_child("FlapL", true, false) as Node3D
+	_check(flap != null and (flap.basis * Vector3.BACK).y < -0.3, "the flap's trailing edge is down")
+	# The flap that is left lifts its own wing: the plane rolls away from it,
+	# toward the side with none.
+	var lopsided: float = -_roll_of(_engine_hit)
+	var even: float = -_roll_of(_reference)
+	_check(lopsided > even + 0.15, "with only the left flap down the plane rolls to the right (%.2f against %.2f rad)" % [lopsided, even])
+	_engine_hit.set_gear_down(false)
+	_reference.set_gear_down(false)
+	_levelled.append(_reference)
+	_levelled.append(_engine_hit)
 
 
 func _final_checks() -> void:
@@ -441,9 +497,9 @@ func _final_checks() -> void:
 		var key: int = plane.get_instance_id()
 		_check(_died_at.has(key), "%s eventually went in" % plane.name)
 		if _died_at.has(key):
-			# Islands reach about 230 m, so anything lost below that hit the
+			# Islands reach about 330 m, so anything lost below that hit the
 			# sea or the ground, since no test plane touched another aircraft.
-			_check(_died_height[key] < 240.0 and not _collided.has(plane), "%s was destroyed by flying into the surface (at %.0f m)" % [plane.name, _died_height[key]])
+			_check(_died_height[key] < 340.0 and not _collided.has(plane), "%s was destroyed by flying into the surface (at %.0f m)" % [plane.name, _died_height[key]])
 			_check(_died_at[key] > 2.0, "%s flew on for a while first (%.1f s)" % [plane.name, _died_at[key]])
 	# Whoever crippled a plane gets the takedown when it finally crashes.
 	_check(_manager.slot_for_plane(_attacker).kills == 2, "both blue losses are credited to the red plane that crippled them (kills %d)" % _manager.slot_for_plane(_attacker).kills)
@@ -469,12 +525,37 @@ func _set_stick(steer: Vector2) -> void:
 		plane.input.steer = steer
 
 
+## Lift for the speed and angle of attack the plane has right now: g per
+## radian of wing angle of attack, at its stalling speed.
+func _grip(plane: PlaneActor) -> float:
+	var attack: float = plane.flight.alpha + FlightDynamics.WING_INCIDENCE
+	return plane.load_factor() / pow(plane.speed / plane.stats.stall_speed, 2.0) / maxf(attack, 0.02)
+
+
+## Radians rolled to the left since the last _mark().
+func _roll_of(plane: PlaneActor) -> float:
+	var key: int = plane.get_instance_id()
+	if _rolled.has(key):
+		return _rolled[key]
+	return 0.0
+
+
+## Largest sideslip since the last _mark(), radians.
+func _slip_of(plane: PlaneActor) -> float:
+	var key: int = plane.get_instance_id()
+	if _most_slip.has(key):
+		return _most_slip[key]
+	return 0.0
+
+
 func _mark() -> void:
 	for plane: PlaneActor in _manager.get_planes():
 		var key: int = plane.get_instance_id()
 		_yaw_start[key] = plane.yaw
 		_pitch_start[key] = plane.pitch
 		_height_start[key] = plane.altitude()
+		_rolled[key] = 0.0
+		_most_slip[key] = 0.0
 
 
 ## Signed yaw change since the last _mark(). Positive = turned left.

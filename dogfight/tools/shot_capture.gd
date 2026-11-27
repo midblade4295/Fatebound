@@ -111,7 +111,7 @@ func _drop_player() -> void:
 		return
 	var direction: Vector3 = field.takeoff_direction()
 	plane.set_engine_running(true)
-	plane.speed = plane.stats.top_speed * 0.6
+	plane.speed = plane.stats.landing_stall_speed * 1.3
 	plane.teleport(Transform3D(Basis.looking_at(direction, Vector3.UP), field.runway_start() + direction * 300.0 + Vector3.UP * 20.0))
 	plane._touch_down(field, _rough_landing)
 
@@ -126,14 +126,33 @@ func _fly_takeoff() -> void:
 	if not plane.has_flag(PlaneActor.FLAG_ENGINE_ON) and _frame % 60 == 20:
 		plane.input.press_engine()
 	plane.input.throttle = 1.0
+	for action: StringName in [GameSession.ACTION_STEER_LEFT, GameSession.ACTION_STEER_RIGHT, GameSession.ACTION_PITCH_UP, GameSession.ACTION_PITCH_DOWN]:
+		Input.action_release(action)
 	if plane.is_on_ground():
-		if plane.speed >= plane.takeoff_speed() * 1.03:
-			Input.action_press(GameSession.ACTION_PITCH_UP, 0.6)
+		# Hold the runway against the engine's swing; ease back at flying speed.
+		var field: Airfield = plane.home_airfield()
+		if field != null:
+			var direction: Vector3 = field.takeoff_direction()
+			var place: Vector2 = field.runway_coordinates(plane.global_position)
+			var wanted_yaw: float = atan2(-direction.x, -direction.z) + atan(place.x / 70.0)
+			_press_axis(GameSession.ACTION_STEER_LEFT, GameSession.ACTION_STEER_RIGHT, -wrapf(wanted_yaw - plane.yaw, -PI, PI) * 5.0)
+		if plane.speed >= plane.takeoff_speed():
+			Input.action_press(GameSession.ACTION_PITCH_UP, 0.75)
 	else:
-		# Hold a gentle climb and tidy the wheels away.
-		Input.action_press(GameSession.ACTION_PITCH_UP, clampf((deg_to_rad(10.0) - plane.pitch) * 4.0, 0.01, 1.0))
+		# Wings level, a gentle climb, and tidy the wheels away.
+		_press_axis(GameSession.ACTION_STEER_LEFT, GameSession.ACTION_STEER_RIGHT, plane.bank * 2.0 + plane.flight.angular_velocity.z * 0.4)
+		_press_axis(GameSession.ACTION_PITCH_DOWN, GameSession.ACTION_PITCH_UP, (deg_to_rad(8.0) - plane.pitch) * 2.5 - plane.flight.angular_velocity.x * 0.8)
 		if plane.is_gear_down() and plane.height_above_ground() > 25.0 and _frame % 60 == 0:
 			plane.input.press_gear()
+
+
+## Presses one of a pair of opposed Input actions by [param amount] (-1..1),
+## undoing the player controller's stick curve so the plane gets that much.
+func _press_axis(negative: StringName, positive: StringName, amount: float) -> void:
+	var wanted: float = clampf(amount, -1.0, 1.0)
+	var strength: float = pow(absf(wanted), 1.0 / PlayerController.STICK_CURVE)
+	if strength > 0.01:
+		Input.action_press(positive if wanted > 0.0 else negative, strength)
 
 
 func _process(_delta: float) -> void:

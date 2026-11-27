@@ -103,9 +103,10 @@ func _arrange() -> void:
 	# 1. Wingtip clip: an enemy flying alongside, slightly slower, with its
 	# left wingtip overlapping our right wingtip by about 0.6 m.
 	var span: float = _wingspan(_clip_blue)
+	# (A plane flies on at whatever speed it had when it was put down.)
+	_clip_red.speed = _clip_blue.speed - 9.0
 	_clip_blue.teleport(Transform3D(north, Vector3(-600.0, 520.0, 0.0)))
 	_clip_red.teleport(Transform3D(north, Vector3(-600.0 + span - 0.6, 520.0, 0.0)))
-	_clip_red.speed = _clip_blue.speed - 9.0
 	_clip_gap_start = absf(_clip_blue.global_position.x - _clip_red.global_position.x)
 
 	# 2. Head-on: nose to nose, 70 m apart, same line.
@@ -118,9 +119,9 @@ func _arrange() -> void:
 
 	# 4. Team-mates: a wingman running into the back of his leader.
 	var length: float = _mate_lead.hitboxes.bounding_radius
+	_mate_wing.speed = _mate_lead.speed + 12.0
 	_mate_lead.teleport(Transform3D(north, Vector3(0.0, 520.0, 700.0)))
 	_mate_wing.teleport(Transform3D(north, Vector3(0.0, 520.0, 700.0 + length * 0.9)))
-	_mate_wing.speed = _mate_lead.speed + 12.0
 
 
 func _check_results() -> void:

@@ -9,10 +9,15 @@ extends Node
 ## Networking: in an online match this node's multiplayer authority is the
 ## owning peer and the InputSync child replicates `steer`/`firing` to the
 ## server, which stays authoritative over the plane itself. One-shot buttons go
-## through RPCs so a dropped packet can never swallow an evade, an engine start or a gear selection.
+## through RPCs so a dropped packet can never swallow an engine start or a gear selection.
 
-## x: -1 turn left .. +1 turn right.  y: -1 nose down .. +1 nose up.
+## The stick. x: -1 hard left .. +1 hard right. In the air that is the
+## ailerons (it rolls the plane); on the ground it steers. y: -1 forward (nose
+## down) .. +1 right back (nose up): the elevators.
 @export var steer: Vector2 = Vector2.ZERO
+## The rudder pedals: -1 nose left .. +1 nose right. Left at 0, the plane's
+## pilot keeps the turns tidy with his feet by himself; any pedal takes over.
+@export_range(-1.0, 1.0) var rudder: float = 0.0
 @export var firing: bool = false
 ## Where the throttle lever is: 0 = closed (and wheel brakes on, when on the
 ## ground) .. 1 = fully open.
@@ -23,17 +28,8 @@ extends Node
 var assist_point: Vector3 = Vector3.ZERO
 var assist_active: bool = false
 
-var _evade_pending: bool = false
 var _engine_pending: bool = false
 var _gear_pending: bool = false
-
-
-## Request an evade roll. Safe to call every frame the button is held.
-func press_evade() -> void:
-	if multiplayer.is_server():
-		_evade_pending = true
-	else:
-		_rpc_press_evade.rpc_id(1)
 
 
 ## Press the engine starter (or the cut-off, if it is running).
@@ -53,12 +49,6 @@ func press_gear() -> void:
 
 
 ## Returns true once per request. Called by PlaneActor on the server.
-func consume_evade() -> bool:
-	var pending: bool = _evade_pending
-	_evade_pending = false
-	return pending
-
-
 func consume_engine() -> bool:
 	var pending: bool = _engine_pending
 	_engine_pending = false
@@ -75,16 +65,11 @@ func consume_gear() -> bool:
 ## where it is: it is a lever, not a spring.
 func clear() -> void:
 	steer = Vector2.ZERO
+	rudder = 0.0
 	firing = false
 	assist_active = false
-	_evade_pending = false
 	_engine_pending = false
 	_gear_pending = false
-
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_press_evade() -> void:
-	_evade_pending = true
 
 
 @rpc("authority", "call_remote", "reliable")

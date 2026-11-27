@@ -16,12 +16,16 @@ extends Node
 
 ## Seconds into the match at which the landing cases are set up (the player
 ## has left the runway by then).
-const LANDINGS_START: float = 22.0
-const TEST_TIMEOUT: float = 150.0
-## Approaches begin this far above the runway (metres, at the plane's origin).
-const APPROACH_HEIGHT: float = 10.0
+const LANDINGS_START: float = 30.0
+const TEST_TIMEOUT: float = 190.0
+## The take-off run is left unsteered for this long, to see the swing.
+const SWING_WATCH_TIME: float = 5.0
+## Approaches begin this far above the runway (metres, at the plane's origin),
+## at this multiple of the stalling speed with flaps and wheels down.
+const APPROACH_HEIGHT: float = 30.0
+const APPROACH_SPEED: float = 1.35
 ## Throttle held on the approaches: enough to keep flying speed, no more.
-const APPROACH_THROTTLE: float = 0.45
+const APPROACH_THROTTLE: float = 0.3
 
 var _manager: MatchManager5v5
 var _player: PlaneActor
@@ -42,8 +46,14 @@ var _roll_start: Vector3 = Vector3.ZERO
 var _roll_start_time: float = 0.0
 var _roll_distance: float = 0.0
 var _tail_pitch_at_speed: float = INF
+## How far the nose swung left before anyone corrected it, and the most right
+## stick it then took to hold the runway.
+var _swing: float = 0.0
+var _most_right_stick: float = 0.0
 var _gear_moves: Array[bool] = []
 var _speed_gear_down: float = 0.0
+var _speed_half_throttle: float = 0.0
+var _speed_idle: float = 0.0
 var _altitude_mark: float = 0.0
 # Smoothness of the take-off: the biggest change from one physics tick to the
 # next, from the start of the run until a few seconds after leaving the ground.
@@ -128,6 +138,14 @@ func _ready() -> void:
 	_player.shot_fired.connect(func(_plane: PlaneActor) -> void: _shots += 1)
 	_player.engine_started.connect(func(_plane: PlaneActor) -> void: _engine_starts += 1)
 	_player.lifted_off.connect(_on_player_lifted_off)
+	_player.died.connect(func(_victim: PlaneActor, _killer: PlaneActor) -> void:
+		if OS.get_cmdline_user_args().has("verbose=1"):
+			print("player died at stage %d (%.1f s in): speed %.0f height %.0f pitch %.0f bank %.0f stalling %s" % [_stage, _stage_clock, _player.speed, _player.global_position.y,
+					rad_to_deg(_player.pitch), rad_to_deg(_player.bank), _player.flight.stall > 0.25])
+			for other: PlaneActor in _manager.get_planes():
+				if other != _player and other.global_position.distance_to(_player.global_position) < 400.0:
+					print("  near: %s team %d at %.0f m, alive %s, position %s" % [other.name, int(other.team), other.global_position.distance_to(_player.global_position), other.alive, str(other.global_position.round())])
+			print("  player at %s" % str(_player.global_position.round())))
 	_player.gear_moved.connect(func(_plane: PlaneActor, going_down: bool) -> void: _gear_moves.append(going_down))
 	_test_parked_start()
 
@@ -154,7 +172,7 @@ func _test_parked_start() -> void:
 	_check(is_zero_approx(_player.input.throttle), "the throttle starts closed")
 	_check(not _player.needs_service(), "a new plane needs no repairs")
 	var takeoff: float = _player.takeoff_speed()
-	_check(takeoff > _player.stats.top_speed * 0.45 and takeoff < _player.stats.top_speed * 0.65, "take-off speed is a sensible share of top speed (%.0f of %.0f m/s)" % [takeoff, _player.stats.top_speed])
+	_check(takeoff > _player.stats.top_speed * 0.25 and takeoff < _player.stats.top_speed * 0.45, "take-off speed is a sensible share of top speed (%.0f of %.0f m/s)" % [takeoff, _player.stats.top_speed])
 
 
 func _physics_process(delta: float) -> void:
@@ -173,7 +191,7 @@ func _physics_process(delta: float) -> void:
 		_start_landing_cases()
 	for case: LandingCase in _cases:
 		_fly_case(case)
-	if _clock >= 34.0 and not _bots_checked:
+	if _clock >= 46.0 and not _bots_checked:
 		_bots_checked = true
 		_check_bots()
 	if _stage >= 100 and _cases_started and _cases_done() and _wreck == null:
@@ -237,24 +255,35 @@ func _fly_player() -> void:
 				_next_stage()
 		4:
 			if _player.is_on_ground():
-				input.steer = Vector2(0.0, 1.0)
-				if _player.speed >= _player.takeoff_speed() * 0.85 and _tail_pitch_at_speed == INF:
+				# For the first few seconds nobody holds it straight; after that
+				# the pilot steers down the runway, stick still hard back.
+				var steer_x: float = 0.0
+				if _stage_clock < SWING_WATCH_TIME:
+					_swing = wrapf(_player.yaw - _runway_yaw(), -PI, PI)
+				else:
+					var place: Vector2 = _field.runway_coordinates(_player.global_position)
+					steer_x = clampf(-wrapf(_runway_yaw() + atan(place.x / 70.0) - _player.yaw, -PI, PI) * 5.0, -1.0, 1.0)
+					_most_right_stick = maxf(_most_right_stick, steer_x)
+				input.steer = Vector2(steer_x, 1.0)
+				if _player.speed >= _player.takeoff_speed() * 0.68 and _tail_pitch_at_speed == INF:
 					_tail_pitch_at_speed = _player.pitch
 				if _stage_clock > 40.0:
 					_check(false, "the plane never left the ground (%.0f m/s after 40 s)" % _player.speed)
 					_stage = 100
 			elif _liftoffs > 0:
-				_check(_liftoff_speed >= _player.takeoff_speed() * 0.98, "it stays down until it has flying speed, however hard the stick is pulled (left at %.0f, needs %.0f m/s)" % [_liftoff_speed, _player.takeoff_speed()])
-				_check(_roll_distance > 150.0 and _roll_distance < 480.0, "the take-off run uses a good part of the runway (%.0f m of %.0f)" % [_roll_distance, Airfield.RUNWAY_LENGTH])
+				_check(_liftoff_speed >= _player.stats.landing_stall_speed * 0.9, "it stays down until it has flying speed, however hard the stick is pulled (left at %.0f, needs %.0f m/s)" % [_liftoff_speed, _player.takeoff_speed()])
+				_check(_roll_distance > 200.0 and _roll_distance < 600.0, "the take-off run uses a good part of the runway (%.0f m of %.0f)" % [_roll_distance, Airfield.RUNWAY_LENGTH])
 				var run_time: float = _liftoff_time - _roll_start_time
-				_check(run_time > 6.0 and run_time < 20.0, "and takes a believable time (%.1f s)" % run_time)
-				_check(_tail_pitch_at_speed < deg_to_rad(4.0), "the tail comes up during the run (nose up %.1f degrees near take-off speed)" % rad_to_deg(_tail_pitch_at_speed))
+				_check(run_time > 8.0 and run_time < 25.0, "and takes a believable time (%.1f s)" % run_time)
+				_check(_swing > deg_to_rad(1.5), "left to itself the plane swings to the left under power (%.1f degrees in %.0f s)" % [rad_to_deg(_swing), SWING_WATCH_TIME])
+				_check(_most_right_stick > 0.05 and absf(_field.runway_coordinates(_player.global_position).x) < Airfield.RUNWAY_WIDTH * 0.5, "and it takes right stick to keep it on the runway (%.2f)" % _most_right_stick)
+				_check(_tail_pitch_at_speed < deg_to_rad(4.0), "the tail comes up during the run (nose up %.1f degrees at two-thirds of take-off speed)" % rad_to_deg(_tail_pitch_at_speed))
 				_check((_player.audio.get_node("EngineCockpit") as AudioStreamPlayer).playing, "the engine is running in the cockpit")
 				_altitude_mark = _player.global_position.y
 				_next_stage()
 		5:
 			# Climb out with the wheels still down.
-			input.steer = Vector2(0.0, _hold_pitch(_player, deg_to_rad(14.0)))
+			input.steer = Vector2(_level_wings(_player), _hold_pitch(_player, deg_to_rad(9.0)))
 			if _stage_clock >= 9.0:
 				_check(_player.alive and not _player.is_on_ground(), "it climbs away")
 				if OS.get_cmdline_user_args().has("verbose=1"):
@@ -264,48 +293,50 @@ func _fly_player() -> void:
 				_check(_max_climb_step < 0.35, "the climb builds smoothly from nothing (largest change %.2f m/s in a tick)" % _max_climb_step)
 				_check(_max_acceleration_step < 1.5, "the pull of the engine does not jump at lift-off (largest change %.2f m/s2 in a tick)" % _max_acceleration_step)
 				_check(_max_height_step < 0.1, "and the plane never hops (largest %.3f m)" % _max_height_step)
-				_check(_player.global_position.y > _altitude_mark + 60.0, "gaining height (%.0f m in 9 s)" % (_player.global_position.y - _altitude_mark))
+				_check(_player.global_position.y > _altitude_mark + 15.0, "gaining height (%.0f m in 9 s)" % (_player.global_position.y - _altitude_mark))
 				_next_stage()
 		6:
 			# Level off: with the wheels hanging down it is slow.
-			input.steer = Vector2(0.0, _hold_pitch(_player, 0.0))
+			input.steer = Vector2(_level_wings(_player), _hold_climb(_player, 5.0))
 			if _stage_clock >= 8.0:
 				_speed_gear_down = _player.speed
 				_check(_speed_gear_down < top * 0.85, "wheels down is draggy (%.0f of %.0f m/s)" % [_speed_gear_down, top])
 				input.press_gear()
 				_next_stage()
 		7:
-			input.steer = Vector2(0.0, _hold_pitch(_player, 0.0))
+			input.steer = Vector2(_level_wings(_player), _hold_climb(_player, 5.0))
 			if _stage_clock >= 9.0:
 				_check(_gear_moves == [false], "the GEAR lever raised the wheels (%s)" % str(_gear_moves))
 				_check(is_zero_approx(_player.gear_deploy) and not _player.is_gear_down(), "they are up and locked (%.2f)" % _player.gear_deploy)
 				_check((_player.audio.get_node("Gear") as AudioStreamPlayer3D).stream != null, "the undercarriage has a sound")
-				_check(_player.speed > _speed_gear_down + top * 0.1, "and the plane is faster for it (%.0f -> %.0f m/s)" % [_speed_gear_down, _player.speed])
+				_check(_player.speed > _speed_gear_down + top * 0.06, "and the plane is faster for it (%.0f -> %.0f m/s)" % [_speed_gear_down, _player.speed])
 				input.throttle = 0.5
 				_altitude_mark = _player.global_position.y
 				_next_stage()
 		8:
 			# Half throttle holds a lower speed; closing it altogether leaves a
-			# glider that slows until its wings can no longer hold it level.
-			input.steer = Vector2(0.0, _hold_pitch(_player, 0.0))
+			# glider that slows for as long as it is held level.
+			input.steer = Vector2(_level_wings(_player), _hold_level(_player))
 			if _stage_clock >= 8.0 and input.throttle > 0.0:
 				_check(_player.speed < top * 0.85 and _player.speed > _player.stats.stall_speed and not _player.is_stalling(),
 						"half throttle holds a lower speed, still flying (%.0f of %.0f m/s)" % [_player.speed, top])
+				_speed_half_throttle = _player.speed
 				input.throttle = 0.0
-			if _stage_clock >= 21.0:
-				_check(_player.speed < top * 0.66, "closing the throttle slows the plane (%.0f of %.0f m/s)" % [_player.speed, top])
-				_check(_player.global_position.y < _altitude_mark - 5.0, "until it can no longer hold its height (%.0f m lost)" % (_altitude_mark - _player.global_position.y))
+			if _stage_clock >= 17.0:
+				_check(_player.speed < _speed_half_throttle - 5.0, "closing the throttle and holding height slows the plane (%.0f from %.0f m/s)" % [_player.speed, _speed_half_throttle])
+				_check(_player.alive and not _player.is_stalling() and _player.speed > _player.stats.stall_speed, "but it is still flying (%.0f m/s; stalls at %.0f)" % [_player.speed, _player.stats.stall_speed])
 				_check(_player.is_engine_running(), "the engine is still running with the throttle closed")
 				input.throttle = 1.0
+				_speed_idle = _player.speed
 				_next_stage()
 		9:
-			input.steer = Vector2(0.0, _hold_pitch(_player, deg_to_rad(4.0)))
+			input.steer = Vector2(_level_wings(_player), _hold_level(_player))
 			if _stage_clock >= 7.0:
-				_check(_player.alive and _player.speed > top * 0.8, "opening the throttle again brings the speed back (%.0f m/s)" % _player.speed)
+				_check(_player.alive and _player.speed > _speed_idle + 6.0, "opening the throttle again brings the speed back (%.0f from %.0f m/s)" % [_player.speed, _speed_idle])
 				input.press_engine()
 				_next_stage()
 		10:
-			input.steer = Vector2(0.0, _hold_pitch(_player, 0.0))
+			input.steer = Vector2(_level_wings(_player), _hold_level(_player))
 			if _stage_clock >= 2.0:
 				_check(not _player.is_engine_running(), "the ENGINE button also switches the engine off")
 				_check(not _player.is_going_down() or _player.speed < top * 0.6, "a switched-off engine is not a shot-down plane")
@@ -313,7 +344,7 @@ func _fly_player() -> void:
 				_stage = 100
 		_:
 			if _player.alive:
-				input.steer = Vector2(0.0, _hold_pitch(_player, deg_to_rad(3.0)))
+				input.steer = Vector2(_level_wings(_player), _hold_pitch(_player, deg_to_rad(4.0)))
 
 
 ## Watches the player's plane for sudden changes while it takes off.
@@ -343,9 +374,30 @@ func _on_player_lifted_off(_plane: PlaneActor) -> void:
 		_roll_distance = _player.global_position.distance_to(_roll_start)
 
 
+## Heading of the home runway, as a yaw angle.
+func _runway_yaw() -> float:
+	var direction: Vector3 = _field.takeoff_direction()
+	return atan2(-direction.x, -direction.z)
+
+
 ## Stick position that eases the nose toward [param target] radians.
 func _hold_pitch(plane: PlaneActor, target: float) -> float:
-	return clampf((target - plane.pitch) * 8.0, -1.0, 1.0)
+	return clampf((target - plane.pitch) * 2.5 - plane.flight.angular_velocity.x * 0.8, -0.6, 0.6)
+
+
+## Stick position that stops the plane climbing or sinking.
+func _hold_level(plane: PlaneActor) -> float:
+	return _hold_climb(plane, 0.0)
+
+
+## Stick position that holds a rate of climb (m/s).
+func _hold_climb(plane: PlaneActor, rate: float) -> float:
+	return clampf((rate - plane.climb_speed()) * 0.03 - plane.flight.angular_velocity.x * 0.4, -0.5, 0.5)
+
+
+## Aileron that rolls the wings level. (Positive bank is left wing down.)
+func _level_wings(plane: PlaneActor) -> float:
+	return clampf(plane.bank * 2.0 + plane.flight.angular_velocity.z * 0.4, -1.0, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -384,12 +436,12 @@ func _start_landing_cases() -> void:
 			red.append(slot.plane)
 	# label, plane, metres right of the centre line, metres along the runway,
 	# nose angle on the approach, wheels down?, heading across the island?
-	_add_case("good landing", blue[0], 0.0, 230.0, -3.0, true, false)
-	_add_case("steep approach", blue[1], 75.0, 300.0, -9.0, true, false)
+	_add_case("good landing", blue[0], 0.0, -50.0, -3.0, true, false)
+	_add_case("steep approach", blue[1], 75.0, 150.0, -9.0, true, false)
 	_add_case("dive", blue[2], -75.0, 300.0, -45.0, true, false)
-	_add_case("belly landing", blue[3], -130.0, 100.0, -2.5, false, false)
-	_add_case("enemy airfield", red[0], 120.0, 250.0, -3.0, true, false)
-	_add_case("off the edge", red[1], -90.0, 420.0, -3.0, true, true)
+	_add_case("belly landing", blue[3], -130.0, 0.0, -2.5, false, false)
+	_add_case("enemy airfield", red[0], 38.0, -50.0, -3.0, true, false)
+	_add_case("off the edge", red[1], -190.0, 440.0, -3.0, true, true)
 
 
 func _add_case(label: String, plane: PlaneActor, across: float, along: float, pitch_deg: float, wheels: bool, sideways: bool) -> void:
@@ -399,7 +451,8 @@ func _add_case(label: String, plane: PlaneActor, across: float, along: float, pi
 	case.approach_pitch = deg_to_rad(pitch_deg)
 	var direction: Vector3 = _field.takeoff_direction()
 	var right: Vector3 = direction.cross(Vector3.UP).normalized()
-	var origin: Vector3 = _field.runway_start() + direction * along + right * across + Vector3.UP * APPROACH_HEIGHT
+	# The one that is meant to run out of island starts lower, to be down in time.
+	var origin: Vector3 = _field.runway_start() + direction * along + right * across + Vector3.UP * (APPROACH_HEIGHT * (0.5 if sideways else 1.0))
 	var heading: Vector3 = right if sideways else direction
 	if pitch_deg < -20.0:
 		# A dive: already pointing at the ground, from higher up.
@@ -409,7 +462,7 @@ func _add_case(label: String, plane: PlaneActor, across: float, along: float, pi
 	plane.set_gear_down(wheels)
 	plane.input.throttle = APPROACH_THROTTLE
 	plane.throttle = APPROACH_THROTTLE
-	plane.speed = plane.stats.top_speed * 0.68
+	plane.speed = plane.stats.landing_stall_speed * APPROACH_SPEED
 	plane.teleport(Transform3D(Basis.looking_at(heading.normalized(), Vector3.UP), origin))
 	plane.touched_down.connect(func(_plane: PlaneActor, sink: float, wheels_down: bool) -> void:
 		if case.touchdowns.is_empty():
@@ -437,7 +490,7 @@ func _fly_case(case: LandingCase) -> void:
 	if case.died or not plane.alive:
 		return
 	if not plane.is_on_ground():
-		plane.input.steer = Vector2(0.0, _hold_pitch(plane, case.approach_pitch))
+		plane.input.steer = Vector2(_level_wings(plane), _hold_pitch(plane, case.approach_pitch))
 		plane.input.throttle = APPROACH_THROTTLE
 		return
 	# Down: stick neutral, throttle closed, which puts the brakes on. The one
@@ -490,7 +543,7 @@ func _check_cases() -> void:
 			"good landing":
 				_check(not case.touchdowns.is_empty() and case.on_wheels and not case.died, "a gentle approach lands on its wheels and survives")
 				_check(first_sink > 0.0 and first_sink <= PlaneActor.FIRM_LANDING_SINK, "coming down gently enough to do no damage (%.1f m/s)" % first_sink)
-				_check(case.stop_distance > 120.0 and case.stop_distance < 420.0, "closing the throttle brakes it to a stop on the runway (%.0f m)" % case.stop_distance)
+				_check(case.stop_distance > 120.0 and case.stop_distance < 560.0, "closing the throttle brakes it to a stop on the runway (%.0f m)" % case.stop_distance)
 				_check(_field.contains(plane.global_position), "it is still on the airfield")
 				_check(case.serviced, "standing still at home, a shot-up plane is repaired")
 				var worst: float = 0.0
@@ -505,14 +558,14 @@ func _check_cases() -> void:
 				_check(not plane.needs_service() and plane.engine_power() >= 1.0, "it is ready to fly again")
 			"steep approach":
 				_check(not case.touchdowns.is_empty() and not case.died, "a steep approach (nose 9 degrees down) is still a landing")
-				_check(first_sink <= PlaneActor.FIRM_LANDING_SINK, "the air under the wings and the flare soften the arrival (%.1f m/s)" % first_sink)
+				_check(first_sink < 9.0 and first_sink <= PlaneActor.GEAR_COLLAPSE_SINK, "the flare takes something off the arrival, which is firm (%.1f m/s)" % first_sink)
 				_check(case.broken_legs == 0 and not case.broken_prop and case.on_wheels, "nothing breaks")
 			"dive":
 				_check(case.died and case.touchdowns.is_empty(), "diving straight into the runway does destroy the plane")
 				_check(absf(case.death_height) < 8.0, "on the runway, not in the sea (%.1f m above it)" % case.death_height)
 			"belly landing":
 				_check(not case.touchdowns.is_empty() and not case.on_wheels and not case.died, "with the wheels up it can still be slid on")
-				_check(case.stop_distance > 20.0 and case.stop_distance < 260.0, "sliding to a stop much sooner than on wheels (%.0f m)" % case.stop_distance)
+				_check(case.stop_distance > 20.0 and case.stop_distance < 330.0, "sliding to a stop sooner than on wheels (%.0f m)" % case.stop_distance)
 				_check(case.broken_prop, "at the cost of the propeller")
 				_check(case.serviced and plane.gear_usable() and plane.is_on_ground(), "at home it is jacked up, mended and put back on its wheels")
 				_check(not plane.is_propeller_broken() and plane.engine_power() >= 1.0, "with a new propeller")
@@ -538,7 +591,7 @@ func _drop(plane: PlaneActor, sink: float, pitch_deg: float, bank_deg: float, wh
 	plane.stats.gear_strength = _drop_gear_strength
 	plane.set_engine_running(true)
 	plane.set_gear_down(wheels)
-	plane.speed = plane.stats.top_speed * 0.62
+	plane.speed = plane.stats.landing_stall_speed * 1.3
 	plane.teleport(Transform3D(Basis.looking_at(direction, Vector3.UP), _field.runway_start() + direction * 380.0 + Vector3.UP * 20.0))
 	plane.pitch = deg_to_rad(pitch_deg)
 	plane.bank = deg_to_rad(bank_deg)

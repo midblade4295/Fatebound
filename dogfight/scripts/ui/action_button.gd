@@ -1,16 +1,16 @@
 class_name ActionButton
 extends Control
-## Chunky right-thumb button (FIRE, EVADE ROLL, ENGINE, GEAR).
+## Chunky right-thumb button (FIRE, the rudder pedals, ENGINE, GEAR).
 ##
 ## Presses and releases an Input action, so it works for both "hold" actions
-## (fire) and "tap" actions (roll, engine, gear). Tracks its own touch index, which
-## lets the player hold FIRE with one finger and tap ROLL with another while
-## the left thumb is on the stick.
+## (fire, rudder) and "tap" actions (engine, gear). Tracks its own touch index,
+## which lets the player hold FIRE with one finger and a rudder pedal with
+## another while the left thumb is on the stick.
 ##
 ## Draws itself: beveled rounded square, simple vector icon, caption, and a
 ## radial cooldown sweep with the seconds remaining.
 
-enum IconKind { CROSSHAIR, ROLL_ARROW, BOLT, PROPELLER, WHEEL }
+enum IconKind { CROSSHAIR, ROLL_ARROW, BOLT, PROPELLER, WHEEL, ARROW_LEFT, ARROW_RIGHT }
 
 @export var action: StringName = &"fire"
 @export var caption: String = "FIRE"
@@ -142,6 +142,18 @@ func _draw_icon(center: Vector2, icon_size: float) -> void:
 				draw_polyline(blade_outline, UiStyle.OUTLINE, 3.0, true)
 			draw_circle(center, icon_size * 0.32, UiStyle.OUTLINE)
 			draw_circle(center, icon_size * 0.22, UiStyle.GOLD)
+		IconKind.ARROW_LEFT, IconKind.ARROW_RIGHT:
+			# A fat arrow: which way this pedal swings the nose.
+			var way: float = -1.0 if icon_kind == IconKind.ARROW_LEFT else 1.0
+			var arrow: PackedVector2Array = PackedVector2Array([
+				center + Vector2(way * 1.25, 0.0) * icon_size, center + Vector2(way * 0.1, -1.05) * icon_size,
+				center + Vector2(way * 0.1, -0.42) * icon_size, center + Vector2(-way * 1.15, -0.42) * icon_size,
+				center + Vector2(-way * 1.15, 0.42) * icon_size, center + Vector2(way * 0.1, 0.42) * icon_size,
+				center + Vector2(way * 0.1, 1.05) * icon_size])
+			draw_colored_polygon(arrow, ink)
+			var arrow_outline: PackedVector2Array = arrow.duplicate()
+			arrow_outline.append(arrow[0])
+			draw_polyline(arrow_outline, UiStyle.OUTLINE, 4.0, true)
 		IconKind.WHEEL:
 			# A leg and a tyre.
 			var axle: Vector2 = center + Vector2(0.0, icon_size * 0.45)

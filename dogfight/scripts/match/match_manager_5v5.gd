@@ -53,11 +53,11 @@ const BOT_NAMES: Array[String] = [
 @export var blue_spawns: Node3D
 @export var red_spawns: Node3D
 @export var arena_center: Vector3 = Vector3.ZERO
-@export var arena_radius: float = 1500.0
-@export var arena_ceiling: float = 750.0
+@export var arena_radius: float = 3200.0
+@export var arena_ceiling: float = 2400.0
 
 var phase: Phase = Phase.COUNTDOWN
-var time_left: float = 180.0
+var time_left: float = 300.0
 var countdown_left: float = COUNTDOWN_TIME
 var winning_team: int = DRAW
 ## Payout for the local player, filled in when the match ends (null for bots-only).

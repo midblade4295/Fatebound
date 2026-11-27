@@ -41,8 +41,10 @@ extends Node3D
 @export var rotation_stiffness: float = 4.5
 ## Hard limit on positional lag so the plane can never leave the frame.
 @export var max_position_lag: float = 5.0
-## 0 keeps the horizon level, 1 rolls the camera fully with the plane's bank.
-@export_range(0.0, 1.0) var roll_follow: float = 0.3
+## 1 rolls the camera fully with the plane. Less holds the horizon a little
+## flatter than the wings while the plane is the right way up; steep, inverted
+## or going over the top of a loop the camera always goes with the plane.
+@export_range(0.0, 1.0) var roll_follow: float = 0.85
 
 @export_group("Field Of View")
 @export_range(40.0, 100.0) var base_fov: float = 66.0
@@ -68,6 +70,10 @@ extends Node3D
 @export var fire_trauma: float = 0.05
 @export var fire_trauma_cap: float = 0.28
 @export var hit_trauma: float = 0.42
+## The shake of a wing close to stalling: it starts at this share of the
+## stalling angle of attack and builds to buffet_trauma in the stall.
+@export_range(0.5, 1.0) var buffet_start: float = 0.86
+@export var buffet_trauma: float = 0.3
 
 var target: PlaneActor
 
@@ -181,6 +187,11 @@ func _process(delta: float) -> void:
 		_apply_rig()
 		return
 
+	# Buffet: the airframe shakes as the wing nears the stall, harder in it.
+	var buffet: float = clampf((target.attack_ratio() - buffet_start) / maxf(1.0 - buffet_start, 0.01), 0.0, 1.0)
+	if buffet > 0.0:
+		add_trauma(buffet * buffet_trauma * delta * 8.0, buffet_trauma * (0.5 + 0.5 * buffet))
+
 	var target_transform: Transform3D = target.get_global_transform_interpolated()
 	var anchor: Vector3 = target_transform.origin + Vector3.UP * height_offset
 
@@ -204,13 +215,20 @@ func _process(delta: float) -> void:
 	_apply_rig()
 
 
-## Heading the pivot wants: the plane's yaw and pitch, with only part of its roll.
+## Attitude the pivot wants. The view goes with the plane: round a loop over
+## the top and down the other side, round a roll, into a spin. Nothing ever
+## snaps, because nothing here depends on which way is "up" in the world.
+## With roll_follow below 1 the horizon is held a little flatter than the
+## wings in ordinary upright flight, and only then.
 func _desired_basis(target_basis: Basis) -> Basis:
 	var plane_basis: Basis = target_basis.orthonormalized()
+	if roll_follow >= 1.0:
+		return plane_basis
 	var nose: Vector3 = -plane_basis.z
-	var up: Vector3 = Vector3.UP if absf(nose.y) < 0.98 else plane_basis.y
-	var level_basis: Basis = Basis.looking_at(nose, up)
-	return level_basis.slerp(plane_basis, roll_follow)
+	var upright: float = clampf(plane_basis.y.y * 2.0, 0.0, 1.0) * (1.0 - smoothstep(0.55, 0.85, absf(nose.y)))
+	if upright <= 0.0:
+		return plane_basis
+	return plane_basis.slerp(Basis.looking_at(nose, Vector3.UP), (1.0 - roll_follow) * upright)
 
 
 func _update_fov(delta: float, speed_factor: float) -> void:

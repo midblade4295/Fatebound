@@ -17,17 +17,17 @@ const GRASS_COLOR: Color = Color("5fc24a")
 const GRASS_DARK_COLOR: Color = Color("3f9d3a")
 
 @export var arena_seed: int = 1942
-@export var arena_radius: float = 1500.0
-@export var island_count: int = 7
-@export var cloud_count: int = 46
+@export var arena_radius: float = 3200.0
+@export var island_count: int = 9
+@export var cloud_count: int = 80
 ## Light whose direction tints the sun-facing side of the clouds.
 @export var sun: DirectionalLight3D
 ## Where each team's airfield is built. Each runway points at the arena centre.
-@export var blue_base_position: Vector3 = Vector3(0.0, 0.0, 1080.0)
-@export var red_base_position: Vector3 = Vector3(0.0, 0.0, -1080.0)
+@export var blue_base_position: Vector3 = Vector3(0.0, 0.0, 2300.0)
+@export var red_base_position: Vector3 = Vector3(0.0, 0.0, -2300.0)
 ## Islands are kept this far (metres) from the line the runways lie on, so
 ## nothing stands in the way of a take-off or an approach.
-@export var runway_corridor: float = 520.0
+@export var runway_corridor: float = 640.0
 
 ## Both airfields, indexed by Teams.Id.
 var airfields: Array[Airfield] = []
@@ -63,7 +63,7 @@ func _ready() -> void:
 
 func _build_ocean() -> void:
 	var water: PlaneMesh = PlaneMesh.new()
-	water.size = Vector2(16000.0, 16000.0)
+	water.size = Vector2(36000.0, 36000.0)
 	var ocean: MeshInstance3D = MeshInstance3D.new()
 	ocean.name = "Ocean"
 	ocean.mesh = water
@@ -78,12 +78,12 @@ func _build_islands() -> void:
 		var angle: float = TAU * (float(index) + 0.5) / float(island_count) + _rng.randf_range(-0.2, 0.2)
 		var distance: float = _rng.randf_range(0.3, 0.72) * arena_radius
 		var center: Vector3 = Vector3(cos(angle) * distance, 0.0, sin(angle) * distance)
-		var radius: float = _rng.randf_range(90.0, 190.0)
+		var radius: float = _rng.randf_range(150.0, 320.0)
 		# Slide the island sideways out of the runway corridor if it landed in it.
 		var clear_of_runways: float = runway_corridor + radius * 1.32
 		if absf(center.x) < clear_of_runways:
 			center.x = clear_of_runways * (1.0 if center.x >= 0.0 else -1.0)
-		_build_island(center, radius, _rng.randf_range(60.0, 200.0), "Island%d" % index)
+		_build_island(center, radius, _rng.randf_range(80.0, 280.0), "Island%d" % index)
 
 
 ## A stack of tapered cylinders: sand skirt, rock cliff, grass cap, plus a rock
@@ -154,8 +154,8 @@ func _build_clouds() -> void:
 	for _cloud: int in range(cloud_count):
 		var angle: float = _rng.randf_range(0.0, TAU)
 		var distance: float = sqrt(_rng.randf()) * arena_radius * 1.9
-		var center: Vector3 = Vector3(cos(angle) * distance, _rng.randf_range(420.0, 900.0), sin(angle) * distance)
-		var cloud_size: float = _rng.randf_range(70.0, 160.0)
+		var center: Vector3 = Vector3(cos(angle) * distance, _rng.randf_range(700.0, 2100.0), sin(angle) * distance)
+		var cloud_size: float = _rng.randf_range(110.0, 280.0)
 		var puffs: int = _rng.randi_range(4, 7)
 		for puff: int in range(puffs):
 			# Puffs are strung out sideways and squashed so clouds read as flat-bottomed.

@@ -11,12 +11,15 @@ extends Node
 ## player. An optional aim assist exists (see aim_assist_enabled) but is off.
 
 ## Enemies further than this are never auto-targeted (metres).
-const TARGET_RANGE: float = 900.0
+const TARGET_RANGE: float = 1600.0
 ## Half-angle of the cone in front of the nose that is searched for a target.
 const TARGET_CONE: float = deg_to_rad(32.0)
 ## Keeps the current target unless another is clearly better (prevents flicker).
 const TARGET_STICKINESS: float = deg_to_rad(5.0)
 const RETARGET_INTERVAL: float = 0.15
+## Stick movement is raised to this power, so the first half of the travel
+## gives about a third of the control.
+const STICK_CURVE: float = 1.5
 ## Throttle lever travel per second while a throttle key is held.
 const THROTTLE_KEY_RATE: float = 0.7
 
@@ -44,10 +47,10 @@ func _physics_process(delta: float) -> void:
 			Input.get_axis(GameSession.ACTION_PITCH_DOWN, GameSession.ACTION_PITCH_UP))
 	if Profile.invert_pitch:
 		steer.y = -steer.y
-	plane.input.steer = steer
+	# A real stick is long: small movements near the middle are fine ones.
+	plane.input.steer = Vector2(_shape(steer.x), _shape(steer.y))
+	plane.input.rudder = Input.get_axis(GameSession.ACTION_RUDDER_LEFT, GameSession.ACTION_RUDDER_RIGHT)
 	plane.input.firing = Input.is_action_pressed(GameSession.ACTION_FIRE)
-	if Input.is_action_just_pressed(GameSession.ACTION_EVADE):
-		plane.input.press_evade()
 	if Input.is_action_just_pressed(GameSession.ACTION_ENGINE):
 		plane.input.press_engine()
 	if Input.is_action_just_pressed(GameSession.ACTION_GEAR):
@@ -62,6 +65,10 @@ func _physics_process(delta: float) -> void:
 		_retarget_timer = RETARGET_INTERVAL
 		plane.current_target = _pick_target()
 	_update_aim_assist()
+
+
+func _shape(deflection: float) -> float:
+	return signf(deflection) * pow(absf(deflection), STICK_CURVE)
 
 
 ## The enemy closest to the gun line, within range and the targeting cone.

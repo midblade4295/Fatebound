@@ -15,7 +15,8 @@ const ACTION_STEER_RIGHT: StringName = &"steer_right"
 const ACTION_PITCH_UP: StringName = &"pitch_up"
 const ACTION_PITCH_DOWN: StringName = &"pitch_down"
 const ACTION_FIRE: StringName = &"fire"
-const ACTION_EVADE: StringName = &"evade_roll"
+const ACTION_RUDDER_LEFT: StringName = &"rudder_left"
+const ACTION_RUDDER_RIGHT: StringName = &"rudder_right"
 const ACTION_THROTTLE_UP: StringName = &"throttle_up"
 const ACTION_THROTTLE_DOWN: StringName = &"throttle_down"
 const ACTION_ENGINE: StringName = &"toggle_engine"
@@ -26,7 +27,7 @@ var team_size: int = 5
 ## Takedowns that end the match early.
 var score_limit: int = 25
 ## Match length in seconds.
-var match_duration: float = 180.0
+var match_duration: float = 300.0
 ## Seconds a downed pilot waits before respawning.
 var respawn_delay: float = 5.0
 var local_team: Teams.Id = Teams.Id.TEAM_BLUE
@@ -78,7 +79,8 @@ func _register_default_actions() -> void:
 	_add_key_action(ACTION_PITCH_UP, [KEY_W, KEY_UP])
 	_add_key_action(ACTION_PITCH_DOWN, [KEY_S, KEY_DOWN])
 	_add_key_action(ACTION_FIRE, [KEY_SPACE])
-	_add_key_action(ACTION_EVADE, [KEY_SHIFT, KEY_Q])
+	_add_key_action(ACTION_RUDDER_LEFT, [KEY_Q, KEY_Z])
+	_add_key_action(ACTION_RUDDER_RIGHT, [KEY_E, KEY_C])
 	_add_key_action(ACTION_THROTTLE_UP, [KEY_R, KEY_PAGEUP])
 	_add_key_action(ACTION_THROTTLE_DOWN, [KEY_F, KEY_PAGEDOWN])
 	_add_key_action(ACTION_ENGINE, [KEY_I])

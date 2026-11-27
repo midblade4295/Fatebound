@@ -12,19 +12,28 @@ extends Resource
 ## Commander Level that unlocks this plane (Hurricane 1, Spitfire 3, Mustang 6).
 @export_range(1, 14) var unlock_commander_level: int = 1
 
-## The clean wing stops carrying the bare aeroplane below this share of its
-## top speed.
-const STALL_SPEED_RATIO: float = 0.6
+## Share of a change in span that shows up as a change in wing area (the tips
+## are the narrow end of the wing).
+const WING_AREA_PER_SPAN: float = 0.6
 
 @export_group("Base Stats")
 @export var base_max_hp: float = 1000.0
-## Level-flight top speed in m/s.
-@export var base_top_speed: float = 85.0
-@export var base_acceleration: float = 0.6
-@export var base_climb_rate: float = 1.0
-@export var base_turn_rate_deg: float = 58.0
-@export var base_pitch_rate_deg: float = 52.0
-@export var base_roll_rate: float = 1.0
+## The real aeroplane's figures. Everything it can do (top speed, stalling
+## speed, climb, turn, take-off run) is worked out from these by the flight
+## model, not stated here.
+## Weight ready to fly but with nothing fitted to the mounts, kg.
+@export var base_mass: float = 2900.0
+## Wing area in square metres and span in metres.
+@export var base_wing_area: float = 22.5
+@export var base_span: float = 11.2
+## Full engine power, kilowatts.
+@export var base_power_kw: float = 1100.0
+## Drag coefficient of the clean aeroplane at zero lift.
+@export var base_drag: float = 0.021
+## The most lift coefficient the wing makes before it stalls.
+@export var base_max_lift: float = 1.5
+## Aileron power: 1.0 rolls like a Spitfire.
+@export var base_roll: float = 1.0
 
 @export_group("Sound")
 ## Seamless loop of this aircraft's engine at cruise power.
@@ -52,19 +61,42 @@ func is_unlocked(commander_level: int) -> bool:
 ## The bare aeroplane with only the Commander Level bonus: nothing fitted, so
 ## no guns. See build_stats() and build_stock_stats().
 func build_base_stats(commander_level: int) -> PlaneStats:
+	var stats: PlaneStats = _begin_stats(commander_level)
+	_finish_stats(stats)
+	return stats
+
+
+func _begin_stats(commander_level: int) -> PlaneStats:
 	var stats: PlaneStats = PlaneStats.new()
 	stats.max_hp = base_max_hp * CommanderProgression.hp_multiplier(commander_level)
-	stats.top_speed = base_top_speed * CommanderProgression.speed_multiplier(commander_level)
-	stats.acceleration = base_acceleration
-	stats.climb_rate = base_climb_rate
-	stats.turn_rate = deg_to_rad(base_turn_rate_deg)
-	stats.pitch_rate = deg_to_rad(base_pitch_rate_deg)
-	stats.roll_rate = base_roll_rate
-	stats.stall_speed = stats.top_speed * STALL_SPEED_RATIO
+	stats.speed_factor = CommanderProgression.speed_multiplier(commander_level)
+	stats.max_lift = base_max_lift
+	stats.roll_power = base_roll
 	stats.fittings.resize(CommanderProgression.MOUNT_COUNT)
 	stats.fitting_marks.resize(CommanderProgression.MOUNT_COUNT)
 	stats.fitting_marks.fill(1)
 	return stats
+
+
+## Turns what the fittings asked for into the aeroplane's real figures, then
+## flies it on paper to find out what it can do.
+func _finish_stats(stats: PlaneStats) -> void:
+	# Weight: everything fitted has to be dragged into the air and round the turns.
+	stats.mass = base_mass * stats.weight
+	stats.engine_power = base_power_kw * 1000.0 * stats.power_factor
+	# Clipped or extended tips change the span, and with it the area.
+	stats.wing_span = base_span * stats.wing_factor
+	stats.wing_area = base_wing_area * (1.0 + WING_AREA_PER_SPAN * (stats.wing_factor - 1.0))
+	# Top speed goes with the cube root of power over drag. A fitting that
+	# promises speed is a cleaner one: it gets its promise in less drag, over
+	# and above whatever extra power it brings.
+	stats.drag = base_drag * stats.power_factor / pow(stats.speed_factor, 3.0)
+	var flight: FlightDynamics = stats.make_flight()
+	stats.top_speed = flight.level_top_speed()
+	stats.stall_speed = flight.stall_speed(0.0)
+	stats.landing_stall_speed = flight.stall_speed(1.0)
+	stats.climb_rate = flight.best_climb_rate()
+	stats.climb_speed = flight.best_climb_speed()
 
 
 ## The plane as it leaves the factory: stock fittings, all Mk I.
@@ -78,7 +110,7 @@ func build_stock_stats(commander_level: int) -> PlaneStats:
 ## Level has not opened, is left off, so a stale loadout can never smuggle
 ## anything on.
 func build_stats(commander_level: int, fittings: Array[ComponentCard], marks: Array[int]) -> PlaneStats:
-	var stats: PlaneStats = build_base_stats(commander_level)
+	var stats: PlaneStats = _begin_stats(commander_level)
 	var count: int = mini(mini(fittings.size(), marks.size()), CommanderProgression.MOUNT_COUNT)
 	var shots_per_second: float = 0.0
 	var damage_per_second: float = 0.0
@@ -102,10 +134,5 @@ func build_stats(commander_level: int, fittings: Array[ComponentCard], marks: Ar
 		stats.fire_rate = shots_per_second
 		stats.bullet_damage = damage_per_second / shots_per_second
 		stats.bullet_speed = speed_weighted / shots_per_second
-	# Weight: everything fitted has to be dragged into the air and round the turns.
-	stats.acceleration /= stats.weight
-	stats.climb_rate /= stats.weight
-	stats.turn_rate /= sqrt(stats.weight)
-	stats.pitch_rate /= sqrt(stats.weight)
-	stats.stall_speed *= sqrt(stats.weight / maxf(stats.lift, 0.1))
+	_finish_stats(stats)
 	return stats

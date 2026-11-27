@@ -8,7 +8,7 @@ extends CanvasLayer
 ##   top-centre   compact score bar:  BLUE score | 5v5 + clock | RED score
 ##   top-right    circular radar
 ##   bottom-left  virtual flight stick
-##   bottom-right FIRE and EVADE ROLL, with the throttle lever beside them
+##   bottom-right FIRE and the two rudder pedals, with the throttle lever beside them
 ##                and ENGINE / GEAR above
 ##   centre       countdown / respawn / out-of-bounds messages, results panel
 ##   world layer  target diamonds, threat arrows, gun pipper, and a marker
@@ -25,6 +25,8 @@ extends CanvasLayer
 const KILL_FEED_LINES: int = 4
 const KILL_FEED_TIME: float = 5.0
 const ALERT_TIME: float = 2.8
+## The flight read-out warns of buffet past this share of the stalling angle.
+const BUFFET_WARNING: float = 0.88
 ## What losing or hurting each part means for the pilot, indexed by PlaneActor.Part.
 const PART_EFFECTS: Array[String] = [
 	"leaking fuel", "losing power", "pulling left", "pulling right", "pulling left", "pulling right",
@@ -64,7 +66,8 @@ var _home: Airfield
 @onready var _sub_message: Label = %SubMessage
 @onready var _joystick: TouchFlightStick = %Joystick
 @onready var _fire_button: ActionButton = %FireButton
-@onready var _roll_button: ActionButton = %RollButton
+@onready var _rudder_left: ActionButton = %RudderLeftButton
+@onready var _rudder_right: ActionButton = %RudderRightButton
 @onready var _engine_button: ActionButton = %EngineButton
 @onready var _gear_button: ActionButton = %GearButton
 @onready var _throttle_lever: ThrottleLever = %ThrottleLever
@@ -109,7 +112,8 @@ func bind(manager: MatchManager5v5, chase_camera: ChaseCamera, local_plane: Plan
 	var has_player: bool = player != null
 	_joystick.visible = has_player
 	_fire_button.visible = has_player
-	_roll_button.visible = has_player
+	_rudder_left.visible = has_player
+	_rudder_right.visible = has_player
 	_engine_button.visible = has_player
 	_gear_button.visible = has_player
 	_throttle_lever.visible = has_player
@@ -162,8 +166,16 @@ func _update_flight_panel() -> void:
 		return
 	var readout: String = "SPD %3d km/h   ALT %4d m" % [roundi(shown.speed_kmh()), roundi(maxf(shown.altitude(), 0.0))]
 	# How hard the wings are pulling, once it is more than a gentle turn.
-	if not shown.is_on_ground() and shown.load_factor() >= 1.5:
-		readout += "   %.1f G" % shown.load_factor()
+	if not shown.is_on_ground():
+		readout += "   %+d m/s" % roundi(shown.climb_speed())
+		if absf(shown.load_factor()) >= 1.5 or shown.load_factor() < 0.4:
+			readout += "   %.1f G" % shown.load_factor()
+		if shown.is_spinning():
+			readout += "   SPIN"
+		elif shown.is_stalling():
+			readout += "   STALL"
+		elif shown.attack_ratio() > BUFFET_WARNING:
+			readout += "   BUFFET"
 	if shown.broken_gear_mask() != 0:
 		readout += "   GEAR BROKEN"
 	elif shown.gear_deploy > 0.02:
@@ -181,12 +193,11 @@ func _update_buttons() -> void:
 		return
 	var dead: bool = not player.alive
 	_fire_button.disabled = dead or player.weapons_locked
-	_roll_button.disabled = dead
-	_roll_button.cooldown_ratio = 0.0 if dead else player.evade_cooldown_ratio()
-	_roll_button.cooldown_seconds = 0.0
+	# The pedals work on the ground too: that is how the nose is held straight.
+	_rudder_left.disabled = dead
+	_rudder_right.disabled = dead
 	var grounded: bool = player.is_on_ground()
 	_fire_button.disabled = _fire_button.disabled or grounded
-	_roll_button.disabled = _roll_button.disabled or grounded
 	# ENGINE: lamp on while it runs; greyed out when there is nothing to start.
 	var running: bool = player.is_engine_running()
 	_engine_button.disabled = dead or (not running and player.engine_power() <= 0.0)
@@ -248,12 +259,14 @@ func _flight_guidance() -> String:
 		if player.input.throttle < 0.5 and player.speed < player.takeoff_speed() * 0.5:
 			return "Open the throttle to roll (closed throttle = brakes)"
 		if player.speed < player.takeoff_speed():
-			return "Take-off speed %d km/h" % takeoff_kmh
+			return "Take-off speed %d km/h - the engine pulls left: hold it straight" % takeoff_kmh
 		return "Ease the stick back to lift off"
 	if player.is_going_down():
 		return "You are going down - fly it as far as you can"
+	if player.is_spinning():
+		return "SPIN - close the throttle, stick forward, rudder against the turn"
 	if player.is_stalling():
-		return "STALLING - ease the nose down to get your speed back"
+		return "STALL - ease the stick forward and let the speed come back"
 	var home_distance: float = INF
 	if _home != null:
 		home_distance = Vector2(player.global_position.x - _home.global_position.x, player.global_position.z - _home.global_position.z).length()
@@ -268,7 +281,7 @@ func _flight_guidance() -> String:
 				verdict = "firm"
 			elif player.pitch < -PlaneActor.PROP_STRIKE_PITCH:
 				verdict = "nose too low"
-			return "Approach: %d km/h (stalls below %d)   descent %.0f m/s - %s" % [roundi(player.speed_kmh()), takeoff_kmh, sink, verdict]
+			return "Approach: %d km/h (stalls at %d)   descent %.0f m/s - %s" % [roundi(player.speed_kmh()), roundi(player.stats.landing_stall_speed * 3.6), sink, verdict]
 		if player.speed > player.stats.top_speed * 0.6:
 			return "Wheels are down - press GEAR to raise them"
 	if _repair_hint_time > 0.0 and player.needs_service():
@@ -399,7 +412,8 @@ func _on_match_ended(winning_team: int) -> void:
 	_results.visible = true
 	_joystick.visible = false
 	_fire_button.visible = false
-	_roll_button.visible = false
+	_rudder_left.visible = false
+	_rudder_right.visible = false
 	_engine_button.visible = false
 	_gear_button.visible = false
 	_throttle_lever.visible = false

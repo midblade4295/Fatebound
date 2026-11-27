@@ -4,10 +4,10 @@ extends Node
 ##
 ##   godot --headless --fixed-fps 60 --path . res://tests/TestMatchSim.tscn
 ##
-## Prints MATCH_SIM_OK on success. Optional user args: `-- seed=7 duration=180`.
+## Prints MATCH_SIM_OK on success. Optional user args: `-- seed=7 duration=300 verbose=1`.
 
 const ARENA_SCENE: String = "res://scenes/arena/DogfightArena5v5.tscn"
-const MAX_SIM_SECONDS: float = 400.0
+const MAX_SIM_SECONDS: float = 520.0
 
 var _manager: MatchManager5v5
 var _failures: PackedStringArray = PackedStringArray()
@@ -32,11 +32,20 @@ var _collision_speeds: Array[float] = []
 var _fall_times: Array[float] = []
 var _first_loss_time: Dictionary[int, float] = {}
 var _parts_damaged: int = 0
+## With verbose=1: what each plane was doing over its last few seconds.
+var _history: Dictionary[int, Array] = {}
+var _history_timer: float = 0.0
+var _state_samples: Array[int] = [0, 0, 0, 0, 0, 0]
+var _engage_distance: float = 0.0
+var _in_range: int = 0
+var _in_range_20: int = 0
+var _in_range_8: int = 0
+var _in_range_firing: int = 0
 
 
 func _ready() -> void:
 	var seed_value: int = 7
-	var duration: float = 180.0
+	var duration: float = 300.0
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("seed="):
 			seed_value = int(argument.trim_prefix("seed="))
@@ -77,6 +86,8 @@ func _physics_process(delta: float) -> void:
 		return
 	_sim_time += delta
 	_max_bullets = maxi(_max_bullets, _manager.bullet_system.active_bullet_count())
+	if OS.get_cmdline_user_args().has("verbose=1"):
+		_record_history(delta)
 	_sample_timer -= delta
 	if _sample_timer <= 0.0:
 		_sample_timer = 0.5
@@ -123,9 +134,43 @@ func _on_died(victim: PlaneActor, killer: PlaneActor) -> void:
 			for damage: float in victim.part_damage:
 				worst = maxf(worst, damage)
 			var bot: SquadAIController = _manager.slot_for_plane(victim).controller as SquadAIController
+			for line: String in _history.get(victim.get_instance_id(), []):
+				print("      ", line)
 			print("  uncaused loss t=%.0f %s at %s speed %.0f pitch %.0f bank %.0f lift %.2f worst damage %.2f ground %s state %d over field %s" % [
 					_sim_time, victim.name, str(victim.global_position.round()), victim.speed, rad_to_deg(victim.pitch), rad_to_deg(victim.bank),
 					victim.lift_ratio(), worst, victim.is_on_ground(), bot.state if bot != null else -1, victim.airfield_at(victim.global_position) != null])
+
+
+## Notes what every bot is doing a few times a second (verbose runs only).
+func _record_history(delta: float) -> void:
+	_history_timer -= delta
+	if _history_timer > 0.0:
+		return
+	_history_timer = 0.5
+	for slot: PilotSlot in _manager.get_roster():
+		var plane: PlaneActor = slot.plane
+		var bot: SquadAIController = slot.controller as SquadAIController
+		if bot == null or not plane.alive:
+			continue
+		_state_samples[bot.state] += 1
+		if bot.state == SquadAIController.State.ENGAGE and bot.target != null and is_instance_valid(bot.target):
+			var distance: float = plane.global_position.distance_to(bot.target.global_position)
+			var off: float = rad_to_deg(Ballistics.angle_off_nose(plane.global_position, plane.forward(), bot.target.global_position))
+			_engage_distance += distance
+			if distance < plane.stats.gun_range:
+				_in_range += 1
+				if off < 20.0:
+					_in_range_20 += 1
+				if off < 8.0:
+					_in_range_8 += 1
+				if plane.input.firing:
+					_in_range_firing += 1
+		var lines: Array = _history.get_or_add(plane.get_instance_id(), [])
+		lines.append("t=%.1f state %d y %.0f vy %.0f v %.0f pitch %.0f bank %.0f g %.1f alpha %.1f stall %.2f stick %.2v thr %.1f" % [_sim_time, bot.state,
+				plane.global_position.y, plane.velocity.y, plane.speed, rad_to_deg(plane.pitch), rad_to_deg(plane.bank), plane.load_factor(),
+				rad_to_deg(plane.flight.alpha), plane.flight.stall, plane.input.steer, plane.throttle])
+		if lines.size() > 14:
+			lines.pop_front()
 
 
 func _on_respawned(plane: PlaneActor) -> void:
@@ -187,12 +232,17 @@ func _report() -> void:
 		print("  %-5s %-14s lvl%-2d skill %.2f  K %d  D %d  %s" % [Teams.name_of(slot.team), slot.display_name,
 				slot.commander_level, slot.bot_skill, slot.kills, slot.deaths, slot.plane.plane_data.display_name])
 
+	if OS.get_cmdline_user_args().has("verbose=1"):
+		print("bot half-seconds by state [patrol, engage, evade, recover, takeoff, upset]: %s" % str(_state_samples))
+		print("engaging: mean distance %.0f m; in gun range %d half-seconds, of which nose within 20 deg %d, within 8 deg %d, firing %d" % [
+				_engage_distance / float(maxi(_state_samples[1], 1)), _in_range, _in_range_20, _in_range_8, _in_range_firing])
 	_check(_manager.phase == MatchManager5v5.Phase.FINISHED, "match is not in the FINISHED phase")
 	_check(blue + red == total_deaths, "score %d does not equal total deaths %d" % [blue + red, total_deaths])
 	_check(total_kills == _shot_kills, "credited kills %d != credited deaths %d" % [total_kills, _shot_kills])
-	# Turning fights take a while with realistic turns: six losses in three
-	# minutes is a slow match, fewer means the bots are not fighting.
-	_check(blue + red >= 6, "too little combat: only %d takedowns" % (blue + red))
+	# Everyone has to take off and fly to the fight first, and turning fights
+	# between real aeroplanes take a while: five losses in five minutes is a
+	# slow match, fewer means the bots are not fighting.
+	_check(blue + red >= 5, "too little combat: only %d takedowns" % (blue + red))
 	_check(_friendly_hits == 0, "%d friendly-fire hits got through" % _friendly_hits)
 	# Every loss is now a crash; "uncredited" ones are those nobody caused.
 	_check(_crashes <= maxi(floori(float(blue + red) / 3.0), 2), "too many losses nobody caused: %d of %d" % [_crashes, blue + red])

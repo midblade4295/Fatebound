@@ -67,13 +67,13 @@ run() {   # run <name> <marker> <timeout> <scene> [user args...]
 run progression        PROGRESSION_OK  60 res://tests/TestProgression.tscn
 run hangar             HANGAR_OK       60 res://tests/TestHangar.tscn
 run player_flow        PLAYER_FLOW_OK  90 res://tests/TestPlayerFlow.tscn
-run flight             FLIGHT_OK       60 res://tests/TestFlight.tscn
-run damage_model       DAMAGE_MODEL_OK 90 res://tests/TestDamageModel.tscn
+run flight             FLIGHT_OK       90 res://tests/TestFlight.tscn
+run damage_model       DAMAGE_MODEL_OK 150 res://tests/TestDamageModel.tscn
 run collisions         COLLISIONS_OK   60 res://tests/TestCollisions.tscn
 run audio              AUDIO_OK        60 res://tests/TestAudio.tscn
-run ground_ops         GROUND_OPS_OK   90 res://tests/TestGroundOps.tscn
+run ground_ops         GROUND_OPS_OK   240 res://tests/TestGroundOps.tscn
 for seed in 1 7 42; do
-  run "match_sim_seed_$seed" MATCH_SIM_OK 120 res://tests/TestMatchSim.tscn "seed=$seed"
+  run "match_sim_seed_$seed" MATCH_SIM_OK 180 res://tests/TestMatchSim.tscn "seed=$seed"
 done
 # Menus: load, run two seconds, and (lobby) hand over to the arena.
 run_scene() {   # run_scene <name> <frames> <scene>

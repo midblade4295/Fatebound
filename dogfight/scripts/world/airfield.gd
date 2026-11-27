@@ -15,15 +15,15 @@ extends Node3D
 ## bots' look-ahead rays; planes are told to ignore it (see ground_body).
 ## Hangars and the tower are ordinary obstacles.
 
-const ISLAND_HALF_WIDTH: float = 200.0
-const ISLAND_HALF_LENGTH: float = 410.0
+const ISLAND_HALF_WIDTH: float = 230.0
+const ISLAND_HALF_LENGTH: float = 560.0
 ## Height of the flat top above the sea.
 const SURFACE_HEIGHT: float = 14.0
 ## Planes are on the island while inside this share of its outline; the rim
 ## beyond it is the sloping edge.
 const USABLE_SHARE: float = 0.94
-const RUNWAY_LENGTH: float = 620.0
-const RUNWAY_WIDTH: float = 52.0
+const RUNWAY_LENGTH: float = 900.0
+const RUNWAY_WIDTH: float = 56.0
 ## Where planes line up at the start end of the runway, one entry per seat:
 ## x = metres right of the centre line, y = metres from the start end. Seat 0
 ## (the player's) is alone on the centre line at the front. The last two are
@@ -182,7 +182,7 @@ func _build_runway() -> void:
 		for bar: int in range(6):
 			var x: float = (float(bar) - 2.5) * 7.0
 			_add_box(self, "Threshold", MARKING_COLOR, Vector3(3.2, 0.3, 26.0), Vector3(x, top - 0.04, side * (half - 22.0)))
-	var dashes: int = 11
+	var dashes: int = 16
 	for dash: int in range(dashes):
 		var z: float = lerpf(-half + 70.0, half - 70.0, float(dash) / float(dashes - 1))
 		_add_box(self, "CentreLine", MARKING_COLOR, Vector3(1.4, 0.3, 24.0), Vector3(0.0, top - 0.04, z))

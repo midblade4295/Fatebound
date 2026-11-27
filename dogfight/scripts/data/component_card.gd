@@ -66,7 +66,7 @@ const XP_REWARD_BY_MARK: Array[int] = [15, 40, 100, 250]
 ## Rounds per second from one gun.
 @export_range(0.0, 30.0, 0.1) var fire_rate: float = 0.0
 @export_range(0.0, 1000.0, 1.0) var damage: float = 0.0
-## Muzzle velocity, m/s (game scale).
+## Muzzle velocity, m/s.
 @export_range(0.0, 1000.0, 1.0) var muzzle_speed: float = 0.0
 @export_range(0.0, 1500.0, 1.0) var gun_range: float = 0.0
 @export_range(0.0, 5.0, 0.05) var spread_deg: float = 0.0
@@ -76,12 +76,20 @@ const XP_REWARD_BY_MARK: Array[int] = [15, 40, 100, 250]
 
 @export_group("Performance")
 # Fractions: 0.05 = +5%, -0.03 = 3% worse. Marks scale only the positive ones.
+# Each is a real change to the aeroplane; what it does to the flying follows
+# from the flight model (see PlaneData._finish_stats).
+## Level top speed (a cleaner, less draggy fitting).
 @export_range(-0.5, 0.5, 0.005) var top_speed_bonus: float = 0.0
+## Engine power: climb, acceleration and a little top speed.
 @export_range(-0.5, 1.0, 0.005) var climb_rate_bonus: float = 0.0
+## The propeller's pull at low speed: the take-off run and slow climbing.
 @export_range(-0.5, 1.0, 0.005) var acceleration_bonus: float = 0.0
+## The most lift the wing makes before it stalls: how hard it can turn.
 @export_range(-0.5, 0.5, 0.005) var turn_rate_bonus: float = 0.0
+## Aileron power: how fast it rolls.
 @export_range(-0.5, 1.0, 0.005) var roll_rate_bonus: float = 0.0
-## More wing (positive) lowers the stalling and take-off speed; less raises it.
+## Wing span. More wing (positive) lowers the stalling and take-off speed and
+## the drag of a hard turn; less raises them.
 @export_range(-0.5, 0.5, 0.005) var lift_bonus: float = 0.0
 
 @export_group("Protection")
@@ -174,13 +182,12 @@ func damage_at(mark: int) -> float:
 ## here: PlaneData.build_stats() puts each one in its station.
 func apply_to(stats: PlaneStats, mark: int) -> void:
 	stats.weight += weight
-	stats.top_speed *= 1.0 + scaled(top_speed_bonus, mark)
-	stats.climb_rate *= 1.0 + scaled(climb_rate_bonus, mark)
-	stats.acceleration *= 1.0 + scaled(acceleration_bonus, mark)
-	stats.turn_rate *= 1.0 + scaled(turn_rate_bonus, mark)
-	stats.pitch_rate *= 1.0 + scaled(turn_rate_bonus, mark)
-	stats.roll_rate *= 1.0 + scaled(roll_rate_bonus, mark)
-	stats.lift *= 1.0 + scaled(lift_bonus, mark)
+	stats.speed_factor *= 1.0 + scaled(top_speed_bonus, mark)
+	stats.power_factor *= 1.0 + scaled(climb_rate_bonus, mark)
+	stats.static_thrust *= 1.0 + scaled(acceleration_bonus, mark)
+	stats.max_lift *= 1.0 + scaled(turn_rate_bonus, mark)
+	stats.roll_power *= 1.0 + scaled(roll_rate_bonus, mark)
+	stats.wing_factor *= 1.0 + scaled(lift_bonus, mark)
 	stats.max_hp *= 1.0 + scaled(toughness_bonus, mark)
 	stats.fuel_leak *= 1.0 - clampf(scaled(leak_reduction, mark), 0.0, 0.95)
 	stats.gear_strength *= 1.0 + scaled(gear_strength_bonus, mark)
@@ -193,11 +200,11 @@ func stat_lines(mark: int) -> PackedStringArray:
 		lines.append("%d damage x %.1f rounds/s" % [roundi(damage_at(mark)), fire_rate])
 		lines.append("Range %d m" % roundi(gun_range))
 	_append_percent(lines, "Top speed", top_speed_bonus, mark)
-	_append_percent(lines, "Climb", climb_rate_bonus, mark)
-	_append_percent(lines, "Acceleration", acceleration_bonus, mark)
-	_append_percent(lines, "Turn", turn_rate_bonus, mark)
+	_append_percent(lines, "Engine power", climb_rate_bonus, mark)
+	_append_percent(lines, "Take-off thrust", acceleration_bonus, mark)
+	_append_percent(lines, "Wing lift", turn_rate_bonus, mark)
 	_append_percent(lines, "Roll", roll_rate_bonus, mark)
-	_append_percent(lines, "Lift", lift_bonus, mark)
+	_append_percent(lines, "Wing span", lift_bonus, mark)
 	_append_percent(lines, "Toughness", toughness_bonus, mark)
 	if leak_reduction > 0.0:
 		lines.append("Fuel leaks %d%% slower" % roundi(clampf(scaled(leak_reduction, mark), 0.0, 0.95) * 100.0))

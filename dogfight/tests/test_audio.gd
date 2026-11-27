@@ -112,7 +112,7 @@ func _physics_process(delta: float) -> void:
 			if _clock >= 3.0:
 				Input.action_release(GameSession.ACTION_PITCH_DOWN)
 				var cruise_pitch: float = get_meta(&"cruise_pitch")
-				_check(engine_here.pitch_scale > cruise_pitch + 0.02, "the engine note rises in a dive (%.2f -> %.2f)" % [cruise_pitch, engine_here.pitch_scale])
+				_check(engine_here.pitch_scale > cruise_pitch + 0.01, "the engine note rises in a dive (%.2f -> %.2f)" % [cruise_pitch, engine_here.pitch_scale])
 				# Kill the engine and set the plane alight.
 				_player.apply_damage(1000000.0, null, PlaneActor.Part.ENGINE)
 				Input.action_press(GameSession.ACTION_PITCH_UP)

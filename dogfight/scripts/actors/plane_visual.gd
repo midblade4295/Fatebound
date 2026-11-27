@@ -141,6 +141,8 @@ var _engine_fire: CPUParticles3D
 var _fuel_fire: CPUParticles3D
 var _control_target: Vector3 = Vector3.ZERO
 var _control_shown: Vector3 = Vector3.ZERO
+var _rudder_target: float = 0.0
+var _rudder_shown: float = 0.0
 var _prop_speed: float = 40.0
 var _prop_target: float = 40.0
 var _gear: Array[Node3D] = []
@@ -184,6 +186,7 @@ func build(data: PlaneData, team: Teams.Id, fittings: Array[ComponentCard] = [])
 	_part_smoke.clear()
 	_any_detached = false
 	_control_shown = Vector3.ZERO
+	_rudder_shown = 0.0
 	_gear.clear()
 	_gear_rest.clear()
 	_ensure_shared_meshes()
@@ -401,11 +404,6 @@ func belly_depth() -> float:
 	return -lowest if is_finite(lowest) else 0.0
 
 
-## Barrel-roll angle (radians) applied on top of the actor's own bank.
-func set_roll_angle(angle: float) -> void:
-	rotation.z = angle
-
-
 ## Shows the state of every part. [param damage] is PlaneActor.part_damage.
 ## Damaged parts smoke; a part that has just been destroyed is unbolted and
 ## thrown clear with [param plane_velocity], taking its attachments with it.
@@ -440,8 +438,9 @@ func set_part_damage(damage: PackedFloat32Array, plane_velocity: Vector3, burnin
 
 ## Where the pilot has the controls: x = roll/yaw (-1 left .. +1 right),
 ## y = pitch (-1 down .. +1 up), z = flaps (0 up .. 1 fully down).
-func set_controls(state: Vector3) -> void:
+func set_controls(state: Vector3, rudder: float = 0.0) -> void:
 	_control_target = state
+	_rudder_target = rudder
 
 
 func stop_effects() -> void:
@@ -735,6 +734,7 @@ func _animate_controls(delta: float) -> void:
 	if _pieces.is_empty():
 		return
 	_control_shown = _control_shown.lerp(_control_target, 1.0 - exp(-CONTROL_RESPONSE * delta))
+	_rudder_shown = lerpf(_rudder_shown, _rudder_target, 1.0 - exp(-CONTROL_RESPONSE * delta))
 	# A positive turn about a surface's hinge swings its trailing edge down.
 	# Rolling right: left aileron down, right aileron up.
 	_deflect(PlaneActor.Part.LEFT_AILERON, Vector3.RIGHT, _control_shown.x * AILERON_MAX)
@@ -743,7 +743,7 @@ func _animate_controls(delta: float) -> void:
 	_deflect(PlaneActor.Part.LEFT_ELEVATOR, Vector3.RIGHT, -_control_shown.y * ELEVATOR_MAX)
 	_deflect(PlaneActor.Part.RIGHT_ELEVATOR, Vector3.RIGHT, -_control_shown.y * ELEVATOR_MAX)
 	# Nose right: rudder trailing edge to the right.
-	_deflect(PlaneActor.Part.RUDDER, Vector3.UP, _control_shown.x * RUDDER_MAX)
+	_deflect(PlaneActor.Part.RUDDER, Vector3.UP, _rudder_shown * RUDDER_MAX)
 	_deflect(PlaneActor.Part.LEFT_FLAP, Vector3.RIGHT, _control_shown.z * FLAP_MAX)
 	_deflect(PlaneActor.Part.RIGHT_FLAP, Vector3.RIGHT, _control_shown.z * FLAP_MAX)
 

@@ -1,15 +1,17 @@
 extends Node
-## Headless test of how the planes fly: lift, stalling and recovery, gliding,
-## and turning.
+## Headless test of how the planes fly. The flight model is a rigid body in
+## real gravity (see FlightDynamics), so this checks the things a real
+## aeroplane does: trimmed cruise, loops, rolls, stalls, spins and recovering
+## from them, what the propeller's torque does, banked turns and gliding.
 ##
-##   godot --headless --fixed-fps 60 --path . res://tests/TestFlight.tscn
+##   godot --headless --fixed-fps 60 --path . res://tests/TestFlight.tscn [-- verbose=1]
 ##
 ## Prints FLIGHT_OK on success. Ten planes are each put in open sky and flown
 ## through one situation by a scripted hand on the stick.
 
 const ARENA_SCENE: String = "res://scenes/arena/DogfightArena5v5.tscn"
-const START_HEIGHT: float = 620.0
-const RUN_TIME: float = 26.0
+const START_HEIGHT: float = 2200.0
+const RUN_TIME: float = 30.0
 
 var _manager: MatchManager5v5
 var _failures: PackedStringArray = PackedStringArray()
@@ -28,19 +30,23 @@ class FlightCase:
 	var start_height: float = 0.0
 	var start_position: Vector3 = Vector3.ZERO
 	var lowest: float = INF
-	## Largest change in rate of descent from one tick to the next (m/s).
-	var worst_drop_step: float = 0.0
-	var last_vertical: float = 0.0
+	var highest: float = -INF
 	var height_at: Dictionary[int, float] = {}
 	var speed_at: Dictionary[int, float] = {}
-	var yaw_at: Dictionary[int, float] = {}
 	var bank_at: Dictionary[int, float] = {}
-	var position_at: Dictionary[int, Vector3] = {}
-	var most_g: float = 0.0
-	var flying_again_at: float = -1.0
-	var stalled_seen: bool = false
-	var total_turn: float = 0.0
+	var load_at: Dictionary[int, float] = {}
+	var most_g: float = -INF
+	var least_g: float = INF
+	## Radians turned about each of the plane's own axes since the start:
+	## x = pitched up, y = yawed left, z = rolled left.
+	var turned: Vector3 = Vector3.ZERO
+	## Heading change (radians, positive to the left), unwrapped.
+	var heading_change: float = 0.0
 	var last_yaw: float = 0.0
+	var stalled_seen: bool = false
+	var spin_seen: bool = false
+	var stalled_time: float = 0.0
+	## Free for each case to use.
 	var notes: Dictionary[String, float] = {}
 
 
@@ -84,9 +90,9 @@ func _physics_process(delta: float) -> void:
 
 func _set_up() -> void:
 	var planes: Array[PlaneActor] = _manager.get_planes()
-	# Every plane the same: a stock Hurricane, far from the others, with no
+	# Every plane the same: a stock Spitfire, far from the others, with no
 	# edge of the arena or ceiling to steer it.
-	var data: PlaneData = GameCatalog.find_plane(&"hurricane")
+	var data: PlaneData = GameCatalog.find_plane(&"spitfire")
 	for index: int in range(planes.size()):
 		var plane: PlaneActor = planes[index]
 		plane.stats = data.build_stock_stats(1)
@@ -95,59 +101,160 @@ func _set_up() -> void:
 		plane.weapons_locked = true
 	var stall: float = planes[0].stats.stall_speed
 	var top: float = planes[0].stats.top_speed
-	# Three planes caught too slow to fly with their noses in the air,
-	# engines at full power.
-	_start("slow, hands off", planes[0], 0, stall * 0.7, true, func(case: FlightCase, _time: float) -> void:
+
+	_start("cruise", planes[0], 0, top * 0.8, 0.75, func(case: FlightCase, _time: float) -> void:
 		case.plane.input.steer = Vector2.ZERO)
-	_start("slow, nose down", planes[1], 1, stall * 0.7, true, func(case: FlightCase, _time: float) -> void:
-		# Push the nose down until it is flying again, then ease out level.
-		var flying: bool = case.plane.speed > case.plane.stats.stall_speed * 1.15
-		case.plane.input.steer = Vector2(0.0, _hold_pitch(case.plane, 0.0) if flying else -1.0))
-	_start("slow, stick held back", planes[2], 2, stall * 0.7, true, func(case: FlightCase, _time: float) -> void:
-		case.plane.input.steer = Vector2(0.0, 1.0))
-	_start("glide", planes[3], 3, stall * 1.3, false, func(case: FlightCase, _time: float) -> void:
-		# Engine off: hold the best gliding speed with the nose.
-		var target: float = case.plane.stats.stall_speed * PlaneActor.BEST_GLIDE_SPEED_RATIO
-		case.plane.input.steer = Vector2(0.0, clampf((case.plane.speed - target) * 0.08, -0.6, 0.6)))
-	_start("engine cut at speed", planes[4], 4, top, false, func(case: FlightCase, _time: float) -> void:
-		case.plane.input.steer = Vector2(0.0, _hold_pitch(case.plane, 0.0)))
-	_start("cruise", planes[5], 5, top * 0.9, true, func(case: FlightCase, _time: float) -> void:
-		case.plane.input.steer = Vector2.ZERO)
-	_start("turn at speed", planes[6], 6, top, true, func(case: FlightCase, _time: float) -> void:
-		case.plane.input.steer = Vector2(1.0, 0.0))
-	_start("turn slow", planes[7], 7, stall * 1.12, true, func(case: FlightCase, time: float) -> void:
-		# Throttled back so it stays slow.
-		case.plane.input.throttle = 0.6
-		case.plane.input.steer = Vector2(1.0 if time > 1.0 else 0.0, 0.0))
-	_start("turn below flying speed", planes[8], 8, stall * 0.9, false, func(case: FlightCase, time: float) -> void:
-		case.plane.input.steer = Vector2(1.0 if time < 1.5 else 0.0, 0.0))
-	_start("zoom climb", planes[9], 9, top, true, func(case: FlightCase, time: float) -> void:
-		# Haul the nose up and hold it there until the speed is gone, then let go.
-		case.plane.input.steer = Vector2(0.0, 1.0 if time < 9.0 else 0.0))
+
+	_start("flat out", planes[1], 1, top, 1.0, func(case: FlightCase, _time: float) -> void:
+		case.plane.input.steer = Vector2(_level_wings(case.plane), _hold_height(case)))
+
+	_start("loop", planes[2], 2, top * 0.95, 1.0, func(case: FlightCase, _time: float) -> void:
+		# Stick back and held there, eased a little if the wing complains,
+		# until the horizon has gone right round. Then let go.
+		if case.turned.x < TAU:
+			case.plane.input.steer = Vector2(0.0, 0.55 if case.plane.stall_amount() < 0.08 else 0.25)
+			case.notes["loop_time"] = _clock
+		else:
+			case.plane.input.steer = Vector2.ZERO)
+
+	_start("roll", planes[3], 3, top * 0.75, 1.0, func(case: FlightCase, _time: float) -> void:
+		# Stick hard over until the plane has gone right round, then level.
+		if -case.turned.z < TAU and not case.notes.has("rolled"):
+			case.plane.input.steer = Vector2(1.0, 0.0)
+			case.notes["roll_time"] = _clock
+		else:
+			case.notes["rolled"] = 1.0
+			case.plane.input.steer = Vector2(_level_wings(case.plane), 0.0))
+
+	_start("stall", planes[4], 4, stall * 1.5, 0.0, func(case: FlightCase, time: float) -> void:
+		# Throttle closed, hold the nose up until the wing lets go. Then stick
+		# forward, power on, and ease out of the dive.
+		var plane: PlaneActor = case.plane
+		if not case.notes.has("recovering"):
+			plane.input.throttle = 0.0
+			plane.input.steer = Vector2(0.0, minf(0.15 + time * 0.12, 1.0))
+			if case.stalled_time > 0.6:
+				case.notes["recovering"] = _clock
+				case.notes["stall_speed"] = plane.speed
+				case.notes["stall_height"] = plane.global_position.y
+			return
+		plane.input.throttle = 1.0
+		if plane.is_stalling() or plane.speed < plane.stats.stall_speed * 1.25:
+			plane.input.steer = Vector2(0.0, -0.4)
+		else:
+			if not case.notes.has("flying_again"):
+				case.notes["flying_again"] = _clock
+			plane.input.steer = Vector2(_level_wings(plane), _hold_pitch(plane, 0.0, 0.5)))
+
+	_start("spin", planes[5], 5, stall * 1.4, 0.1, func(case: FlightCase, time: float) -> void:
+		# Slow, then stick right back with full left rudder, and hold it in.
+		var plane: PlaneActor = case.plane
+		if time < 3.0:
+			plane.input.steer = Vector2(0.0, 0.35)
+			return
+		if time < 16.0:
+			plane.input.steer = Vector2(0.0, 1.0)
+			plane.input.rudder = -1.0
+			case.notes["turns_in_spin"] = absf(case.turned.y) / TAU
+			case.notes["spin_bottom"] = plane.global_position.y
+			return
+		# Recovery: throttle closed, stick forward, rudder against the turn.
+		if not case.notes.has("out_of_spin"):
+			plane.input.throttle = 0.0
+			var against: Vector3 = FlightPilot.recover_spin(plane)
+			plane.input.steer = Vector2(against.x, against.y)
+			plane.input.rudder = against.z
+			if not plane.is_stalling() and absf(plane.flight.angular_velocity.y) < 0.3:
+				case.notes["out_of_spin"] = _clock
+			return
+		plane.input.throttle = 1.0
+		plane.input.rudder = 0.0
+		plane.input.steer = Vector2(_level_wings(plane), _hold_pitch(plane, 0.0, 0.5)))
+
+	_start("torque", planes[6], 6, stall * 1.3, 0.3, func(case: FlightCase, time: float) -> void:
+		# Trimmed and slow on a little power, then the throttle is slammed open
+		# and nobody touches the stick.
+		var plane: PlaneActor = case.plane
+		plane.input.steer = Vector2.ZERO
+		if time < 4.0:
+			case.notes["bank_before"] = plane.bank
+			case.notes["yaw_before"] = case.heading_change
+		else:
+			plane.input.throttle = 1.0
+			if time < 7.0:
+				case.notes["bank_after"] = plane.bank
+				case.notes["yaw_after"] = case.heading_change)
+
+	_start("turn", planes[7], 7, top * 0.75, 1.0, func(case: FlightCase, time: float) -> void:
+		# Roll to sixty degrees of bank and pull enough to hold height: 2 g.
+		var plane: PlaneActor = case.plane
+		var bank_error: float = deg_to_rad(-60.0) - plane.bank
+		var roll_stick: float = clampf(-bank_error * 2.5 + plane.flight.angular_velocity.z * 0.4, -1.0, 1.0)
+		var pull: float = clampf(plane.flight.elevator_for_load(2.0) - plane.climb_speed() * 0.03, -0.3, 1.0)
+		plane.input.steer = Vector2(roll_stick, pull if time > 1.0 else 0.0)
+		if time > 8.0 and not case.notes.has("turn_from"):
+			case.notes["turn_from"] = case.heading_change
+			case.notes["turn_from_time"] = _clock
+			case.notes["turn_height"] = plane.global_position.y
+		case.notes["turn_to"] = case.heading_change
+		case.notes["turn_to_time"] = _clock)
+
+	_start("glide", planes[8], 8, stall * 1.6, -1.0, func(case: FlightCase, _time: float) -> void:
+		# Engine stopped: hold a good gliding speed with the nose.
+		var plane: PlaneActor = case.plane
+		var target: float = plane.stats.stall_speed * 1.5
+		plane.input.steer = Vector2(_level_wings(plane), clampf((plane.speed - target) * 0.04 - plane.flight.angular_velocity.x * 0.5, -0.5, 0.5)))
+
+	_start("free fall", planes[9], 9, top * 0.7, -1.0, func(case: FlightCase, time: float) -> void:
+		# Engine stopped; from two seconds in, push the stick to hold no g at
+		# all for two seconds. With no lift the plane is a thrown stone.
+		var plane: PlaneActor = case.plane
+		if time < 2.0 or time > 4.0:
+			plane.input.steer = Vector2(_level_wings(plane), _hold_pitch(plane, deg_to_rad(-8.0), 0.5) if time > 4.0 else 0.0)
+			if time < 2.0:
+				case.notes["fall_start"] = plane.velocity.y
+			return
+		plane.input.steer = Vector2(0.0, clampf(plane.flight.elevator_for_load(0.0) - plane.load_factor() * 0.2, -1.0, 1.0))
+		if time > 2.5:
+			case.notes["weightless_g"] = maxf(_note(case, "weightless_g", 0.0), absf(plane.load_factor()))
+		case.notes["fall_end"] = plane.velocity.y
+		case.notes["fall_time"] = time - 2.0)
 
 
-func _start(label: String, plane: PlaneActor, lane: int, speed: float, engine_on: bool, fly: Callable) -> void:
-	# The three "slow" planes start nose-high, as after pulling up too far.
-	var nose_up: float = deg_to_rad(25.0) if label.begins_with("slow") else 0.0
+## [param throttle] below zero means the engine is stopped.
+func _start(label: String, plane: PlaneActor, lane: int, speed: float, throttle: float, fly: Callable) -> void:
 	var case: FlightCase = FlightCase.new()
 	case.plane = plane
 	case.fly = fly
 	plane.speed = speed
-	plane.set_engine_running(engine_on)
-	plane.input.throttle = 1.0 if engine_on else 0.0
+	plane.set_engine_running(throttle >= 0.0)
+	plane.input.throttle = maxf(throttle, 0.0)
 	plane.throttle = plane.input.throttle
 	plane.input.steer = Vector2.ZERO
-	# Lanes 320 m apart, all heading north.
-	plane.teleport(Transform3D(Basis(Vector3.RIGHT, nose_up), Vector3((float(lane) - 4.5) * 320.0, START_HEIGHT, 1200.0)))
+	plane.input.rudder = 0.0
+	# Lanes 600 m apart, all heading north.
+	plane.teleport(Transform3D(Basis.IDENTITY, Vector3((float(lane) - 4.5) * 600.0, START_HEIGHT, 1200.0)))
 	case.start_height = plane.global_position.y
 	case.start_position = plane.global_position
 	case.last_yaw = plane.yaw
 	_cases[label] = case
 
 
-## Stick position that eases the flight path toward [param target] radians.
-func _hold_pitch(plane: PlaneActor, target: float) -> float:
-	return clampf((target - plane.pitch) * 6.0, -1.0, 1.0)
+## Stick that eases the nose toward [param target] radians above the horizon.
+func _hold_pitch(plane: PlaneActor, target: float, most: float = 1.0) -> float:
+	return clampf((target - plane.pitch) * 2.5 - plane.flight.angular_velocity.x * 0.8, -most, most)
+
+
+## Stick that holds the height the case started at.
+func _hold_height(case: FlightCase) -> float:
+	var plane: PlaneActor = case.plane
+	var climb_wanted: float = clampf((case.start_height - plane.global_position.y) * 0.3, -8.0, 8.0)
+	return clampf((climb_wanted - plane.climb_speed()) * 0.03, -0.4, 0.4)
+
+
+## Aileron that rolls the wings level. (Positive bank is left wing down.)
+func _level_wings(plane: PlaneActor) -> float:
+	return clampf(plane.bank * 2.0 + plane.flight.angular_velocity.z * 0.4, -1.0, 1.0)
 
 
 func _watch(case: FlightCase, delta: float) -> void:
@@ -156,25 +263,20 @@ func _watch(case: FlightCase, delta: float) -> void:
 	if not case.height_at.has(second):
 		case.height_at[second] = plane.global_position.y
 		case.speed_at[second] = plane.speed
-		case.yaw_at[second] = case.total_turn
 		case.bank_at[second] = plane.bank
-		case.position_at[second] = plane.global_position
+		case.load_at[second] = plane.load_factor()
 	case.lowest = minf(case.lowest, plane.global_position.y)
-	case.worst_drop_step = maxf(case.worst_drop_step, case.last_vertical - plane.velocity.y)
-	case.last_vertical = plane.velocity.y
+	case.highest = maxf(case.highest, plane.global_position.y)
 	case.most_g = maxf(case.most_g, plane.load_factor())
-	var lift_possible: float = pow(plane.speed / plane.stats.stall_speed, 2.0) * (1.0 + PlaneActor.FLAP_LIFT_BONUS)
-	case.notes["g_over_lift"] = maxf(_note(case, "g_over_lift", -INF), plane.load_factor() - lift_possible)
-	if _clock > 3.0:
-		case.notes["slowest"] = minf(_note(case, "slowest", INF), plane.speed)
-	case.total_turn += wrapf(plane.yaw - case.last_yaw, -PI, PI)
+	case.least_g = minf(case.least_g, plane.load_factor())
+	case.turned += plane.flight.angular_velocity * delta
+	case.heading_change += wrapf(plane.yaw - case.last_yaw, -PI, PI)
 	case.last_yaw = plane.yaw
 	if plane.is_stalling():
 		case.stalled_seen = true
-	elif case.stalled_seen and case.flying_again_at < 0.0 and plane.speed >= plane.stats.stall_speed:
-		case.flying_again_at = _clock
-	if delta <= 0.0:
-		return
+		case.stalled_time += delta
+	if plane.is_spinning():
+		case.spin_seen = true
 
 
 # ---------------------------------------------------------------------------
@@ -182,98 +284,96 @@ func _watch(case: FlightCase, delta: float) -> void:
 # ---------------------------------------------------------------------------
 
 func _judge() -> void:
-	var stall: float = _cases["cruise"].plane.stats.stall_speed
-	var top: float = _cases["cruise"].plane.stats.top_speed
-	var gravity_step: float = PlaneActor.FLIGHT_GRAVITY / 60.0
+	var stats: PlaneStats = _cases["cruise"].plane.stats
+	var stall: float = stats.stall_speed
+	var top: float = stats.top_speed
 
-	# --- Too slow to fly: it sinks, it does not drop -------------------------
-	var hands_off: FlightCase = _cases["slow, hands off"]
-	_check(hands_off.stalled_seen, "at 70% of stalling speed the wings cannot hold the plane")
-	_check(hands_off.worst_drop_step <= gravity_step * 1.2, "but its descent builds no faster than a fall would (largest change %.2f m/s in a tick, gravity is %.2f)" % [hands_off.worst_drop_step, gravity_step])
-	var early_loss: float = hands_off.start_height - _height(hands_off, 1)
-	_check(early_loss < 8.0, "after a second it has lost only %.1f m, not dropped out of the sky" % early_loss)
-	_check(hands_off.plane.alive and hands_off.flying_again_at > 0.0, "left alone, it picks up speed on the way down and flies again (after %.1f s)" % hands_off.flying_again_at)
-	var hands_off_loss: float = hands_off.start_height - hands_off.lowest
-	_check(hands_off_loss < 120.0, "having lost %.0f m doing it" % hands_off_loss)
-	_check(absf(_height(hands_off, 20) - _height(hands_off, 24)) < 12.0, "after which it holds its height (%.0f m in 4 s)" % (_height(hands_off, 24) - _height(hands_off, 20)))
-	_check(_speed(hands_off, 20) >= stall, "and it is still flying 20 s later (%.0f m/s, stalls at %.0f)" % [_speed(hands_off, 20), stall])
+	# --- The aeroplane's figures come out of the physics --------------------------
+	_check(top * 3.6 > 440.0 and top * 3.6 < 540.0, "a Spitfire's top speed at sea level is a real one (%.0f km/h)" % (top * 3.6))
+	_check(stall * 3.6 > 115.0 and stall * 3.6 < 160.0, "and so is its stalling speed (%.0f km/h)" % (stall * 3.6))
+	_check(stats.climb_rate > 11.0 and stats.climb_rate < 21.0, "and its rate of climb (%.1f m/s)" % stats.climb_rate)
+	_check(stats.landing_stall_speed < stall, "flaps lower the stalling speed (%.0f against %.0f km/h)" % [stats.landing_stall_speed * 3.6, stall * 3.6])
 
-	# --- Nose down gets the speed back sooner --------------------------------
-	var nose_down: FlightCase = _cases["slow, nose down"]
-	_check(nose_down.flying_again_at > 0.0 and nose_down.flying_again_at < hands_off.flying_again_at - 0.2,
-			"putting the nose down gets flying speed back sooner (%.1f s against %.1f s hands off)" % [nose_down.flying_again_at, hands_off.flying_again_at])
-	_check(nose_down.start_height - nose_down.lowest < 150.0, "for %.0f m of height" % (nose_down.start_height - nose_down.lowest))
-	_check(nose_down.plane.alive and absf(nose_down.plane.pitch) < deg_to_rad(6.0) and not nose_down.plane.is_stalling(), "and the pilot then levels out, in control (nose %.1f degrees)" % rad_to_deg(nose_down.plane.pitch))
-	_check(_speed(nose_down, 20) > stall * 1.05, "flying at %.0f m/s" % _speed(nose_down, 20))
-
-	# --- Holding the stick back when slow does not help ----------------------
-	var held_back: FlightCase = _cases["slow, stick held back"]
-	var over: float = _note(held_back, "g_over_lift", 0.0)
-	_check(over <= 0.01, "hauling back cannot make the wings pull harder than the airspeed allows (never more than %.2f g over what the airspeed gives)" % over)
-	_check(_note(held_back, "slowest", INF) < stall, "holding the stick back keeps stalling it again (down to %.0f m/s)" % _note(held_back, "slowest", INF))
-	_check(held_back.plane.alive, "though it still does not fall out of the sky")
-
-	# --- Gliding ---------------------------------------------------------------
-	var glide: FlightCase = _cases["glide"]
-	var glide_run: float = Vector2(glide.position_at[22].x - glide.position_at[6].x, glide.position_at[22].z - glide.position_at[6].z).length()
-	var glide_fall: float = _height(glide, 6) - _height(glide, 22)
-	var glide_ratio: float = glide_run / maxf(glide_fall, 0.1)
-	_check(glide_ratio > 4.0 and glide_ratio < 9.0, "engine off, it glides about 1 in %.1f" % glide_ratio)
-	_check(not glide.plane.is_stalling() and absf(_speed(glide, 22) - stall * PlaneActor.BEST_GLIDE_SPEED_RATIO) < 6.0, "holding its speed with the nose down a little (%.0f m/s, nose %.1f degrees)" % [_speed(glide, 22), rad_to_deg(glide.plane.pitch)])
-	var cut: FlightCase = _cases["engine cut at speed"]
-	_check(_height(cut, 6) > cut.start_height - 3.0, "an engine cut at speed leaves the plane flying level on its momentum (%.1f m lost in 6 s)" % (cut.start_height - _height(cut, 6)))
-	_check(_speed(cut, 6) < top * 0.9 and _speed(cut, 6) > stall, "slowing as drag takes the speed off (%.0f -> %.0f m/s in 6 s)" % [top, _speed(cut, 6)])
-	var sink_rate: float = (_height(cut, 18) - _height(cut, 24)) / 6.0
-	_check(cut.plane.alive and sink_rate > 3.0 and sink_rate < 14.0, "and when it can no longer fly level it descends at %.0f m/s: a glide, not a plummet" % sink_rate)
-
-	# --- Cruise ----------------------------------------------------------------
+	# --- Trimmed flight ------------------------------------------------------------
 	var cruise: FlightCase = _cases["cruise"]
-	_check(absf(_speed(cruise, 20) - top) < top * 0.03, "at full throttle it settles at top speed (%.0f of %.0f m/s)" % [_speed(cruise, 20), top])
-	_check(absf(_height(cruise, 20) - cruise.start_height) < 5.0, "holding its height hands off (%.1f m)" % (_height(cruise, 20) - cruise.start_height))
-	_check(absf(cruise.plane.load_factor() - 1.0) < 0.05, "at 1 g (%.2f)" % cruise.plane.load_factor())
+	_check(cruise.plane.alive and absf(_height(cruise, 28) - cruise.start_height) < 120.0, "hands off, a trimmed plane holds its height (%.0f m in 28 s)" % (_height(cruise, 28) - cruise.start_height))
+	_check(absf(cruise.plane.load_factor() - 1.0) < 0.06, "at 1 g (%.2f)" % cruise.plane.load_factor())
+	_check(absf(cruise.plane.bank) < deg_to_rad(25.0), "with its wings near enough level (%.0f degrees)" % rad_to_deg(cruise.plane.bank))
+	var flat_out: FlightCase = _cases["flat out"]
+	_check(absf(_speed(flat_out, 28) - top) < top * 0.04, "flat out and level it holds its top speed (%.0f of %.0f m/s)" % [_speed(flat_out, 28), top])
 
-	# --- Turning ---------------------------------------------------------------
-	var fast_turn: FlightCase = _cases["turn at speed"]
-	var slow_turn: FlightCase = _cases["turn slow"]
-	var fast_bank: float = absf(fast_turn.bank_at[3])
-	var slow_bank: float = absf(slow_turn.bank_at[6])
-	_check(fast_bank > deg_to_rad(45.0), "a turn is a bank: full stick at speed rolls it over %.0f degrees" % rad_to_deg(fast_bank))
-	var fast_rate: float = absf(fast_turn.yaw_at[4] - fast_turn.yaw_at[2]) / 2.0
-	var fast_speed: float = (_speed(fast_turn, 2) + _speed(fast_turn, 4)) * 0.5
-	# g x tan(bank) / speed, plus the little the rudder skids it round.
-	var expected: float = PlaneActor.FLIGHT_GRAVITY * tan(fast_bank) / fast_speed + PlaneActor.RUDDER_YAW_RATE
-	_check(absf(fast_rate - expected) < expected * 0.2, "and it turns at the rate that bank gives at that speed (%.0f degrees/s, physics says %.0f)" % [rad_to_deg(fast_rate), rad_to_deg(expected)])
-	_check(fast_turn.most_g > 1.8 and fast_turn.most_g <= PlaneActor.G_LIMIT + 0.01, "pulling %.1f g" % fast_turn.most_g)
-	_check(absf(_height(fast_turn, 8) - fast_turn.start_height) < 25.0, "without losing or gaining height (%.0f m in 8 s)" % (_height(fast_turn, 8) - fast_turn.start_height))
-	_check(_speed(fast_turn, 10) < top * 0.97, "a hard turn costs speed (%.0f -> %.0f m/s)" % [top, _speed(fast_turn, 10)])
-	var later_rate: float = absf(fast_turn.yaw_at[20] - fast_turn.yaw_at[16]) / 4.0
-	_check(later_rate < fast_rate * 0.97, "so held, it settles into a slower turn (%.0f then %.0f degrees/s)" % [rad_to_deg(fast_rate), rad_to_deg(later_rate)])
-	var slow_rate: float = absf(slow_turn.yaw_at[10] - slow_turn.yaw_at[6]) / 4.0
-	_check(slow_bank < fast_bank - deg_to_rad(8.0), "just above stalling speed it cannot bank as far without losing height (%.0f against %.0f degrees)" % [rad_to_deg(slow_bank), rad_to_deg(fast_bank)])
-	_check(slow_rate < fast_rate * 0.8, "so it turns more slowly (%.0f against %.0f degrees/s)" % [rad_to_deg(slow_rate), rad_to_deg(fast_rate)])
-	_check(slow_turn.start_height - slow_turn.lowest < 30.0, "but it does not fall out of the turn (%.0f m lost)" % (slow_turn.start_height - slow_turn.lowest))
-	var too_slow: FlightCase = _cases["turn below flying speed"]
-	_check(absf(too_slow.bank_at[1]) < deg_to_rad(12.0), "below flying speed there is no lift to spare for a turn: it stays nearly wings-level (%.0f degrees)" % rad_to_deg(absf(too_slow.bank_at[1])))
-	_check(too_slow.plane.alive, "and survives the attempt")
+	# --- Aerobatics ------------------------------------------------------------------
+	var loop: FlightCase = _cases["loop"]
+	_check(loop.plane.alive and loop.turned.x >= TAU, "holding the stick back takes it right round a loop (%.0f degrees)" % rad_to_deg(loop.turned.x))
+	_check(_note(loop, "loop_time", 99.0) < 26.0, "in %.0f seconds" % _note(loop, "loop_time", 99.0))
+	_check(loop.highest - loop.start_height > 250.0, "going %.0f m up and over the top" % (loop.highest - loop.start_height))
+	_check(loop.most_g > 3.0 and loop.most_g < 8.6, "pulling %.1f g on the way in" % loop.most_g)
+	var roll: FlightCase = _cases["roll"]
+	_check(roll.plane.alive and _note(roll, "rolled", 0.0) > 0.0, "stick hard over rolls it right round (%.0f degrees)" % rad_to_deg(-roll.turned.z))
+	var roll_rate: float = 360.0 / maxf(_note(roll, "roll_time", 99.0), 0.1)
+	_check(roll_rate > 60.0 and roll_rate < 170.0, "at a fighter's rate of roll (%.0f degrees a second)" % roll_rate)
+	_check(roll.start_height - _height(roll, 4) > 20.0, "through upside down, where its lift points at the ground: it comes out %.0f m lower" % (roll.start_height - _height(roll, 4)))
 
-	# --- Zoom climb --------------------------------------------------------------
-	var zoom: FlightCase = _cases["zoom climb"]
-	var gained: float = 0.0
-	for second: int in zoom.height_at:
-		gained = maxf(gained, zoom.height_at[second] - zoom.start_height)
-	_check(gained > 80.0, "hauling the nose up trades speed for height (%.0f m gained)" % gained)
-	_check(zoom.most_g > 2.0, "pulling %.1f g into the climb" % zoom.most_g)
-	_check(zoom.plane.alive and _speed(zoom, 24) > stall, "and once the speed has gone the nose comes down and it flies on (%.0f m/s at the end)" % _speed(zoom, 24))
-	_check(zoom.worst_drop_step <= gravity_step * 1.2, "with no sudden drop at the top (largest change %.2f m/s in a tick)" % zoom.worst_drop_step)
+	# --- Stall ----------------------------------------------------------------------
+	var stalled: FlightCase = _cases["stall"]
+	_check(stalled.stalled_seen, "throttle closed and the nose held up, the wing stalls")
+	_check(absf(_note(stalled, "stall_speed", 0.0) - stall) < stall * 0.25, "close to its stalling speed (%.0f against %.0f m/s)" % [_note(stalled, "stall_speed", 0.0), stall])
+	_check(stalled.plane.alive and _note(stalled, "flying_again", 99.0) - _note(stalled, "recovering", 0.0) < 8.0,
+			"stick forward and power on, it is flying again in %.1f s" % (_note(stalled, "flying_again", 99.0) - _note(stalled, "recovering", 0.0)))
+	var height_lost: float = _note(stalled, "stall_height", stalled.start_height) - stalled.lowest
+	_check(height_lost > 15.0 and height_lost < 450.0, "having lost %.0f m" % height_lost)
+	_check(not stalled.plane.is_stalling() and stalled.plane.speed > stall * 1.2, "and it flies on (%.0f m/s)" % stalled.plane.speed)
+
+	# --- Spin -----------------------------------------------------------------------
+	var spin: FlightCase = _cases["spin"]
+	_check(spin.spin_seen, "stalled with full rudder held on, it spins")
+	_check(_note(spin, "turns_in_spin", 0.0) > 1.0, "going round %.1f times" % _note(spin, "turns_in_spin", 0.0))
+	_check(spin.start_height - _note(spin, "spin_bottom", spin.start_height) > 250.0, "and coming down fast (%.0f m)" % (spin.start_height - _note(spin, "spin_bottom", spin.start_height)))
+	_check(spin.turned.y > 0.0, "to the left, the way the rudder was put")
+	_check(spin.plane.alive and _note(spin, "out_of_spin", 99.0) - 16.0 < 7.0, "stick forward and opposite rudder stops it in %.1f s" % (_note(spin, "out_of_spin", 99.0) - 16.0))
+	_check(not spin.plane.is_stalling() and absf(spin.plane.pitch) < deg_to_rad(35.0), "and the pilot flies it out of the dive (nose %.0f degrees)" % rad_to_deg(spin.plane.pitch))
+
+	# --- Propeller effects --------------------------------------------------------------
+	var torque: FlightCase = _cases["torque"]
+	var rolled_left: float = _note(torque, "bank_after", 0.0) - _note(torque, "bank_before", 0.0)
+	_check(rolled_left > deg_to_rad(2.0), "slamming the throttle open at low speed rolls the plane to the left (%.1f degrees)" % rad_to_deg(rolled_left))
+	var swung_left: float = _note(torque, "yaw_after", 0.0) - _note(torque, "yaw_before", 0.0)
+	_check(swung_left > deg_to_rad(1.0), "and swings its nose left (%.1f degrees)" % rad_to_deg(swung_left))
+	_check(torque.plane.alive and absf(torque.plane.bank) < deg_to_rad(40.0), "which the pilot's trimming then takes out (bank %.0f degrees at the end)" % rad_to_deg(torque.plane.bank))
+
+	# --- Turning ---------------------------------------------------------------------
+	var turn: FlightCase = _cases["turn"]
+	var turn_time: float = _note(turn, "turn_to_time", 1.0) - _note(turn, "turn_from_time", 0.0)
+	var turn_rate: float = -(_note(turn, "turn_to", 0.0) - _note(turn, "turn_from", 0.0)) / maxf(turn_time, 0.1)
+	var expected_rate: float = FlightDynamics.GRAVITY * tan(deg_to_rad(60.0)) / maxf(turn.plane.speed, 1.0)
+	_check(absf(turn.plane.bank + deg_to_rad(60.0)) < deg_to_rad(8.0), "it turns by banking (%.0f degrees)" % rad_to_deg(-turn.plane.bank))
+	_check(absf(turn.plane.load_factor() - 2.0) < 0.35, "a sixty-degree bank held level is 2 g (%.2f)" % turn.plane.load_factor())
+	_check(absf(turn_rate - expected_rate) < expected_rate * 0.25, "and turns as fast as that bank and speed say it must (%.1f against %.1f degrees a second)" % [rad_to_deg(turn_rate), rad_to_deg(expected_rate)])
+	_check(absf(turn.plane.global_position.y - _note(turn, "turn_height", 0.0)) < 150.0, "holding its height (%.0f m)" % (turn.plane.global_position.y - _note(turn, "turn_height", 0.0)))
+	_check(absf(turn.plane.sideslip()) < deg_to_rad(4.0), "without skidding (%.1f degrees of slip)" % rad_to_deg(turn.plane.sideslip()))
+
+	# --- Gliding ---------------------------------------------------------------------
+	var glide: FlightCase = _cases["glide"]
+	var glide_time: float = 18.0
+	var sink: float = (_height(glide, 10) - _height(glide, 28)) / glide_time
+	var glide_ratio: float = _speed(glide, 20) / maxf(sink, 0.1)
+	_check(glide.plane.alive and not glide.plane.is_stalling(), "with the engine stopped it glides")
+	_check(glide_ratio > 6.0 and glide_ratio < 18.0, "about %.0f m forward for every metre down (%.1f m/s down at %.0f m/s)" % [glide_ratio, sink, _speed(glide, 20)])
+
+	# --- Gravity ---------------------------------------------------------------------
+	var fall: FlightCase = _cases["free fall"]
+	var fall_rate: float = (_note(fall, "fall_start", 0.0) - _note(fall, "fall_end", 0.0)) / maxf(_note(fall, "fall_time", 1.0), 0.1)
+	_check(_note(fall, "weightless_g", 9.0) < 0.35, "pushing the stick forward takes the weight off the wings (%.2f g)" % _note(fall, "weightless_g", 9.0))
+	_check(absf(fall_rate - FlightDynamics.GRAVITY) < 2.5, "and then it falls as anything falls: %.1f m/s faster every second" % fall_rate)
 
 	if OS.get_cmdline_user_args().has("verbose=1"):
 		for label: String in _cases:
 			var case: FlightCase = _cases[label]
-			var line: String = "%-26s" % label
-			for second: int in [0, 2, 4, 6, 10, 15, 20, 25]:
+			var line: String = "%-10s" % label
+			for second: int in [0, 2, 4, 6, 8, 10, 14, 18, 22, 26, 29]:
 				if case.height_at.has(second):
-					line += "  %2ds h%+5.0f v%3.0f b%+4.0f" % [second, case.height_at[second] - case.start_height, case.speed_at[second], rad_to_deg(case.bank_at[second])]
-			print(line, "  maxg %.2f  alive %s" % [case.most_g, case.plane.alive])
+					line += " |%2d h%+5.0f v%3.0f b%+4.0f g%+4.1f" % [second, case.height_at[second] - case.start_height, case.speed_at[second], rad_to_deg(case.bank_at[second]), case.load_at[second]]
+			print(line, "  g %.1f..%.1f alive %s notes %s" % [case.least_g, case.most_g, case.plane.alive, case.notes])
 
 
 func _height(case: FlightCase, second: int) -> float:

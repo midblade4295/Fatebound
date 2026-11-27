@@ -337,11 +337,12 @@ func _refresh_plane_panel() -> void:
 	_plane_name.text = data.display_name.to_upper()
 	# Show the numbers the plane would fly with what is fitted now.
 	var stats: PlaneStats = data.build_stats(level, Profile.equipped_cards(), Profile.equipped_card_marks())
-	var take_off: float = stats.stall_speed / sqrt(1.0 + PlaneActor.FLAP_LIFT_BONUS)
-	_plane_info.text = "%s\n\nSpeed %d km/h    Take-off %d km/h\nTurn %d deg/s    Toughness %d\nGuns %d    %d damage/s    Weight +%d%%" % [
-			data.description, roundi(stats.top_speed * 3.6), roundi(take_off * 3.6),
-			roundi(rad_to_deg(stats.turn_rate)), roundi(stats.max_hp),
-			stats.gun_count(), roundi(stats.fire_rate * stats.bullet_damage), roundi((stats.weight - 1.0) * 100.0)]
+	# All of these are measured from the flight model, not stated: change what
+	# is fitted and they move as the real aeroplane's would.
+	_plane_info.text = "%s\n\nTop speed %d km/h    Stalls at %d km/h\nClimb %d m/s    %d kg    %d hp\nToughness %d    Guns %d    %d damage/s" % [
+			data.description, roundi(stats.top_speed * 3.6), roundi(stats.stall_speed * 3.6),
+			roundi(stats.climb_rate), roundi(stats.mass), roundi(stats.engine_power / 745.7),
+			roundi(stats.max_hp), stats.gun_count(), roundi(stats.fire_rate * stats.bullet_damage)]
 	if not unlocked:
 		_select_plane.text = "COMMANDER LV %d" % data.unlock_commander_level
 		_select_plane.disabled = true

@@ -6,28 +6,43 @@ extends RefCounted
 ## PlaneActor reads the numbers; PlaneVisual reads the fittings to decide which
 ## pieces of the model to show.
 
-# --- Airframe ---
+# --- Airframe: the real figures the flight model is built from ---
 ## Toughness: how much punishment the parts take (see PlaneActor.PART_STRENGTH).
 var max_hp: float = 1000.0
-## Level-flight top speed in m/s.
-var top_speed: float = 85.0
-## How fast the engine pulls speed back toward top speed (1/s).
-var acceleration: float = 0.6
-## 1.0 = baseline. Higher keeps more speed in a climb.
-var climb_rate: float = 1.0
-## Yaw rate at full stick, radians per second.
-var turn_rate: float = 1.0
-## Pitch rate at full stick, radians per second.
-var pitch_rate: float = 0.9
-## 1.0 = baseline. Scales stick response and shortens the evade-roll cooldown.
-var roll_rate: float = 1.0
-## Speed (m/s) below which the clean wing no longer carries the plane. Heavier
-## fittings raise it, more wing lowers it; a faster engine does not change it.
-var stall_speed: float = 51.0
+## All-up weight in kilograms, with everything that is fitted.
+var mass: float = 3000.0
+## Wing area (m^2) and span (m).
+var wing_area: float = 22.5
+var wing_span: float = 11.2
+## Full engine power at the propeller shaft, watts.
+var engine_power: float = 1000000.0
+## Drag coefficient of the clean aeroplane at zero lift.
+var drag: float = 0.021
+## The most lift coefficient the wing makes before it stalls.
+var max_lift: float = 1.5
+## The propeller's bite at low speed, relative to the standard one.
+var static_thrust: float = 1.0
+## Aileron power relative to the standard wing: how fast it rolls.
+var roll_power: float = 1.0
+
+# --- What that adds up to: measured from the flight model by PlaneData ---
+## Level-flight top speed at full power, m/s.
+var top_speed: float = 130.0
+## Speed (m/s) below which the clean wing no longer carries the plane, and the
+## same with the flaps down.
+var stall_speed: float = 38.0
+var landing_stall_speed: float = 36.0
+## Best rate of climb (m/s) and the airspeed that gives it.
+var climb_rate: float = 15.0
+var climb_speed: float = 70.0
+
+# --- Bookkeeping while the fittings are added up ---
 ## Weight relative to the bare aeroplane (1.0 = nothing fitted).
 var weight: float = 1.0
-## Wing lift relative to the standard wing.
-var lift: float = 1.0
+## Multipliers the fittings ask for: top speed, engine power and wing span.
+var speed_factor: float = 1.0
+var power_factor: float = 1.0
+var wing_factor: float = 1.0
 ## How fast a holed tank leaks, relative to an unprotected one.
 var fuel_leak: float = 1.0
 ## How hard a landing the undercarriage stands, relative to the standard legs.
@@ -74,6 +89,30 @@ func gun_count() -> int:
 func fitting_in(slot: ComponentCard.Slot) -> ComponentCard:
 	var mount: int = CommanderProgression.mount_for_slot(slot)
 	return fittings[mount] if mount >= 0 and mount < fittings.size() else null
+
+
+## A flight model set up as this aeroplane.
+func make_flight() -> FlightDynamics:
+	var flight: FlightDynamics = FlightDynamics.new()
+	flight.configure(mass, wing_area, wing_span, engine_power, drag, max_lift, static_thrust, roll_power)
+	return flight
+
+
+## Speed (m/s) at which the plane will leave the ground with the flaps down
+## and the stick eased back.
+func takeoff_speed() -> float:
+	return landing_stall_speed * 1.08
+
+
+## Power for every kilogram, watts: the best single guide to climb and
+## acceleration.
+func power_loading() -> float:
+	return engine_power / maxf(mass, 1.0)
+
+
+## Weight on every square metre of wing, kg: the best single guide to turning.
+func wing_loading() -> float:
+	return mass / maxf(wing_area, 0.1)
 
 
 ## Ids of the fittings in mount order ("" for an empty mount): what a remote

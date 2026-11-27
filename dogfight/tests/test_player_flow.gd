@@ -4,13 +4,15 @@ extends Node
 ##
 ##   godot --headless --fixed-fps 60 --path . res://tests/TestPlayerFlow.tscn
 ##
-## Script: fly level and fire -> evade roll -> take a gun off and fire again ->
-## look around with a finger on the open sky -> dive into the sea. Checks both fitted guns fire, the roll goes on cooldown,
-## a plane with one gun fires one gun, the crash gives RED a ticket and the
-## player is back in the air 5 seconds later.
+## Script: fire while rolling right -> pull into the turn -> level out -> a
+## touch of rudder -> take a gun off and fire again -> look around with a
+## finger on the open sky -> dive into the sea. Checks both fitted guns fire,
+## the stick rolls and the pull turns, the pedals yaw, a plane with one gun
+## fires one gun, the crash gives RED a ticket and the player is back in the
+## air 5 seconds later.
 ## Prints PLAYER_FLOW_OK on success.
 
-enum Step { WAIT_START, FIRE, ROLL, ONE_GUN, LOOK, LOOK_BACK, STICK_TOUCH, DIVE, WAIT_RESPAWN, DONE }
+enum Step { WAIT_START, FIRE, TURN, LEVEL, RUDDER, ONE_GUN, LOOK, LOOK_BACK, STICK_TOUCH, DIVE, WAIT_RESPAWN, DONE }
 
 var _manager: MatchManager5v5
 var _player: PlaneActor
@@ -29,7 +31,10 @@ var _look_sent: bool = false
 var _stick_point: Vector2 = Vector2.ZERO
 var _look_from: Vector2 = Vector2.ZERO
 var _max_fov: float = 0.0
-var _evades: int = 0
+var _yaw_before_turn: float = 0.0
+var _yaw_before_rudder: float = 0.0
+var _most_rudder: float = 0.0
+var _most_slip: float = 0.0
 
 
 func _ready() -> void:
@@ -61,7 +66,6 @@ func _ready() -> void:
 	_check(_camera.target == _player, "chase camera follows the player")
 	_check(_hud.player == _player, "HUD is bound to the player")
 	_player.shot_fired.connect(func(_plane: PlaneActor) -> void: _shots += 1)
-	_player.evade_started.connect(func(_plane: PlaneActor) -> void: _evades += 1)
 	_player.died.connect(func(_victim: PlaneActor, _killer: PlaneActor) -> void: _death_time = _clock)
 
 
@@ -87,24 +91,46 @@ func _physics_process(delta: float) -> void:
 				# Two .303s at 6 rounds a second each.
 				_check(_player.stats.gun_count() == 2, "the player's plane has its two stock guns")
 				_check(_shots >= 10 and _shots <= 14, "about twelve shots in one second from two guns (got %d)" % _shots)
-				_check(_player.yaw < -0.2, "steering right turned the plane right (yaw %.2f)" % _player.yaw)
-				_check(_player.bank < -0.2, "the plane banks into the turn (bank %.2f)" % _player.bank)
-				Input.action_press(GameSession.ACTION_EVADE)
-				_next(Step.ROLL)
-		Step.ROLL:
-			if _step_time >= 0.3:
-				Input.action_release(GameSession.ACTION_EVADE)
-				_check(_evades == 1, "evade roll started")
-				_check(_player.is_evading(), "plane reports it is evading")
-				_check(_player.evade_cooldown_ratio() > 0.5, "evade roll is on cooldown")
+				_check(_player.bank < -0.25, "stick to the right rolls the plane to the right (bank %.2f rad)" % _player.bank)
+				_yaw_before_turn = _player.yaw
+				_next(Step.TURN)
+		Step.TURN:
+			# Banked, then pull: that is what turns an aeroplane.
+			Input.action_press(GameSession.ACTION_PITCH_UP, 0.7)
+			if _step_time >= 1.5:
+				Input.action_release(GameSession.ACTION_PITCH_UP)
+				var turned: float = wrapf(_player.yaw - _yaw_before_turn, -PI, PI)
+				_check(turned < -0.1, "banked and pulling, it turns to the right (%.2f rad in 1.5 s)" % turned)
+				_check(_player.load_factor() > 1.5, "at more than 1 g (%.1f)" % _player.load_factor())
+				_next(Step.LEVEL)
+		Step.LEVEL:
+			_level_wings()
+			if _step_time >= 2.5:
+				_check(absf(_player.bank) < 0.12, "stick the other way rolls it level again (bank %.2f rad)" % _player.bank)
+				_yaw_before_rudder = _player.yaw
+				_next(Step.RUDDER)
+		Step.RUDDER:
+			# A pedal swings the nose without banking: the plane skids.
+			_level_wings()
+			if _step_time < 1.0:
+				Input.action_press(GameSession.ACTION_RUDDER_RIGHT)
+				_most_rudder = maxf(_most_rudder, _player.rudder_state)
+				_most_slip = minf(_most_slip, _player.sideslip())
+			else:
+				Input.action_release(GameSession.ACTION_RUDDER_RIGHT)
+			if _step_time >= 3.0:
+				_check(_most_rudder > 0.6, "the right pedal puts the rudder over (%.2f)" % _most_rudder)
+				_check(_most_slip < -deg_to_rad(1.0), "and skids the nose to the right (%.1f degrees of slip)" % rad_to_deg(-_most_slip))
+				_check(absf(_player.sideslip()) < deg_to_rad(2.0), "which the plane straightens out of once the pedal is let go (%.1f degrees)" % rad_to_deg(_player.sideslip()))
 				_next(Step.ONE_GUN)
 		Step.ONE_GUN:
-			# Once the roll is over, take the right-hand gun off and fire again.
-			if _step_time >= 1.2 and _shots_before_one_gun == 0:
+			# Take the right-hand gun off and fire again.
+			_level_wings()
+			if _step_time >= 0.2 and _shots_before_one_gun == 0:
 				_player.stats.fittings[1] = null
 				_shots_before_one_gun = _shots
 				Input.action_press(GameSession.ACTION_FIRE)
-			if _step_time >= 2.2:
+			if _step_time >= 1.2:
 				Input.action_release(GameSession.ACTION_FIRE)
 				var fired: int = _shots - _shots_before_one_gun
 				_check(fired >= 5 and fired <= 7, "with one gun fitted, one gun fires: about six shots in a second (got %d)" % fired)
@@ -112,6 +138,7 @@ func _physics_process(delta: float) -> void:
 				_next(Step.LOOK)
 		Step.LOOK:
 			# A finger dragged across open sky turns the camera, not the plane.
+			_level_wings()
 			if not _look_sent:
 				_look_sent = true
 				_yaw_before_look = _player.yaw
@@ -126,6 +153,7 @@ func _physics_process(delta: float) -> void:
 				var arm: float = _camera.camera.global_position.distance_to(_player.global_position)
 				_check(arm > 6.0 and arm < 25.0, "the camera is still on its arm (%.1f m from the plane)" % arm)
 				_send_touch(5, _look_from + Vector2(300.0, 80.0), false)
+				_release_stick()
 				_next(Step.LOOK_BACK)
 		Step.LOOK_BACK:
 			if _step_time >= 0.4 and _step_time < 0.5:
@@ -146,14 +174,18 @@ func _physics_process(delta: float) -> void:
 				_red_before_crash = _manager.team_score(Teams.Id.TEAM_RED)
 				_next(Step.DIVE)
 		Step.DIVE:
-			Input.action_press(GameSession.ACTION_PITCH_DOWN)
+			# Stick forward until the nose is well down, then let it go in.
+			if _player.pitch > deg_to_rad(-55.0):
+				Input.action_press(GameSession.ACTION_PITCH_DOWN)
+			else:
+				Input.action_release(GameSession.ACTION_PITCH_DOWN)
 			if not _player.alive:
 				Input.action_release(GameSession.ACTION_PITCH_DOWN)
 				_check(_manager.team_score(Teams.Id.TEAM_RED) >= _red_before_crash + 1, "crashing gives RED a ticket")
 				_check(_manager.local_slot().deaths == 1, "the crash counts as a loss for the player")
 				_check(_max_fov > _camera.base_fov + 6.0, "camera FOV widened in the dive (max %.1f)" % _max_fov)
 				_next(Step.WAIT_RESPAWN)
-			elif _step_time > 20.0:
+			elif _step_time > 30.0:
 				_check(false, "plane never hit the sea")
 				_finish()
 		Step.WAIT_RESPAWN:
@@ -171,6 +203,21 @@ func _physics_process(delta: float) -> void:
 			elif _step_time > 8.0:
 				_check(false, "player never respawned")
 				_finish()
+
+
+## Works the stick through its Input actions to roll the wings level.
+func _level_wings() -> void:
+	var wanted: float = clampf(_player.bank * 2.5 + _player.flight.angular_velocity.z * 0.5, -1.0, 1.0)
+	_release_stick()
+	if wanted > 0.0:
+		Input.action_press(GameSession.ACTION_STEER_RIGHT, pow(wanted, 1.0 / PlayerController.STICK_CURVE))
+	elif wanted < 0.0:
+		Input.action_press(GameSession.ACTION_STEER_LEFT, pow(-wanted, 1.0 / PlayerController.STICK_CURVE))
+
+
+func _release_stick() -> void:
+	Input.action_release(GameSession.ACTION_STEER_LEFT)
+	Input.action_release(GameSession.ACTION_STEER_RIGHT)
 
 
 ## How squarely the camera sits behind the plane: 1 = dead astern, 0 = abeam,
@@ -213,8 +260,8 @@ func _next(step: Step) -> void:
 
 func _finish() -> void:
 	_step = Step.DONE
-	for action: StringName in [GameSession.ACTION_FIRE, GameSession.ACTION_EVADE,
-			GameSession.ACTION_PITCH_DOWN, GameSession.ACTION_STEER_RIGHT]:
+	for action: StringName in [GameSession.ACTION_FIRE, GameSession.ACTION_RUDDER_RIGHT, GameSession.ACTION_PITCH_UP,
+			GameSession.ACTION_PITCH_DOWN, GameSession.ACTION_STEER_RIGHT, GameSession.ACTION_STEER_LEFT]:
 		Input.action_release(action)
 	if _failures.is_empty():
 		print("PLAYER_FLOW_OK")

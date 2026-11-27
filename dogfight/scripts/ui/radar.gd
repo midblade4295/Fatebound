@@ -6,7 +6,7 @@ extends Control
 ## the rim so you still know which way to turn.
 
 ## World metres from the centre to the rim.
-@export var radar_range: float = 800.0
+@export var radar_range: float = 1800.0
 ## Half-angle of the forward gun cone drawn on the dial, in degrees.
 @export var cone_half_angle_deg: float = 28.0
 
