@@ -35,6 +35,11 @@ to move the camera round it, pinch to zoom, drag with two fingers to slide the
 plane about the screen, double-tap to put the view back (mouse: drag, wheel,
 right-drag). Touches that start on a panel do not move the camera.
 
+In a match, drag a finger anywhere that is not a control to look around: the
+chase camera swings round the plane (right round to look back over the tail,
+and up to look down on it) without steering. Let go and after a moment the
+view eases back behind the tail.
+
 A closed throttle on the ground is also the wheel brakes. The GEAR lever is
 locked while the plane is standing on its wheels, and the guns are safe on the
 ground.
@@ -449,7 +454,7 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 | `TestAudio` | every plane has its own engine loop and every kind of gun its own samples; the player's engine plays from the cockpit and the other nine in 3D; firing plays one of the fitted gun's samples; a bullet passing 6 m away is heard once and one 60 m away is not; the engine note rises in a dive; a dead engine falls silent and the fire is heard. It checks wiring, not how anything sounds |
 | `TestGroundOps` | everyone starts parked on their own runway; the guns and an open throttle do nothing with the engine off; the ENGINE and throttle keys work; the plane cannot be pulled off the ground before flying speed and uses a believable length of runway; nothing jumps at lift-off (pitch, climb rate, acceleration and height are measured tick by tick); wheels-down drag; throttling back slows it until it sinks; a gentle landing and a steep one both arrive softly; a wheels-up landing; what each rate of descent, nose angle and bank breaks (strained wings, one leg, both legs, propeller, wingtip) and where destruction starts; braking to a stop; repairs at home including new parts, legs and propeller; a plane stopped on the enemy's airfield or run off the island is lost; bots left alone take off and raise their wheels |
 | `TestCollisions` | box-overlap maths; a wingtip clip damages only the wingtips; a head-on destroys both; a pass three metres apart does nothing; team-mates can collide |
-| `TestPlayerFlow` | 1 player + 9 bots through Input actions: both fitted guns fire, roll, with one gun taken off one gun fires, crash gives a ticket, 5 s respawn |
+| `TestPlayerFlow` | 1 player + 9 bots through Input actions and touch events: both fitted guns fire, roll, with one gun taken off one gun fires, a drag on open sky swings the view while the plane flies straight on and the view returns by itself, a finger on the stick does not turn the camera, crash gives a ticket, 5 s respawn |
 | `TestMatchSim` (3 seeds) | full bots-only match: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, few uncaused losses, few collisions, bot accuracy stays in a human-like 2-25% band |
 | hangar / lobby | scenes load and the lobby hands over to the arena without script errors |
 

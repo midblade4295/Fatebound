@@ -13,6 +13,7 @@ extends CanvasLayer
 ##   centre       countdown / respawn / out-of-bounds messages, results panel
 ##   world layer  target diamonds, threat arrows, gun pipper, and a marker
 ##                on the player's own airfield (HudWorldOverlay)
+##   anywhere else  drag to look around (LookArea turns the chase camera)
 ##
 ## The centre line under the headline talks the pilot through whatever comes
 ## next: start the engine, open the throttle, the speed to lift off at, raise
@@ -89,6 +90,7 @@ func bind(manager: MatchManager5v5, chase_camera: ChaseCamera, local_plane: Plan
 	camera = chase_camera
 	player = local_plane
 	var view_team: Teams.Id = player.team if player != null else Teams.Id.TEAM_BLUE
+	(%LookArea as LookArea).camera = chase_camera
 	_overlay.match_manager = manager
 	_overlay.camera = chase_camera.camera
 	_overlay.player = player

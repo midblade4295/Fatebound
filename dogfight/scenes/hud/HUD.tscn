@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
 [ext_resource type="Script" path="res://scripts/ui/hud_world_overlay.gd" id="2_overlay"]
@@ -7,11 +7,23 @@
 [ext_resource type="Script" path="res://scripts/ui/action_button.gd" id="5_button"]
 [ext_resource type="Script" path="res://scripts/ui/damage_diagram.gd" id="6_damage"]
 [ext_resource type="Script" path="res://scripts/ui/throttle_lever.gd" id="7_throttle"]
+[ext_resource type="Script" path="res://scripts/ui/look_area.gd" id="8_look"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
 
 [node name="Root" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="LookArea" type="Control" parent="Root"]
+unique_name_in_owner = true
+script = ExtResource("8_look")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

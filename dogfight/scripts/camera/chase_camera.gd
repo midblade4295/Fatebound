@@ -16,6 +16,10 @@ extends Node3D
 ##    lag at all and the plane does not shrink into the distance at speed.
 ##  - Speed FOV: field of view and arm length open up with speed.
 ##  - Trauma shake: add_trauma() from gunfire/hits; shake = trauma squared.
+##  - Looking around: look_by() swings the camera round the plane, as far as
+##    looking straight back over the tail or down from above. It is only the
+##    view that turns, never the plane. When the pilot lets go the camera
+##    waits a moment and then eases back behind the tail.
 ##
 ## Runs in _process and reads the plane's *interpolated* transform, so it is
 ## smooth at any refresh rate even though the plane moves at the physics rate.
@@ -46,6 +50,16 @@ extends Node3D
 @export var speed_fov_boost: float = 12.0
 @export var fov_stiffness: float = 3.5
 
+@export_group("Look Around")
+## Radians the view turns per pixel of drag.
+@export var look_speed: float = 0.006
+## How far up and down the camera can be taken (degrees above / below the tail).
+@export_range(0.0, 89.0) var look_up_limit_deg: float = 70.0
+@export_range(0.0, 60.0) var look_down_limit_deg: float = 20.0
+## Seconds after letting go before the view starts back, and how fast it goes (1/s).
+@export var look_return_delay: float = 0.7
+@export var look_return_rate: float = 4.0
+
 @export_group("Shake")
 @export var trauma_decay: float = 1.8
 @export var max_shake_offset: float = 0.45
@@ -62,6 +76,12 @@ var _smoothed_basis: Basis = Basis.IDENTITY
 var _trauma: float = 0.0
 var _shake_time: float = 0.0
 var _noise: FastNoiseLite = FastNoiseLite.new()
+## Where the pilot is looking, relative to straight ahead from behind the
+## tail: x = round the plane (radians, positive = camera swings to the plane's
+## right side), y = up over it.
+var _look: Vector2 = Vector2.ZERO
+var _look_held: bool = false
+var _look_idle: float = 0.0
 
 @onready var camera: Camera3D = $Pivot/SpringArm3D/Camera3D
 @onready var _pivot: Node3D = $Pivot
@@ -107,7 +127,33 @@ func snap_to_target() -> void:
 	_smoothed_basis = _desired_basis(target_transform.basis)
 	_smoothed_position = target_transform.origin + Vector3.UP * height_offset
 	_trauma = 0.0
+	_look = Vector2.ZERO
 	_apply_rig()
+
+
+## A finger has gone down to look around: the view stops returning.
+func begin_look() -> void:
+	_look_held = true
+
+
+## Swings the view by [param pixels] of drag (right and down positive). The
+## scene follows the finger, as it does in the hangar.
+func look_by(pixels: Vector2) -> void:
+	_look_idle = 0.0
+	_look.x = wrapf(_look.x - pixels.x * look_speed, -PI, PI)
+	_look.y = clampf(_look.y + pixels.y * look_speed, -deg_to_rad(look_down_limit_deg), deg_to_rad(look_up_limit_deg))
+
+
+## The finger has lifted: after a moment the view eases back behind the tail.
+func end_look() -> void:
+	_look_held = false
+	_look_idle = 0.0
+
+
+## Where the pilot is looking: x = radians round the plane, y = radians up
+## over it. Zero is the normal view from behind the tail.
+func look_angles() -> Vector2:
+	return _look
 
 
 ## Adds camera shake. 0.0-1.0; the visible shake is trauma squared, so small
@@ -121,6 +167,12 @@ func _process(delta: float) -> void:
 		return
 	_trauma = maxf(_trauma - trauma_decay * delta, 0.0)
 	_shake_time += delta
+	if not _look_held and _look != Vector2.ZERO:
+		_look_idle += delta
+		if _look_idle >= look_return_delay:
+			_look = _look.lerp(Vector2.ZERO, 1.0 - exp(-look_return_rate * delta))
+			if _look.length() < 0.002:
+				_look = Vector2.ZERO
 
 	if not target.alive:
 		# Death cam: hold position and drift slowly around the wreck.
@@ -167,7 +219,10 @@ func _update_fov(delta: float, speed_factor: float) -> void:
 
 
 func _apply_rig() -> void:
-	_pivot.global_transform = Transform3D(_smoothed_basis, _smoothed_position)
+	# Looking around turns the rig about the plane; the arm and the camera on
+	# the end of it come round with it.
+	var look: Basis = Basis(Vector3.UP, _look.x) * Basis(Vector3.RIGHT, -_look.y)
+	_pivot.global_transform = Transform3D(_smoothed_basis * look, _smoothed_position)
 	# Shake is applied to the camera itself so it never fights the follow maths.
 	var shake: float = _trauma * _trauma
 	var sample: float = _shake_time * shake_frequency

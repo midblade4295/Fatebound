@@ -22,8 +22,9 @@ var _takeoff_demo: bool = false
 ## roughlanding=<m/s> drops the player's plane onto its own runway at that
 ## rate of descent on frame 30, to show what a rough landing breaks.
 var _rough_landing: float = 0.0
-## look=<x>,<y>,<zoom> drags the hangar camera by that many pixels and zooms
-## by that factor on frame 20 (below 1 = closer).
+## look=<x>,<y>,<zoom> drags the camera by that many pixels on frame 20: in
+## the hangar it also zooms by that factor (below 1 = closer); in a match it
+## holds the chase camera turned that far.
 var _look: Vector3 = Vector3.ZERO
 var _scene: Node
 ## Frames at the start that run at `_warp_scale` x speed to reach the action.
@@ -147,6 +148,11 @@ func _process(_delta: float) -> void:
 	if _look.z > 0.0 and _frame == 20 and _scene.has_method(&"orbit_view"):
 		_scene.call(&"orbit_view", Vector2(_look.x, _look.y))
 		_scene.call(&"zoom_view", _look.z)
+	var chase: ChaseCamera = _scene.get_node_or_null("ChaseCamera") as ChaseCamera
+	if _look.z > 0.0 and _frame == 20 and chase != null:
+		# In a match: hold the view round by that many pixels of drag.
+		chase.begin_look()
+		chase.look_by(Vector2(_look.x, _look.y))
 	if _rough_landing > 0.0 and _frame == 30:
 		_drop_player()
 	if _steer_action != &"" and _frame > _warp_frames:
