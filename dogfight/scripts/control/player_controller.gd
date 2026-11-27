@@ -17,6 +17,8 @@ const TARGET_CONE: float = deg_to_rad(32.0)
 ## Keeps the current target unless another is clearly better (prevents flicker).
 const TARGET_STICKINESS: float = deg_to_rad(5.0)
 const RETARGET_INTERVAL: float = 0.15
+## Throttle lever travel per second while a throttle key is held.
+const THROTTLE_KEY_RATE: float = 0.7
 
 var plane: PlaneActor
 ## Supplies the list of planes to pick targets from.
@@ -48,6 +50,14 @@ func _physics_process(delta: float) -> void:
 		plane.input.press_evade()
 	if Input.is_action_just_pressed(GameSession.ACTION_GADGET):
 		plane.input.press_gadget()
+	if Input.is_action_just_pressed(GameSession.ACTION_ENGINE):
+		plane.input.press_engine()
+	if Input.is_action_just_pressed(GameSession.ACTION_GEAR):
+		plane.input.press_gear()
+	# Keys nudge the throttle lever; the touch lever on the HUD sets it directly.
+	var throttle_change: float = Input.get_axis(GameSession.ACTION_THROTTLE_DOWN, GameSession.ACTION_THROTTLE_UP)
+	if throttle_change != 0.0:
+		plane.input.throttle = clampf(plane.input.throttle + throttle_change * THROTTLE_KEY_RATE * delta, 0.0, 1.0)
 
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:

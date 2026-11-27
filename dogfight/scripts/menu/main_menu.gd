@@ -104,7 +104,8 @@ func _show_plane() -> void:
 		_preview.name = "PlanePreview"
 		_turntable.add_child(_preview)
 	_preview.build(data, GameSession.local_team)
-	_preview.set_throttle(0.25)
+	_preview.set_propeller(0.25)
+	_preview.set_gear(1.0)
 	_refresh_plane_panel()
 
 

@@ -12,9 +12,11 @@ static var _toon_cache: Dictionary[String, ShaderMaterial] = {}
 static var _unlit_cache: Dictionary[String, StandardMaterial3D] = {}
 
 
-## Cel-shaded material using shaders/toon_plane.gdshader.
-static func toon(color: Color, emission_strength: float = 0.0, spec_strength: float = 0.45) -> ShaderMaterial:
-	var key: String = "%s|%.2f|%.2f" % [color.to_html(), emission_strength, spec_strength]
+## Cel-shaded material using shaders/toon_plane.gdshader. [param rim] scales
+## the bright edge light: 1 for objects, 0 for flat ground, which is seen at
+## such a shallow angle from a cockpit that the rim would bleach all of it.
+static func toon(color: Color, emission_strength: float = 0.0, spec_strength: float = 0.45, rim: float = 1.0) -> ShaderMaterial:
+	var key: String = "%s|%.2f|%.2f|%.2f" % [color.to_html(), emission_strength, spec_strength, rim]
 	if _toon_cache.has(key):
 		return _toon_cache[key]
 	var material: ShaderMaterial = ShaderMaterial.new()
@@ -22,6 +24,9 @@ static func toon(color: Color, emission_strength: float = 0.0, spec_strength: fl
 	material.set_shader_parameter(&"albedo", color)
 	material.set_shader_parameter(&"emission_strength", emission_strength)
 	material.set_shader_parameter(&"spec_strength", spec_strength)
+	if rim < 1.0:
+		material.set_shader_parameter(&"rim_strength", 0.7 * rim)
+		material.set_shader_parameter(&"ambient_rim", 0.12 * rim)
 	_toon_cache[key] = material
 	return material
 

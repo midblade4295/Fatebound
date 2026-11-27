@@ -93,13 +93,14 @@ script = ExtResource("9_collisions")
 
 [node name="Controllers" type="Node" parent="."]
 
-[node name="MatchManager" type="Node" parent="." node_paths=PackedStringArray("planes_root", "controllers_root", "bullet_system", "midair_collisions", "blue_spawns", "red_spawns")]
+[node name="MatchManager" type="Node" parent="." node_paths=PackedStringArray("planes_root", "controllers_root", "bullet_system", "midair_collisions", "arena", "blue_spawns", "red_spawns")]
 script = ExtResource("5_match")
 plane_scene = ExtResource("6_plane")
 planes_root = NodePath("../Planes")
 controllers_root = NodePath("../Controllers")
 bullet_system = NodePath("../BulletSystem")
 midair_collisions = NodePath("../MidairCollisions")
+arena = NodePath("../World")
 blue_spawns = NodePath("../SpawnPoints/Blue")
 red_spawns = NodePath("../SpawnPoints/Red")
 

@@ -6,9 +6,13 @@ extends Node3D
 ## Each PlaneData names its own engine recording and gun samples, so a
 ## Hurricane, a Spitfire and a Mustang do not sound alike.
 ##
-##  - Engine: one seamless loop whose pitch follows speed and whose level
-##    follows power. A damaged engine misfires (the note stumbles); a dead one
-##    coughs, winds down and leaves only the wind.
+##  - Engine: one seamless loop. Its note follows the throttle (revs) and,
+##    less, the airspeed; its level follows throttle and power. Starting up
+##    plays the starter and the engine catching, with the loop fading in under
+##    it. A damaged engine misfires (the note stumbles); a dead one coughs,
+##    winds down and leaves only the wind.
+##  - On the ground: the wheels rumble with speed, the tyres chirp on
+##    touchdown, and the undercarriage whines and clunks home.
 ##  - Guns: one short sample per round actually fired, picked at random from
 ##    the plane's set with a small pitch change, so bursts never sound like a
 ##    looped recording and stay in step with the tracers.
@@ -18,8 +22,16 @@ extends Node3D
 ##
 ## Cosmetic only: runs on every peer from replicated state and signals.
 
-const ENGINE_PITCH_MIN: float = 0.74
-const ENGINE_PITCH_MAX: float = 1.2
+## Engine note = revs (throttle) x a smaller change with airspeed.
+const IDLE_PITCH: float = 0.68
+const SLOW_PITCH: float = 0.74
+const FAST_PITCH: float = 1.16
+## Share of full level an idling engine makes.
+const IDLE_LEVEL: float = 0.3
+## The loop comes in under the start-up sound between these times (seconds
+## after the starter is pressed), which is when the recording's engine catches.
+const START_FADE_BEGIN: float = 1.3
+const START_FADE_END: float = 2.4
 const NITRO_PITCH_BONUS: float = 0.1
 ## Other planes: distance (m) at which they are at full level, and beyond
 ## which they are not heard at all.
@@ -48,6 +60,12 @@ const SOUND_BREAK: Array[AudioStream] = [
 const SOUND_WATER_CRASH: AudioStream = preload("res://assets/audio/water_crash_1.wav")
 const SOUND_ENGINE_FAIL: AudioStream = preload("res://assets/audio/engine_fail.wav")
 const SOUND_FIRE: AudioStream = preload("res://assets/audio/fire.wav")
+const SOUND_ENGINE_START: AudioStream = preload("res://assets/audio/engine_start.wav")
+const SOUND_GEAR: AudioStream = preload("res://assets/audio/gear.wav")
+const SOUND_GROUND_ROLL: AudioStream = preload("res://assets/audio/ground_roll.wav")
+const SOUND_TOUCHDOWN: Array[AudioStream] = [
+	preload("res://assets/audio/touchdown_1.wav"), preload("res://assets/audio/touchdown_2.wav"),
+]
 
 var plane: PlaneActor
 ## True for the plane the listener is flying.
@@ -59,8 +77,14 @@ var _guns_remote: AudioStreamPlayer3D
 var _guns_cockpit: AudioStreamPlayer
 var _fire: AudioStreamPlayer3D
 var _events: AudioStreamPlayer3D
+var _starter: AudioStreamPlayer3D
+var _gear: AudioStreamPlayer3D
+var _roll: AudioStreamPlayer3D
 var _engine_level: float = 1.0
 var _engine_was_running: bool = true
+var _stopped_by_pilot: bool = false
+## Seconds since the starter was pressed; INF once the engine is simply running.
+var _start_age: float = INF
 var _misfire_time: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
@@ -93,11 +117,23 @@ func setup(owner_plane: PlaneActor) -> void:
 	_fire.stream = SoundTools.looped(SOUND_FIRE)
 	_events = _make_3d("Events", EVENT_UNIT_SIZE, EVENT_MAX_DISTANCE, 4.0)
 	_events.max_polyphony = 4
+	_starter = _make_3d("Starter", ENGINE_UNIT_SIZE, ENGINE_MAX_DISTANCE, 3.0)
+	_starter.stream = SOUND_ENGINE_START
+	_gear = _make_3d("Gear", 18.0, 250.0, 0.0)
+	_gear.stream = SOUND_GEAR
+	_roll = _make_3d("GroundRoll", 20.0, 350.0, -30.0)
+	_roll.stream = SoundTools.looped(SOUND_GROUND_ROLL)
 
 	plane.shot_fired.connect(_on_shot_fired)
 	plane.part_state_changed.connect(_on_part_state_changed)
 	plane.died.connect(_on_died)
 	plane.respawned.connect(_on_respawned)
+	plane.engine_started.connect(_on_engine_started)
+	plane.engine_stopped.connect(_on_engine_stopped)
+	plane.gear_moved.connect(_on_gear_moved)
+	plane.touched_down.connect(_on_touched_down)
+	_engine_was_running = plane.is_engine_running()
+	_engine_level = 1.0 if _engine_was_running else 0.0
 	_start_engine()
 
 
@@ -117,17 +153,23 @@ func _process(delta: float) -> void:
 	if plane == null or not plane.alive:
 		return
 	var power: float = plane.engine_power()
-	var running: bool = power > 0.0
+	var running: bool = plane.is_engine_running()
 	if _engine_was_running and not running:
-		# The engine has just died: a cough and a wind-down over the top.
-		_play_event(SOUND_ENGINE_FAIL, 1.0, -2.0)
+		# Shot dead or out of fuel: a cough and a wind-down over the top. A
+		# pilot switching off gets the same wind-down, only quieter.
+		_play_event(SOUND_ENGINE_FAIL, 1.12 if _stopped_by_pilot else 1.0, -9.0 if _stopped_by_pilot else -2.0)
 	_engine_was_running = running
-
-	# Level follows power, easing so a dying engine fades rather than cuts.
-	var target_level: float = 0.0 if not running else lerpf(0.55, 1.0, power)
-	_engine_level = lerpf(_engine_level, target_level, 1.0 - exp(-1.6 * delta))
-	var speed_ratio: float = clampf(plane.speed / maxf(plane.stats.top_speed, 1.0), 0.3, 1.5)
-	var pitch: float = lerpf(ENGINE_PITCH_MIN, ENGINE_PITCH_MAX, clampf((speed_ratio - 0.4) / 0.9, 0.0, 1.0))
+	_stopped_by_pilot = false
+	# Level follows throttle and power, easing so changes swell and fade.
+	var target_level: float = 0.0
+	if running:
+		target_level = lerpf(IDLE_LEVEL, 1.0, plane.throttle) * lerpf(0.55, 1.0, power)
+		if _start_age < START_FADE_END:
+			_start_age += delta
+			target_level *= smoothstep(START_FADE_BEGIN, START_FADE_END, _start_age)
+	_engine_level = lerpf(_engine_level, target_level, 1.0 - exp(-2.2 * delta))
+	var speed_ratio: float = clampf(plane.speed / maxf(plane.stats.top_speed, 1.0), 0.0, 1.5)
+	var pitch: float = lerpf(IDLE_PITCH, 1.0, plane.throttle) * lerpf(SLOW_PITCH, FAST_PITCH, clampf((speed_ratio - 0.3) / 0.9, 0.0, 1.0))
 	if plane.is_boosting():
 		pitch += NITRO_PITCH_BONUS
 	# A hurt engine misfires: every so often the note sags for a moment.
@@ -146,6 +188,17 @@ func _process(delta: float) -> void:
 		_engine_remote.pitch_scale = pitch
 		_engine_remote.volume_db = REMOTE_ENGINE_DB + level_db
 
+	# Wheels on the ground: a rumble that grows with speed.
+	var rolling: bool = plane.is_on_ground() and plane.speed > 1.5
+	if rolling != _roll.playing:
+		if rolling:
+			_roll.play(_rng.randf_range(0.0, 2.0))
+		else:
+			_roll.stop()
+	if rolling:
+		var roll_ratio: float = clampf(plane.speed / maxf(plane.takeoff_speed(), 1.0), 0.0, 1.2)
+		_roll.volume_db = lerpf(-28.0, -3.0, clampf(roll_ratio, 0.0, 1.0))
+		_roll.pitch_scale = lerpf(0.7, 1.2, clampf(roll_ratio, 0.0, 1.0))
 	var burning: bool = plane.has_flag(PlaneActor.FLAG_BURNING)
 	if burning != _fire.playing:
 		if burning:
@@ -201,16 +254,49 @@ func _on_died(_victim: PlaneActor, _killer: PlaneActor) -> void:
 	_engine_remote.stop()
 	_engine_cockpit.stop()
 	_fire.stop()
+	_roll.stop()
+	_starter.stop()
 	# Into the sea, or into something harder.
-	if plane.global_position.y < 25.0:
+	if plane.global_position.y < 25.0 and plane.airfield_at(plane.global_position) == null:
 		_play_event(SOUND_WATER_CRASH, _rng.randf_range(0.92, 1.05), 2.0)
 	_play_event(SOUND_EXPLOSION[_rng.randi_range(0, SOUND_EXPLOSION.size() - 1)], _rng.randf_range(0.9, 1.08), 3.0)
 
 
 func _on_respawned(_plane: PlaneActor) -> void:
-	_engine_level = 1.0
-	_engine_was_running = true
+	# A new plane is either already flying or parked with a cold engine.
+	_engine_was_running = plane.is_engine_running()
+	_engine_level = 1.0 if _engine_was_running else 0.0
+	_start_age = INF
 	_start_engine()
+
+
+func _on_engine_started(_plane: PlaneActor) -> void:
+	_start_age = 0.0
+	_engine_level = 0.0
+	_starter.pitch_scale = _rng.randf_range(0.96, 1.04)
+	_starter.play()
+
+
+func _on_engine_stopped(_plane: PlaneActor) -> void:
+	_stopped_by_pilot = true
+	_starter.stop()
+	_start_age = INF
+
+
+func _on_gear_moved(_plane: PlaneActor, going_down: bool) -> void:
+	# Coming down is a touch slower and lower than going up.
+	_gear.pitch_scale = 0.94 if going_down else 1.04
+	_gear.volume_db = 0.0 if cockpit else -5.0
+	_gear.play()
+
+
+func _on_touched_down(_plane: PlaneActor, sink_speed: float, on_wheels: bool) -> void:
+	var firmness: float = clampf(sink_speed / PlaneActor.HARD_LANDING_SINK, 0.1, 1.0)
+	if on_wheels:
+		_play_event(SOUND_TOUCHDOWN[_rng.randi_range(0, SOUND_TOUCHDOWN.size() - 1)], lerpf(1.1, 0.9, firmness), lerpf(-6.0, 4.0, firmness))
+	else:
+		# No wheels: metal on tarmac.
+		_play_event(SOUND_BREAK[_rng.randi_range(0, SOUND_BREAK.size() - 1)], 0.8, 4.0)
 
 
 func _play_event(stream: AudioStream, pitch: float, volume_db: float) -> void:

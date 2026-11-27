@@ -8,6 +8,7 @@ extends Node3D
 ## This script:
 ##  - swings the hinged control surfaces to follow the stick,
 ##  - spins the propeller (and stops it when the engine dies),
+##  - folds the undercarriage legs up into the wings and back down,
 ##  - trails smoke from damaged parts and fire from burning ones,
 ##  - and, when a part is destroyed, unbolts that piece from the model and
 ##    lets it fall away as debris, together with everything attached to it.
@@ -60,6 +61,11 @@ const SLICED_PIECES: Dictionary[StringName, Array] = {
 	&"StabiliserL": [0, 2], &"StabiliserR": [0, 2], &"Fin": [1, 3], &"Rudder": [1, 2],
 }
 const MUZZLE_NODES: Array[StringName] = [&"MuzzleL", &"MuzzleR"]
+## Main undercarriage legs (left, right) and the tail wheel.
+const GEAR_NODES: Array[StringName] = [&"GearL", &"GearR"]
+const TAIL_WHEEL_NODE: StringName = &"TailWheel"
+## How far each leg swings outward to lie under its wing.
+const GEAR_RETRACT_ANGLE: float = deg_to_rad(86.0)
 ## Big pieces cast shadows; small ones are not worth the draw calls on a phone.
 const SHADOW_CASTERS: Array[StringName] = [&"Fuselage", &"Engine", &"Tail", &"WingL", &"WingR", &"WingTipL", &"WingTipR"]
 
@@ -103,6 +109,9 @@ var _control_target: Vector3 = Vector3.ZERO
 var _control_shown: Vector3 = Vector3.ZERO
 var _prop_speed: float = 40.0
 var _prop_target: float = 40.0
+var _gear: Array[Node3D] = []
+var _gear_rest: Array[Basis] = []
+var _gear_deploy: float = -1.0
 
 
 func _process(delta: float) -> void:
@@ -136,6 +145,8 @@ func build(data: PlaneData, team: Teams.Id) -> void:
 	_part_smoke.clear()
 	_any_detached = false
 	_control_shown = Vector3.ZERO
+	_gear.clear()
+	_gear_rest.clear()
 	_ensure_shared_meshes()
 
 	_model = MODEL.instantiate() as Node3D
@@ -149,6 +160,13 @@ func build(data: PlaneData, team: Teams.Id) -> void:
 		_pieces.append(piece)
 		_rest_bases.append(piece.basis if piece != null else Basis.IDENTITY)
 
+	for node_name: StringName in GEAR_NODES:
+		var leg: Node3D = _model.find_child(node_name, true, false) as Node3D
+		_gear.append(leg)
+		_gear_rest.append(leg.basis if leg != null else Basis.IDENTITY)
+	var shown_deploy: float = _gear_deploy
+	_gear_deploy = -1.0
+	set_gear(maxf(shown_deploy, 0.0))
 	_propeller = _model.find_child("PropellerMesh", true, false) as Node3D
 	if _propeller != null:
 		# A faint disc where the blades blur, parented beside the propeller so
@@ -242,8 +260,47 @@ func flash_muzzle(index: int) -> void:
 
 
 ## 0 = propeller stopped, 1 = full throttle.
-func set_throttle(ratio: float) -> void:
-	_prop_target = 0.0 if ratio <= 0.0 else lerpf(28.0, 62.0, clampf(ratio, 0.0, 1.5))
+func set_propeller(ratio: float) -> void:
+	_prop_target = 0.0 if ratio <= 0.0 else lerpf(8.0, 62.0, clampf(ratio, 0.0, 1.5))
+
+
+## 0 = undercarriage up (and hidden inside the wings), 1 = down and locked.
+func set_gear(deploy: float) -> void:
+	if is_equal_approx(deploy, _gear_deploy):
+		return
+	_gear_deploy = deploy
+	var angle: float = (1.0 - clampf(deploy, 0.0, 1.0)) * GEAR_RETRACT_ANGLE
+	for index: int in range(_gear.size()):
+		var leg: Node3D = _gear[index]
+		if leg == null or not is_instance_valid(leg) or not _model.is_ancestor_of(leg):
+			continue  # Went with its wing.
+		# The left leg swings out to the left, the right leg to the right.
+		var side: float = -1.0 if index == 0 else 1.0
+		leg.basis = _gear_rest[index] * Basis(Vector3.BACK, side * angle)
+		leg.visible = deploy > 0.03
+
+
+## Lowest point of the main wheels and of the tail wheel, in PlaneActor space,
+## with the undercarriage down. Empty if the model has no undercarriage.
+func undercarriage_contacts() -> Array[Vector3]:
+	var result: Array[Vector3] = []
+	var shown: float = _gear_deploy
+	set_gear(1.0)
+	var main_wheel: Vector3 = _lowest_point(GEAR_NODES[0])
+	var tail_wheel: Vector3 = _lowest_point(TAIL_WHEEL_NODE)
+	set_gear(shown)
+	if is_finite(main_wheel.y) and is_finite(tail_wheel.y):
+		result.append(main_wheel)
+		result.append(tail_wheel)
+	return result
+
+
+## How far the bottom of the fuselage is below the plane's origin.
+func belly_depth() -> float:
+	var lowest: float = INF
+	for node_name: StringName in [PART_NODES[PlaneActor.Part.FUSELAGE], PART_NODES[PlaneActor.Part.ENGINE]]:
+		lowest = minf(lowest, _lowest_point(node_name).y)
+	return -lowest if is_finite(lowest) else 0.0
 
 
 ## Barrel-roll angle (radians) applied on top of the actor's own bank.
@@ -257,6 +314,10 @@ func set_roll_angle(angle: float) -> void:
 func set_part_damage(damage: PackedFloat32Array, plane_velocity: Vector3, burning: bool) -> void:
 	if damage.size() < PlaneActor.PART_COUNT or _pieces.is_empty():
 		return
+	if _any_detached and _has_refitted_part(damage):
+		# Ground crew have fitted a new part: rebuild the model, then take off
+		# again (quietly) whatever is still missing.
+		_rebuild_with(damage)
 	# Parents come before their children in Part order, so a wing is detached
 	# before its flap is considered, and the flap simply goes with it.
 	for index: int in range(PlaneActor.PART_COUNT):
@@ -318,6 +379,61 @@ func has_piece(part: PlaneActor.Part) -> bool:
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
+
+## The lowest vertex of a piece's mesh, in PlaneActor space (y = INF if the
+## piece is not there).
+func _lowest_point(node_name: StringName) -> Vector3:
+	var lowest: Vector3 = Vector3(0.0, INF, 0.0)
+	if _model == null:
+		return lowest
+	var mesh_instance: MeshInstance3D = _model.find_child(node_name, true, false) as MeshInstance3D
+	if mesh_instance == null or mesh_instance.mesh == null:
+		return lowest
+	var to_self: Transform3D = _transform_to_self(mesh_instance)
+	for surface: int in range(mesh_instance.mesh.get_surface_count()):
+		var vertices: PackedVector3Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
+		for vertex: Vector3 in vertices:
+			var point: Vector3 = to_self * vertex
+			if point.y < lowest.y:
+				lowest = point
+	return lowest
+
+
+## True when a piece that is missing from the model should be on it again.
+func _has_refitted_part(damage: PackedFloat32Array) -> bool:
+	for index: int in range(PlaneActor.PART_COUNT):
+		if _pieces[index] == null and PlaneActor.PART_DETACHES[index] and not _is_missing(index, damage):
+			return true
+	return false
+
+
+## Whether a part is off the plane: destroyed itself, or hanging on one that is.
+func _is_missing(part: int, damage: PackedFloat32Array) -> bool:
+	var current: int = part
+	while current >= 0:
+		if damage[current] >= 1.0 and PlaneActor.PART_DETACHES[current]:
+			return true
+		current = PlaneActor.PART_PARENT[current]
+	return false
+
+
+func _rebuild_with(damage: PackedFloat32Array) -> void:
+	build(_data, _team)
+	for index: int in range(PlaneActor.PART_COUNT):
+		if _pieces[index] == null or not is_instance_valid(_pieces[index]):
+			_pieces[index] = null
+			continue
+		if damage[index] >= 1.0 and PlaneActor.PART_DETACHES[index]:
+			var piece: Node3D = _pieces[index]
+			_pieces[index] = null
+			_any_detached = true
+			piece.get_parent().remove_child(piece)
+			piece.queue_free()
+	# Children of a removed piece went with it.
+	for index: int in range(PlaneActor.PART_COUNT):
+		if _pieces[index] != null and _is_missing(index, damage):
+			_pieces[index] = null
+
 
 ## Unbolts a piece and hands it to a Debris node in the world.
 func _detach(part: int, plane_velocity: Vector3) -> void:

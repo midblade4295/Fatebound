@@ -7,6 +7,7 @@ extends Control
 ##  - the gun pipper: a fixed gunsight showing where your bullets are going.
 ##    There is no lead-prediction reticle; deflection is judged by eye.
 ##  - hit marker and damage flash
+##  - a marker on the player's own airfield, with the distance to it
 ##
 ## All positions come from the chase camera's unproject_position() of
 ## *interpolated* transforms, so markers stay glued to the planes even though
@@ -32,6 +33,8 @@ var camera: Camera3D
 var match_manager: MatchManager5v5
 var player: PlaneActor
 var view_team: Teams.Id = Teams.Id.TEAM_BLUE
+## The player's own airfield, or null.
+var home: Airfield
 
 var _hit_marker: float = 0.0
 var _damage_flash: float = 0.0
@@ -87,11 +90,48 @@ func _draw() -> void:
 			if hunting or distance < THREAT_RANGE:
 				_draw_edge_arrow(world_position, distance, hunting)
 
-	if player_alive:
+	if player_alive and home != null and is_instance_valid(home) and not player.is_on_ground():
+		_draw_home_marker(eye, safe_rect)
+	if player_alive and not player.is_on_ground():
 		_draw_gunsight()
 	if _damage_flash > 0.0:
 		var alpha: float = _damage_flash / DAMAGE_FLASH_TIME
 		draw_rect(Rect2(Vector2.ZERO, size), Color(1.0, 0.1, 0.05, 0.22 * alpha), false, 90.0)
+
+
+## A small runway sign on the player's own airfield. Off-screen it becomes an
+## arrow on the edge, but only when the pilot has a reason to go home (damage,
+## or the wheels are down), so it does not clutter a dogfight.
+func _draw_home_marker(eye: Vector3, safe_rect: Rect2) -> void:
+	var world_position: Vector3 = home.runway_center()
+	var distance: float = eye.distance_to(world_position)
+	var label: String = "BASE %.1f km" % (distance / 1000.0) if distance >= 1000.0 else "BASE %d m" % roundi(distance)
+	var color: Color = Teams.color_of(home.team).lightened(0.35)
+	var wanted: bool = player.needs_service() or player.is_gear_down()
+	var in_front: bool = not camera.is_position_behind(world_position)
+	var at: Vector2 = camera.unproject_position(world_position) if in_front else Vector2.ZERO
+	if in_front and safe_rect.has_point(at):
+		var half: Vector2 = Vector2(9.0, 20.0) * (1.25 if wanted else 1.0)
+		var plate: Rect2 = Rect2(at - half, half * 2.0)
+		draw_rect(plate.grow(3.0), UiStyle.OUTLINE)
+		draw_rect(plate, color)
+		draw_line(at + Vector2(0.0, -half.y + 5.0), at + Vector2(0.0, half.y - 5.0), UiStyle.OUTLINE, 2.0)
+		UiStyle.draw_outlined_text(self, label, at + Vector2(-110.0, -half.y - 10.0), 18, color, 220.0, 5)
+		return
+	if not wanted:
+		return
+	var center: Vector2 = size * 0.5
+	var direction: Vector2 = Vector2.UP
+	var relative: Vector3 = camera.global_transform.basis.inverse() * (world_position - camera.global_position)
+	if Vector2(relative.x, -relative.y).length_squared() > 0.0001:
+		direction = Vector2(relative.x, -relative.y).normalized()
+	var reach: float = minf((size.x * 0.5 - EDGE_MARGIN) / maxf(absf(direction.x), 0.0001), (size.y * 0.5 - EDGE_MARGIN) / maxf(absf(direction.y), 0.0001))
+	var tip: Vector2 = center + direction * reach
+	var side: Vector2 = direction.orthogonal() * 13.0
+	var arrow: PackedVector2Array = PackedVector2Array([tip, tip - direction * 26.0 + side, tip - direction * 26.0 - side])
+	draw_colored_polygon(arrow, color)
+	draw_polyline(PackedVector2Array([arrow[0], arrow[1], arrow[2], arrow[0]]), UiStyle.OUTLINE, 3.0, true)
+	UiStyle.draw_outlined_text(self, label, tip - direction * 52.0 + Vector2(-110.0, 6.0), 18, color, 220.0, 5)
 
 
 func _draw_enemy_marker(plane: PlaneActor, at: Vector2, distance: float, is_target: bool) -> void:

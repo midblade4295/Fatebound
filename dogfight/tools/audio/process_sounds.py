@@ -1,7 +1,9 @@
 """
 Turns raw sound-effect takes into the game's audio assets.
 
-    python tools/audio/process_sounds.py <folder of raw takes> assets/audio
+    python tools/audio/process_sounds.py <folder of raw takes> assets/audio [name ...]
+
+With names after the two folders, only those sounds are (re)made.
 
 Needs ffmpeg on the PATH and numpy. The raw takes are expected as
 <name>_<n>.mp3 (any format ffmpeg reads), several takes per name.
@@ -16,6 +18,10 @@ What it does, per kind of sound:
     tail, and levels by peak. The best takes are kept as variations.
   * Guns additionally get a low shelf and gentle saturation: more thump and
     density without making them longer.
+  * Sequences (engine start, undercarriage): sounds that are a little story
+    with a quiet part and a loud part, where the timing matters. One chosen
+    take is cut at fixed times, its quiet lead-in is lifted so it can be
+    heard over a battle, and the end is faded.
 Everything is written as mono 16-bit 44.1 kHz WAV.
 """
 
@@ -37,6 +43,7 @@ LOOPS = {
     "engine_mustang": (7.0, 1.0, -17.0),
     "wind": (6.0, 1.0, -20.0),
     "fire": (6.0, 1.0, -19.0),
+    "ground_roll": (6.0, 1.0, -21.0),
 }
 # name -> (max seconds, how many takes to keep, extra ffmpeg filter, cut at a second event?)
 PUNCH = "bass=g=5:f=115:w=0.7,highshelf=g=2:f=3500"
@@ -51,6 +58,15 @@ ONE_SHOTS = {
     "collision": (1.7, 2, "bass=g=2:f=120:w=0.7", False),
     "water_crash": (3.6, 1, "", False),
     "engine_fail": (5.0, 1, "", False),
+    "touchdown": (0.9, 2, "", False),
+}
+# name -> (take, start s, length s, lift the lead-in by dB, lead-in ends at s
+# into the cut, fade-out s). The engine start is cut so the engine catches
+# about 2 s in, which is how long the game's starter takes; the gear clip is
+# a motor whine ending in the clunk of the locks.
+SEQUENCES = {
+    "engine_start": (3, 0.7, 5.3, 14.0, 1.0, 1.6),
+    "gear": (1, 0.1, 2.85, 14.0, 1.75, 0.25),
 }
 # Sounds that exist once in the game, saved without a take number.
 SINGLE_FILE = {"engine_fail"}
@@ -220,10 +236,29 @@ def saturate(piece: np.ndarray, drive: float = 1.5) -> np.ndarray:
     return (shaped * 0.89 / max(float(np.max(np.abs(shaped))), 1e-9)).astype(np.float32)
 
 
+def make_sequence(samples: np.ndarray, start: float, seconds: float, lift_db: float, lift_until: float, fade: float) -> np.ndarray:
+    piece = samples[int(start * RATE):int((start + seconds) * RATE)].astype(np.float64)
+    # Lift the quiet lead-in, easing back to nothing over 0.3 s before the loud part.
+    gain = np.ones(len(piece))
+    lift = 10.0 ** (lift_db / 20.0)
+    hold = min(int(lift_until * RATE), len(piece))
+    ease = min(int(0.3 * RATE), len(piece) - hold)
+    gain[:hold] = lift
+    gain[hold:hold + ease] = np.linspace(lift, 1.0, ease)
+    piece *= gain
+    attack = int(0.02 * RATE)
+    piece[:attack] *= np.linspace(0.0, 1.0, attack)
+    release = min(int(fade * RATE), len(piece))
+    piece[-release:] *= np.linspace(1.0, 0.0, release) ** 1.4
+    piece *= 0.89 / max(float(np.max(np.abs(piece))), 1e-9)
+    return piece.astype(np.float32)
+
+
 def main() -> None:
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3:
         sys.exit(__doc__)
     raw_folder, out_folder = sys.argv[1], sys.argv[2]
+    only = set(sys.argv[3:])
     os.makedirs(out_folder, exist_ok=True)
 
     def takes_of(name: str) -> list[tuple[str, np.ndarray]]:
@@ -234,6 +269,8 @@ def main() -> None:
 
     print("LOOPS")
     for name, (seconds, fade, target_db) in LOOPS.items():
+        if only and name not in only:
+            continue
         loop, note = make_loop(name, takes_of(name), seconds, fade, target_db)
         write_wav(os.path.join(out_folder, f"{name}.wav"), loop)
         print(f"  {name:<18} {len(loop) / RATE:4.1f}s  rms {db(rms(loop)):6.1f} dB  peak {db(float(np.max(np.abs(loop)))):5.1f} dB  "
@@ -241,6 +278,8 @@ def main() -> None:
 
     print("ONE-SHOTS")
     for name, (max_seconds, keep, audio_filter, cut) in ONE_SHOTS.items():
+        if only and name not in only:
+            continue
         candidates = []
         for path, samples in takes_of(name):
             piece, event_count = make_one_shot(samples, max_seconds, cut)
@@ -258,6 +297,17 @@ def main() -> None:
             written = decode(os.path.join(out_folder, file_name))
             print(f"  {file_name:<22} {len(written) / RATE:4.2f}s  peak {db(float(np.max(np.abs(written)))):5.1f} dB  rms {db(rms(written)):6.1f} dB  "
                   f"centroid {spectral_centroid(written):5.0f} Hz  events in take {event_count}  (from {source})")
+
+
+    print("SEQUENCES")
+    for name, (take, start, seconds, lift_db, lift_until, fade) in SEQUENCES.items():
+        if only and name not in only:
+            continue
+        path, samples = takes_of(name)[take - 1]
+        piece = make_sequence(samples, start, seconds, lift_db, lift_until, fade)
+        write_wav(os.path.join(out_folder, f"{name}.wav"), piece, "alimiter=limit=0.94:level=false")
+        levels = " ".join(f"{level:.0f}" for level in window_rms_db(piece, 0.25))
+        print(f"  {name + '.wav':<22} {len(piece) / RATE:4.2f}s  (from {os.path.basename(path)})  loudness every 0.25 s: {levels}")
 
 
 if __name__ == "__main__":

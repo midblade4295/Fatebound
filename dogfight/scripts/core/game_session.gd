@@ -17,6 +17,10 @@ const ACTION_PITCH_DOWN: StringName = &"pitch_down"
 const ACTION_FIRE: StringName = &"fire"
 const ACTION_EVADE: StringName = &"evade_roll"
 const ACTION_GADGET: StringName = &"gadget"
+const ACTION_THROTTLE_UP: StringName = &"throttle_up"
+const ACTION_THROTTLE_DOWN: StringName = &"throttle_down"
+const ACTION_ENGINE: StringName = &"toggle_engine"
+const ACTION_GEAR: StringName = &"toggle_gear"
 
 ## Planes per team. 5v5 by default.
 var team_size: int = 5
@@ -31,6 +35,9 @@ var local_team: Teams.Id = Teams.Id.TEAM_BLUE
 var local_player_enabled: bool = true
 ## 0.0-1.0 average bot skill. Individual bots vary around it.
 var bot_skill: float = 0.55
+## True: everyone starts parked on their airfield and has to take off.
+## False: everyone starts already flying (the old air start).
+var ground_start: bool = true
 ## Seed for bot names/skills. 0 picks a random one per match.
 var match_seed: int = 0
 
@@ -74,6 +81,10 @@ func _register_default_actions() -> void:
 	_add_key_action(ACTION_FIRE, [KEY_SPACE])
 	_add_key_action(ACTION_EVADE, [KEY_SHIFT, KEY_Q])
 	_add_key_action(ACTION_GADGET, [KEY_E])
+	_add_key_action(ACTION_THROTTLE_UP, [KEY_R, KEY_PAGEUP])
+	_add_key_action(ACTION_THROTTLE_DOWN, [KEY_F, KEY_PAGEDOWN])
+	_add_key_action(ACTION_ENGINE, [KEY_I])
+	_add_key_action(ACTION_GEAR, [KEY_G])
 
 
 func _add_key_action(action: StringName, keys: Array[Key]) -> void:

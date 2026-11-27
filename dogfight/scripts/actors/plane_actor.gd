@@ -21,6 +21,13 @@ extends CharacterBody3D
 ## a lift check: too little wing or too little speed and the plane sinks and
 ## its nose drops, whatever the stick says.
 ##
+## Planes start on the ground. The pilot starts the engine, opens the throttle
+## and rolls down the runway; the wheels stay on the ground until there is
+## enough speed for the wings to carry the plane *and* the stick is eased back.
+## Coming home works the other way round: gear down, throttle back, and put it
+## on the island gently enough and level enough to keep it in one piece
+## (see _touch_down). Standing still on its own airfield, a plane is repaired.
+##
 ## Networking: the server (multiplayer authority of this node) runs all of
 ## _physics_process. Everyone else only runs _process for cosmetics and gets
 ## transform/speed/damage/flags through the StateSync MultiplayerSynchronizer.
@@ -35,6 +42,17 @@ signal evade_started(plane: PlaneActor)
 signal gadget_used(plane: PlaneActor, gadget_type: int)
 ## A part crossed into a new PartState (damaged, critical, destroyed, or repaired).
 signal part_state_changed(plane: PlaneActor, part: Part, state: PartState)
+## The wheels (or the belly, if [param on_wheels] is false) met the ground and
+## the plane survived. [param sink_speed] is how fast it was coming down (m/s).
+signal touched_down(plane: PlaneActor, sink_speed: float, on_wheels: bool)
+signal lifted_off(plane: PlaneActor)
+signal engine_started(plane: PlaneActor)
+## The pilot shut the engine down (not: it was shot dead).
+signal engine_stopped(plane: PlaneActor)
+## The undercarriage lever was moved.
+signal gear_moved(plane: PlaneActor, going_down: bool)
+## Ground crew have finished: everything is repaired and the tank is full.
+signal serviced(plane: PlaneActor)
 
 ## Every separately damageable piece of the airframe. The names match the
 ## pieces of the model (see PlaneVisual.PART_NODES).
@@ -150,6 +168,87 @@ const FUEL_LEAK_RATE: float = 0.05
 ## A destroyed fuselage empties the tank in a few seconds.
 const FUEL_DUMP_RATE: float = 0.25
 
+# --- Throttle and engine start -------------------------------------------------
+## Seconds from pressing the starter until the engine answers the throttle fully.
+const ENGINE_START_TIME: float = 2.3
+const ENGINE_STOP_TIME: float = 1.2
+## How fast the engine follows the lever (full travel per second).
+const THROTTLE_SLEW: float = 1.4
+## With the throttle closed the plane slows this quickly toward gliding speed
+## (1/s). Much gentler than a dead engine's windmilling propeller.
+const IDLE_RESPONSE: float = 0.14
+
+# --- Undercarriage ---------------------------------------------------------------
+## Seconds for the wheels to travel fully up or down.
+const GEAR_TRAVEL_TIME: float = 2.1
+## Share of top speed lost with the wheels hanging in the airflow.
+const GEAR_DRAG: float = 0.18
+## Used if the model has no undercarriage to measure (metres).
+const DEFAULT_WHEEL_HEIGHT: float = 3.4
+const DEFAULT_BELLY_HEIGHT: float = 1.9
+
+# --- On the ground ---------------------------------------------------------------
+## Acceleration at full throttle from a standstill (m/s^2) for a plane with
+## PlaneStats.acceleration of 0.6. A take-off run is a few hundred metres.
+const GROUND_THRUST: float = 5.6
+const REFERENCE_ACCELERATION: float = 0.6
+## Rolling resistance (m/s^2): tarmac, grass, and sliding on the belly.
+const ROLL_RUNWAY: float = 0.5
+const ROLL_GRASS: float = 2.4
+const BELLY_FRICTION: float = 8.5
+## Wheel brakes come on by themselves when the throttle is closed.
+const WHEEL_BRAKES: float = 4.0
+const BRAKE_THROTTLE: float = 0.04
+## Speed bled off by the air when the throttle is pulled back on the ground (1/s).
+const GROUND_AIR_BRAKE: float = 0.05
+## Steering on the ground: the tightest turn, and the most sideways grip.
+const GROUND_TURN_RATE: float = deg_to_rad(42.0)
+const GROUND_GRIP: float = 5.5
+const GROUND_PITCH_RATE: float = deg_to_rad(16.0)
+## The tail comes up between these fractions of take-off speed.
+const TAIL_UP_START: float = 0.35
+const TAIL_UP_END: float = 0.65
+## Ease the stick back at least this far to leave the ground.
+const LIFTOFF_STICK: float = 0.15
+const LIFTOFF_PITCH: float = deg_to_rad(3.0)
+const LIFTOFF_GRACE: float = 0.8
+## Running into a hangar faster than this destroys the plane (m/s).
+const GROUND_CRASH_SPEED: float = 10.0
+## Further than this under the surface means the plane flew into the side of
+## the island rather than onto the top of it (metres).
+const GROUND_PENETRATION: float = 3.0
+
+# --- Landing -----------------------------------------------------------------------
+## Rate of descent (m/s) at touchdown: up to FIRM is a good landing, above it
+## the undercarriage and wings take damage, above HARD the plane breaks up.
+const FIRM_LANDING_SINK: float = 5.0
+const HARD_LANDING_SINK: float = 10.0
+## Without wheels the plane can still be slid on, but only very gently.
+const BELLY_LANDING_SINK: float = 6.0
+## Nose lower than this at touchdown digs in; more bank than this cartwheels.
+const NOSE_OVER_PITCH: float = deg_to_rad(12.0)
+const CARTWHEEL_BANK: float = deg_to_rad(38.0)
+const WINGTIP_STRIKE_BANK: float = deg_to_rad(14.0)
+## Damage (share of the part's strength) from a landing at the hard limit.
+const HARD_LANDING_WING_DAMAGE: float = 0.45
+const HARD_LANDING_FUSELAGE_DAMAGE: float = 0.3
+## A belly landing bends the propeller and scrapes the underside.
+const BELLY_ENGINE_DAMAGE: float = 0.6
+const BELLY_FUSELAGE_DAMAGE: float = 0.3
+const WINGTIP_STRIKE_DAMAGE: float = 0.6
+
+# --- Repairs at the home airfield ---------------------------------------------------
+## The plane must be standing this still, for this long, before work starts.
+const SERVICE_MAX_SPEED: float = 1.0
+const SERVICE_DELAY: float = 1.5
+## Damage mended per second on every part, and seconds to fit each new part.
+const SERVICE_RATE: float = 0.22
+const SERVICE_REFIT_TIME: float = 1.1
+const SERVICE_FUEL_RATE: float = 0.2
+## A plane that comes to rest anywhere but its own airfield is not coming home:
+## after this long its pilot abandons it and it counts as lost.
+const STRANDED_TIME: float = 6.0
+
 const EVADE_DURATION: float = 0.75
 const EVADE_COOLDOWN: float = 4.0
 const EVADE_SIDE_SPEED: float = 34.0
@@ -158,6 +257,9 @@ const EVADE_DAMAGE_MULTIPLIER: float = 0.35
 const EVADE_MIN_AILERONS: float = 0.3
 
 const SPAWN_SHIELD_TIME: float = 2.5
+## A plane that has just been wheeled out cannot be hurt until it leaves the
+## ground, or until this long has passed, whichever comes first.
+const GROUND_SHIELD_TIME: float = 25.0
 ## A crash is credited to the last enemy who hit this plane within this long.
 ## It is generous because a crippled plane can take a while to come down.
 const CRASH_CREDIT_WINDOW: float = 45.0
@@ -176,6 +278,10 @@ const FLAG_BURNING: int = 8
 const FLAG_SHIELDED: int = 16
 const FLAG_OUT_OF_BOUNDS: int = 32
 const FLAG_GOING_DOWN: int = 64
+const FLAG_ON_GROUND: int = 128
+const FLAG_ENGINE_ON: int = 256
+const FLAG_GEAR_DOWN: int = 512
+const FLAG_SERVICING: int = 1024
 
 # --- Identity (replicated once at spawn) ------------------------------------
 @export var team: Teams.Id = Teams.Id.TEAM_BLUE
@@ -201,11 +307,19 @@ const FLAG_GOING_DOWN: int = 64
 ## peer: x = aileron/rudder (-1 left .. +1 right), y = elevator (-1 down ..
 ## +1 up), z = how far the flaps are dropped (0..1).
 @export var control_state: Vector3 = Vector3.ZERO
+## Where the engine's throttle actually is, 0..1 (it follows the lever).
+@export var throttle: float = 1.0
+## How far the undercarriage is down: 0 = up and locked, 1 = down and locked.
+@export var gear_deploy: float = 0.0
 
 # --- Arena limits, set by the match manager ---------------------------------
 var arena_center: Vector3 = Vector3.ZERO
 var arena_radius: float = 1500.0
 var arena_ceiling: float = 750.0
+
+## Places a plane can land. Set by the match manager; with none, there is no
+## ground to stand on and every surface is a crash.
+var airfields: Array[Airfield] = []
 
 var plane_data: PlaneData
 var stats: PlaneStats
@@ -251,6 +365,31 @@ var _gone_mask: int = 0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _rng_seeded: bool = false
 
+# --- Engine, undercarriage and ground state (server side) ---------------------
+var _on_ground: bool = false
+## Sliding on the fuselage instead of rolling on wheels.
+var _belly: bool = false
+var _engine_running: bool = true
+## 0 = stopped .. 1 = running and answering the throttle.
+var _engine_spool: float = 1.0
+## Where the undercarriage lever is (the wheels take a while to follow).
+var _gear_lever_down: bool = false
+var _ground_field: Airfield
+## Height of the plane's origin above the surface right now.
+var _ground_height: float = 0.0
+var _liftoff_grace: float = 0.0
+var _service_time: float = 0.0
+var _refit_timer: float = 0.0
+var _service_start_load: float = 0.0
+var _stranded_time: float = 0.0
+# Undercarriage geometry, measured from the model in _ready().
+## Origin height with the tail up and the main wheels on the ground.
+var _wheel_height: float = DEFAULT_WHEEL_HEIGHT
+## Origin height and nose-up angle sitting on all three wheels.
+var _rest_height: float = DEFAULT_WHEEL_HEIGHT
+var _rest_pitch: float = deg_to_rad(12.0)
+var _belly_height: float = DEFAULT_BELLY_HEIGHT
+
 ## This plane's engine, guns and break-up sounds.
 var audio: PlaneAudio
 
@@ -295,6 +434,7 @@ func _ready() -> void:
 		speed = stats.top_speed * 0.85
 	visual.build(plane_data, team)
 	hitboxes = PlaneHitboxes.from_visual(visual)
+	_measure_undercarriage()
 	var offsets: Array[Vector3] = visual.gun_offsets()
 	for index: int in range(mini(offsets.size(), _muzzles.size())):
 		_muzzles[index].position = offsets[index]
@@ -324,7 +464,8 @@ func _process(_delta: float) -> void:
 	# Cosmetics only: runs on every peer from replicated state.
 	if not alive:
 		return
-	visual.set_throttle(speed / maxf(stats.top_speed, 1.0) if engine_power() > 0.0 else 0.0)
+	visual.set_propeller(_propeller_ratio())
+	visual.set_gear(gear_deploy)
 	visual.set_roll_angle(visual_roll)
 	visual.set_part_damage(part_damage, velocity, has_flag(FLAG_BURNING))
 	visual.set_controls(control_state)
@@ -366,6 +507,78 @@ func is_out_of_bounds() -> bool:
 ## its way down. Bots stop wasting ammunition on it.
 func is_going_down() -> bool:
 	return has_flag(FLAG_GOING_DOWN)
+
+
+## Wheels (or belly) on the ground.
+func is_on_ground() -> bool:
+	return has_flag(FLAG_ON_GROUND)
+
+
+## The engine is turning: switched on, not destroyed, and with fuel to burn.
+func is_engine_running() -> bool:
+	return has_flag(FLAG_ENGINE_ON) and engine_power() > 0.0
+
+
+## Where the undercarriage lever is. See gear_deploy for the wheels themselves.
+func is_gear_down() -> bool:
+	return has_flag(FLAG_GEAR_DOWN)
+
+
+## Ground crew are working on the plane right now.
+func is_servicing() -> bool:
+	return has_flag(FLAG_SERVICING)
+
+
+## True when there is something for ground crew to fix or fill.
+func needs_service() -> bool:
+	if fuel < 1.0 or _burn_time > 0.0 or _belly:
+		return true
+	for damage: float in part_damage:
+		if damage > 0.0:
+			return true
+	return false
+
+
+## How far through the current repair job the ground crew are, 0..1.
+func service_progress() -> float:
+	if _service_start_load <= 0.0:
+		return 1.0
+	return clampf(1.0 - _service_load() / _service_start_load, 0.0, 1.0)
+
+
+## Speed (m/s) at which this plane, undamaged and with its wheels and flaps
+## down, has enough lift to leave the ground.
+func takeoff_speed() -> float:
+	return stats.top_speed * STALL_SPEED_RATIO / sqrt(1.0 + FLAP_LIFT_BONUS)
+
+
+## The wheels are down, locked and still attached to both wings.
+func gear_usable() -> bool:
+	return gear_deploy >= 0.98 and not is_part_gone(Part.LEFT_WING) and not is_part_gone(Part.RIGHT_WING)
+
+
+## The airfield whose flat top [param world_position] is over, or null.
+func airfield_at(world_position: Vector3) -> Airfield:
+	for field: Airfield in airfields:
+		if is_instance_valid(field) and field.contains(world_position):
+			return field
+	return null
+
+
+## This plane's own base, or null.
+func home_airfield() -> Airfield:
+	for field: Airfield in airfields:
+		if is_instance_valid(field) and field.team == team:
+			return field
+	return null
+
+
+## Height of the wheels (or the belly, with the wheels up) above whatever is
+## underneath: the airfield if the plane is over one, otherwise the sea.
+func height_above_ground() -> float:
+	var field: Airfield = airfield_at(global_position)
+	var floor_y: float = field.surface_y() if field != null else 0.0
+	return global_position.y - floor_y - _ride_height()
 
 
 ## 0.0 = pristine .. 1.0 = destroyed.
@@ -576,15 +789,38 @@ func destroy(killer: PlaneActor) -> void:
 	_die(killer if killer != null else recent_attacker())
 
 
-## Puts the plane back in the air at [param spawn_transform], factory fresh.
-func respawn(spawn_transform: Transform3D) -> void:
+## Puts the plane at [param spawn_transform], factory fresh. By default it is
+## already flying. With [param parked] it stands on the airfield under that
+## point instead (the transform's origin is then a point on the ground): engine
+## off, wheels down, throttle closed, waiting for its pilot.
+func respawn(spawn_transform: Transform3D, parked: bool = false) -> void:
 	global_transform = spawn_transform.orthonormalized()
 	_read_angles_from_transform()
 	bank = 0.0
-	rotation = Vector3(pitch, yaw, bank)
 	_yaw_rate = 0.0
 	_pitch_rate = 0.0
-	speed = stats.top_speed * 0.85
+	var field: Airfield = airfield_at(global_position) if parked else null
+	_on_ground = field != null
+	_ground_field = field
+	_belly = false
+	_engine_running = not _on_ground
+	_engine_spool = 1.0 if _engine_running else 0.0
+	throttle = 1.0 if _engine_running else 0.0
+	input.throttle = throttle
+	_gear_lever_down = _on_ground
+	gear_deploy = 1.0 if _on_ground else 0.0
+	_liftoff_grace = 0.0
+	_service_time = 0.0
+	_service_start_load = 0.0
+	_stranded_time = 0.0
+	if _on_ground:
+		pitch = _rest_pitch
+		_ground_height = _rest_height
+		global_position.y = field.surface_y() + _ground_height
+		speed = 0.0
+	else:
+		speed = stats.top_speed * 0.85
+	rotation = Vector3(pitch, yaw, bank)
 	velocity = forward() * speed
 	part_damage.fill(0.0)
 	_gone_mask = 0
@@ -604,7 +840,7 @@ func respawn(spawn_transform: Transform3D) -> void:
 	_last_attacker_age = INF
 	_doomed_by = null
 	_fire_cooldown = 0.0
-	_spawn_shield = SPAWN_SHIELD_TIME
+	_spawn_shield = GROUND_SHIELD_TIME if _on_ground else SPAWN_SHIELD_TIME
 	visual_roll = 0.0
 	current_target = null
 	input.clear()
@@ -617,8 +853,11 @@ func respawn(spawn_transform: Transform3D) -> void:
 
 
 ## Moves the plane somewhere else as it is, damage and all, with no spawn
-## protection. For tests, cutscenes and editor tools.
+## protection, and flying. For tests, cutscenes and editor tools.
 func teleport(new_transform: Transform3D) -> void:
+	_on_ground = false
+	_belly = false
+	_spawn_shield = 0.0
 	global_transform = new_transform.orthonormalized()
 	_read_angles_from_transform()
 	bank = 0.0
@@ -627,7 +866,24 @@ func teleport(new_transform: Transform3D) -> void:
 	_pitch_rate = 0.0
 	_knock_velocity = Vector3.ZERO
 	velocity = forward() * speed
+	_refresh_status_flags()
 	reset_physics_interpolation()
+
+
+## Starts or stops the engine at once, with no starter and no spool-up.
+## For tests, cutscenes and editor tools.
+func set_engine_running(running: bool) -> void:
+	_engine_running = running and engine_power() > 0.0
+	_engine_spool = 1.0 if _engine_running else 0.0
+	_refresh_status_flags()
+
+
+## Puts the undercarriage up or down at once, with no travel time.
+## For tests, cutscenes and editor tools.
+func set_gear_down(down: bool) -> void:
+	_gear_lever_down = down
+	gear_deploy = 1.0 if down else 0.0
+	_refresh_status_flags()
 
 
 ## The enemy to credit if this plane is destroyed right now: whoever shot a
@@ -719,7 +975,18 @@ func _aileron_health() -> float:
 
 
 func _integrate_flight(delta: float) -> void:
-	var steer: Vector2 = _apply_bounds_assist(input.steer.limit_length(1.0))
+	var steer: Vector2 = input.steer.limit_length(1.0)
+	_tick_engine(delta)
+	_tick_gear(delta)
+	_liftoff_grace = maxf(_liftoff_grace - delta, 0.0)
+	if _on_ground:
+		# No rolls and no gadgets with the wheels on the ground.
+		input.consume_evade()
+		input.consume_gadget()
+		if _integrate_ground(steer, delta):
+			return
+		# Left the ground this tick (took off, or ran off the edge): fly on.
+	steer = _apply_bounds_assist(steer)
 
 	if input.consume_evade():
 		_try_start_evade(steer.x)
@@ -751,6 +1018,8 @@ func _integrate_flight(delta: float) -> void:
 	# Combat flaps: pulling hard drops them for a tighter turn at the cost of
 	# speed. A shot-up flap gives less, and uneven flaps pull the plane round.
 	var flap_demand: float = clampf((steer.length() - FLAP_DEPLOY_STICK) / (1.0 - FLAP_DEPLOY_STICK), 0.0, 1.0)
+	# The landing flaps come down with the wheels.
+	flap_demand = maxf(flap_demand, gear_deploy)
 	_flap_deploy = move_toward(_flap_deploy, flap_demand, FLAP_SPEED * delta)
 	var flap_effect: float = _flap_deploy * 0.5 * (left_flap + right_flap)
 	var flap_asymmetry: float = (left_flap - right_flap) * _flap_deploy
@@ -799,29 +1068,334 @@ func _integrate_flight(delta: float) -> void:
 	bank = lerpf(bank, bank_target, 1.0 - exp(-BANK_RESPONSE * stats.roll_rate * control_feel * delta))
 	rotation = Vector3(pitch, yaw, bank)
 
-	# --- Speed: throttle is automatic. Climbing bleeds it, diving builds it. --
-	var nitro_multiplier: float = 1.0 + stats.gadget_power if _nitro_time > 0.0 and power > 0.0 else 1.0
-	var drag: float = (1.0 - WING_DRAG * (2.0 - left_lift - right_lift)) * (1.0 - FLAP_DRAG * _flap_deploy)
-	var target_speed: float = stats.top_speed * (1.0 - ENGINE_SPEED_LOSS * (1.0 - power)) * drag * nitro_multiplier
-	var engine_response: float = stats.acceleration * (1.0 - ENGINE_ACCEL_LOSS * (1.0 - power)) * (3.0 if nitro_multiplier > 1.0 else 1.0)
-	if power <= 0.0:
-		# Dead stick: only a dive keeps the speed up now.
-		target_speed = stats.top_speed * DEAD_ENGINE_SPEED_RATIO
-		engine_response = DEAD_ENGINE_RESPONSE
+	# --- Speed: the throttle sets what the engine is asked for; climbing ------
+	# bleeds speed and diving builds it.
+	var drive: float = _drive()
+	var nitro_multiplier: float = 1.0 + stats.gadget_power if _nitro_time > 0.0 and drive > 0.0 else 1.0
+	var drag: float = (1.0 - WING_DRAG * (2.0 - left_lift - right_lift)) * (1.0 - FLAP_DRAG * _flap_deploy) * (1.0 - GEAR_DRAG * gear_deploy)
+	var powered_speed: float = stats.top_speed * (1.0 - ENGINE_SPEED_LOSS * (1.0 - power)) * drag * nitro_multiplier
+	var powered_response: float = stats.acceleration * (1.0 - ENGINE_ACCEL_LOSS * (1.0 - power)) * (3.0 if nitro_multiplier > 1.0 else 1.0)
+	# With no drive at all the plane settles to a glide: quickly behind a dead
+	# engine's windmilling propeller, gently behind one that is merely idling.
+	var glide_response: float = IDLE_RESPONSE if power > 0.0 else DEAD_ENGINE_RESPONSE
+	var target_speed: float = lerpf(stats.top_speed * DEAD_ENGINE_SPEED_RATIO, powered_speed, drive)
+	var engine_response: float = lerpf(glide_response, powered_response, drive)
 	var gravity_pull: float = -sin(pitch) * GRAVITY_ACCEL
 	if pitch > 0.0:
 		gravity_pull /= maxf(stats.climb_rate, 0.1)
 	speed += ((target_speed - speed) * engine_response + gravity_pull) * delta
-	speed = clampf(speed, stats.top_speed * MIN_SPEED_RATIO, stats.top_speed * DIVE_SPEED_RATIO * nitro_multiplier)
+	speed = clampf(speed, 0.0, stats.top_speed * DIVE_SPEED_RATIO * nitro_multiplier)
 
 	control_state = Vector3(steer.x, steer.y, _flap_deploy)
 	_knock_velocity = _knock_velocity.lerp(Vector3.ZERO, 1.0 - exp(-KNOCK_DAMPING * delta))
 	velocity = forward() * speed + Vector3.DOWN * SINK_SPEED * lift_deficit + _evade_velocity() + _knock_velocity
+	if _meet_the_ground(delta):
+		return
 	var collision: KinematicCollision3D = move_and_collide(velocity * delta)
 	if collision != null:
-		# Hit the sea, a cliff or the carrier. This is the only way a plane dies
-		# on its own; credit whoever put it in this state.
+		# Hit the sea, a cliff or a building. Apart from a bad landing this is
+		# the only way a plane dies on its own; credit whoever put it in this state.
 		_die(recent_attacker())
+
+
+# ---------------------------------------------------------------------------
+# Engine, throttle and undercarriage
+# ---------------------------------------------------------------------------
+
+## Share of the engine's available power that is being used right now, 0..1:
+## the throttle, once the engine is running.
+func _drive() -> float:
+	if engine_power() <= 0.0:
+		return 0.0
+	return clampf(throttle * _engine_spool, 0.0, 1.0)
+
+
+func _tick_engine(delta: float) -> void:
+	if input.consume_engine():
+		if _engine_running:
+			_engine_running = false
+			engine_stopped.emit(self)
+		elif engine_power() > 0.0:
+			_engine_running = true
+			engine_started.emit(self)
+	if _engine_running and engine_power() <= 0.0:
+		_engine_running = false  # Shot dead or out of fuel; it will not restart.
+	if _engine_running:
+		_engine_spool = move_toward(_engine_spool, 1.0, delta / ENGINE_START_TIME)
+	else:
+		_engine_spool = move_toward(_engine_spool, 0.0, delta / ENGINE_STOP_TIME)
+	throttle = move_toward(throttle, clampf(input.throttle, 0.0, 1.0), THROTTLE_SLEW * delta)
+
+
+func _tick_gear(delta: float) -> void:
+	# The lever is locked while the plane's weight is on the wheels.
+	if input.consume_gear() and not _on_ground:
+		_gear_lever_down = not _gear_lever_down
+		gear_moved.emit(self, _gear_lever_down)
+	gear_deploy = move_toward(gear_deploy, 1.0 if _gear_lever_down else 0.0, delta / GEAR_TRAVEL_TIME)
+
+
+## How fast the propeller should look like it is turning, 0..1.
+func _propeller_ratio() -> float:
+	if is_engine_running():
+		return lerpf(0.3, 1.0, throttle)
+	# A stopped engine still windmills in the airflow.
+	return 0.0 if is_on_ground() else clampf(speed / maxf(stats.top_speed, 1.0), 0.0, 1.0) * 0.25
+
+
+## Reads the wheel positions off the model: how high the plane stands with its
+## tail up, and how high and how nose-up it sits on all three wheels.
+func _measure_undercarriage() -> void:
+	var contacts: Array[Vector3] = visual.undercarriage_contacts()
+	_belly_height = maxf(visual.belly_depth(), 0.5)
+	if contacts.size() < 2:
+		_wheel_height = _belly_height + (DEFAULT_WHEEL_HEIGHT - DEFAULT_BELLY_HEIGHT)
+		_rest_height = _wheel_height
+		_rest_pitch = 0.0
+		return
+	# Side view: x = distance behind the origin (+Z), y = height.
+	var main_wheel: Vector2 = Vector2(contacts[0].z, contacts[0].y)
+	var tail_wheel: Vector2 = Vector2(contacts[1].z, contacts[1].y)
+	var ground_line: Vector2 = tail_wheel - main_wheel
+	_wheel_height = maxf(-main_wheel.y, _belly_height)
+	_rest_pitch = clampf(atan2(ground_line.y, ground_line.x), 0.0, deg_to_rad(20.0))
+	# Distance from the origin to the line through both contact points.
+	_rest_height = absf(main_wheel.x * tail_wheel.y - main_wheel.y * tail_wheel.x) / maxf(ground_line.length(), 0.01)
+
+
+## Origin height above the ground for the plane's attitude and wheels.
+func _ride_height() -> float:
+	if not gear_usable():
+		return _belly_height
+	var tail_down: float = clampf(pitch / maxf(_rest_pitch, 0.001), 0.0, 1.0)
+	return lerpf(_wheel_height, _rest_height, tail_down)
+
+
+# ---------------------------------------------------------------------------
+# On the ground
+# ---------------------------------------------------------------------------
+
+## One tick of rolling (or sliding) along the airfield. Returns false if the
+## plane left the ground this tick, so the caller carries on with flight.
+func _integrate_ground(steer: Vector2, delta: float) -> bool:
+	var field: Airfield = airfield_at(global_position)
+	if field == null:
+		# Ran off the edge of the island. Whatever happens next is flying.
+		_on_ground = false
+		_belly = false
+		_ground_field = null
+		return false
+	_ground_field = field
+	if not _belly and not gear_usable():
+		_belly = true  # A wing, and the leg under it, has just gone.
+
+	# --- Lift: is it going fast enough to fly? -------------------------------
+	_flap_deploy = move_toward(_flap_deploy, gear_deploy, FLAP_SPEED * delta)
+	var left_lift: float = _side_lift(Part.LEFT_WING, Part.LEFT_WINGTIP)
+	var right_lift: float = _side_lift(Part.RIGHT_WING, Part.RIGHT_WINGTIP)
+	var flap_effect: float = _flap_deploy * 0.5 * (part_health(Part.LEFT_FLAP) + part_health(Part.RIGHT_FLAP))
+	var speed_fraction: float = speed / maxf(stats.top_speed * STALL_SPEED_RATIO, 1.0)
+	var raw_lift: float = 0.5 * (left_lift + right_lift) * speed_fraction * speed_fraction * (1.0 + FLAP_LIFT_BONUS * flap_effect)
+	_lift_ratio = clampf(raw_lift, 0.0, 1.0)
+	var elevators: float = 0.5 * (part_health(Part.LEFT_ELEVATOR) + part_health(Part.RIGHT_ELEVATOR))
+	if not _belly and raw_lift >= 1.0 and steer.y * lerpf(PITCH_WITHOUT_ELEVATORS, 1.0, elevators) > LIFTOFF_STICK:
+		_lift_off()
+		return false
+
+	# --- Speed: thrust against rolling resistance and brakes ------------------
+	var power: float = engine_power()
+	var drive: float = _drive()
+	var drag: float = (1.0 - WING_DRAG * (2.0 - left_lift - right_lift)) * (1.0 - FLAP_DRAG * _flap_deploy) * (1.0 - GEAR_DRAG * gear_deploy)
+	var target_speed: float = stats.top_speed * (1.0 - ENGINE_SPEED_LOSS * (1.0 - power)) * drive * drag
+	var acceleration: float
+	if target_speed > speed and not _belly:
+		var thrust: float = GROUND_THRUST * (stats.acceleration / REFERENCE_ACCELERATION) * drive * (1.0 - ENGINE_ACCEL_LOSS * (1.0 - power))
+		acceleration = minf((target_speed - speed) * stats.acceleration, thrust)
+	else:
+		acceleration = minf((target_speed - speed) * GROUND_AIR_BRAKE, 0.0)
+	var resistance: float = BELLY_FRICTION
+	if not _belly:
+		resistance = ROLL_RUNWAY if field.is_on_runway(global_position) else ROLL_GRASS
+		if input.throttle <= BRAKE_THROTTLE:
+			resistance += WHEEL_BRAKES
+	speed = maxf(speed + (acceleration - resistance) * delta, 0.0)
+
+	# --- Steering: rudder and tail wheel, limited by grip at speed ------------
+	var turn_limit: float = minf(GROUND_TURN_RATE, GROUND_GRIP / maxf(speed, 0.1)) * clampf(speed / 2.0, 0.0, 1.0)
+	if _belly:
+		turn_limit *= 0.15
+	var yaw_target: float = -steer.x * turn_limit * lerpf(0.5, 1.0, part_health(Part.RUDDER))
+	_yaw_rate = lerpf(_yaw_rate, yaw_target, 1.0 - exp(-STICK_RESPONSE * delta))
+	_pitch_rate = 0.0
+	yaw = wrapf(yaw + _yaw_rate * delta, -PI, PI)
+
+	# --- Attitude: tail down at rest, coming up as the speed builds -----------
+	var tail_up: float = smoothstep(TAIL_UP_START, TAIL_UP_END, speed / maxf(takeoff_speed(), 1.0))
+	var pitch_target: float = 0.0 if _belly else _rest_pitch * (1.0 - tail_up)
+	pitch = move_toward(pitch, pitch_target, GROUND_PITCH_RATE * delta)
+	bank = lerpf(bank, 0.0, 1.0 - exp(-6.0 * delta))
+	rotation = Vector3(pitch, yaw, bank)
+	_ground_height = move_toward(_ground_height, _ride_height(), 3.0 * delta)
+
+	# --- Move ------------------------------------------------------------------
+	control_state = Vector3(steer.x, steer.y, _flap_deploy)
+	_knock_velocity = _knock_velocity.lerp(Vector3.ZERO, 1.0 - exp(-KNOCK_DAMPING * delta))
+	var heading: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
+	velocity = heading * speed + Vector3(_knock_velocity.x, 0.0, _knock_velocity.z)
+	var collision: KinematicCollision3D = move_and_collide(velocity * delta)
+	if collision != null:
+		if speed > GROUND_CRASH_SPEED:
+			_die(recent_attacker())
+			return true
+		speed = 0.0
+	global_position.y = field.surface_y() + _ground_height
+	_tick_service(field, delta)
+	if field.team != team and speed < SERVICE_MAX_SPEED:
+		_stranded_time += delta
+		if _stranded_time >= STRANDED_TIME:
+			_die(recent_attacker())
+	else:
+		_stranded_time = 0.0
+	return true
+
+
+func _lift_off() -> void:
+	_on_ground = false
+	_belly = false
+	_ground_field = null
+	_service_time = 0.0
+	pitch = maxf(pitch, LIFTOFF_PITCH)
+	_liftoff_grace = LIFTOFF_GRACE
+	# Protection for a freshly wheeled-out plane ends once it is flying.
+	_spawn_shield = minf(_spawn_shield, SPAWN_SHIELD_TIME)
+	lifted_off.emit(self)
+
+
+## Called in flight just before moving. If this tick would take the plane into
+## the top of an airfield it either lands or crashes there, and this returns true.
+func _meet_the_ground(delta: float) -> bool:
+	var field: Airfield = airfield_at(global_position)
+	if field == null:
+		return false
+	var floor_y: float = field.surface_y() + _ride_height()
+	if global_position.y < floor_y - GROUND_PENETRATION:
+		# Under the surface: it flew into the side of the island.
+		_die(recent_attacker())
+		return true
+	if global_position.y + velocity.y * delta > floor_y:
+		return false
+	var sink: float = -velocity.y
+	if sink <= 0.0 or (_liftoff_grace > 0.0 and sink < 2.0):
+		return false  # Skimming the surface on the way up.
+	_touch_down(field, sink)
+	return true
+
+
+## The plane has reached the surface, coming down at [param sink] m/s.
+## Gently and level, on its wheels, is a landing. Gently on its belly is a
+## landing it can walk away from. Anything else is a crash.
+func _touch_down(field: Airfield, sink: float) -> void:
+	var on_wheels: bool = gear_usable()
+	var limit: float = HARD_LANDING_SINK if on_wheels else BELLY_LANDING_SINK
+	global_position.y = field.surface_y() + _ride_height()
+	if sink > limit or pitch < -NOSE_OVER_PITCH or absf(bank) > CARTWHEEL_BANK:
+		_die(recent_attacker())
+		return
+	var low_wingtip: Part = Part.LEFT_WINGTIP if bank > 0.0 else Part.RIGHT_WINGTIP
+	var wing_low: bool = absf(bank) > WINGTIP_STRIKE_BANK
+	_on_ground = true
+	_belly = not on_wheels
+	_ground_field = field
+	_ground_height = global_position.y - field.surface_y()
+	speed = Vector2(velocity.x, velocity.z).length()
+	_pitch_rate = 0.0
+	_yaw_rate *= 0.3
+	_evade_time = 0.0
+	visual_roll = 0.0
+	_service_time = 0.0
+	if on_wheels and sink > FIRM_LANDING_SINK:
+		var severity: float = (sink - FIRM_LANDING_SINK) / (HARD_LANDING_SINK - FIRM_LANDING_SINK)
+		_impact_damage(Part.LEFT_WING, HARD_LANDING_WING_DAMAGE * severity)
+		_impact_damage(Part.RIGHT_WING, HARD_LANDING_WING_DAMAGE * severity)
+		_impact_damage(Part.FUSELAGE, HARD_LANDING_FUSELAGE_DAMAGE * severity)
+	if not on_wheels:
+		_impact_damage(Part.ENGINE, BELLY_ENGINE_DAMAGE)
+		_impact_damage(Part.FUSELAGE, BELLY_FUSELAGE_DAMAGE)
+	if wing_low:
+		_impact_damage(low_wingtip, WINGTIP_STRIKE_DAMAGE)
+	touched_down.emit(self, sink, on_wheels)
+
+
+## Damage from hitting the ground: [param share] of the part's strength.
+## Spawn protection and evade rolls do not soften the ground.
+func _impact_damage(part: Part, share: float) -> void:
+	if share <= 0.0 or is_part_gone(part):
+		return
+	var amount: float = share * maxf(stats.max_hp * PART_STRENGTH[part], 1.0)
+	_damage_part(part, amount, null)
+	damaged.emit(self, amount, null)
+
+
+## Everything ground crew still have to put right, as one number.
+func _service_load() -> float:
+	var total: float = 1.0 - fuel
+	for damage: float in part_damage:
+		total += damage
+	if _belly:
+		total += 1.0
+	return total
+
+
+## Repairs at the plane's own airfield, once it is standing still: fires are
+## put out, the tank is filled, holes are patched and missing parts are fitted
+## one at a time (the wing before the flap that hangs on it).
+func _tick_service(field: Airfield, delta: float) -> void:
+	if field.team != team or speed > SERVICE_MAX_SPEED or not needs_service():
+		_service_time = 0.0
+		return
+	if _service_time <= 0.0:
+		_service_start_load = _service_load()
+		_refit_timer = SERVICE_REFIT_TIME
+	_service_time += delta
+	if _service_time < SERVICE_DELAY:
+		return
+	_burn_time = 0.0
+	_burn_dps = 0.0
+	_burn_source = null
+	fuel = minf(fuel + SERVICE_FUEL_RATE * delta, 1.0)
+	_refit_timer -= delta
+	for index: int in range(PART_COUNT):
+		var part: Part = index as Part
+		var damage: float = part_damage[index]
+		if damage <= 0.0:
+			continue
+		var parent: int = PART_PARENT[index]
+		if parent >= 0 and is_part_gone(parent as Part):
+			continue  # Nothing to bolt it to yet.
+		var before: PartState = part_state(part)
+		if damage >= 1.0:
+			# Destroyed: a new one is fitted, which takes a moment.
+			if _refit_timer > 0.0:
+				continue
+			_refit_timer = SERVICE_REFIT_TIME
+			part_damage[index] = 0.0
+			_refresh_gone_mask()
+		else:
+			part_damage[index] = maxf(damage - SERVICE_RATE * delta, 0.0)
+		var after: PartState = part_state(part)
+		if after != before:
+			part_state_changed.emit(self, part, after)
+	if _belly and not is_part_gone(Part.LEFT_WING) and not is_part_gone(Part.RIGHT_WING):
+		# Jacked up and the wheels lowered under it.
+		_gear_lever_down = true
+		if gear_deploy >= 0.98:
+			_belly = false
+	if not needs_service():
+		_doomed_by = null
+		_last_attacker = null
+		_last_attacker_age = INF
+		_service_start_load = 0.0
+		serviced.emit(self)
 
 
 ## Soft arena limits: past the edge the plane is steered back toward the
@@ -890,7 +1464,7 @@ func _try_activate_gadget() -> void:
 
 func _tick_weapons(delta: float) -> void:
 	_fire_cooldown = maxf(_fire_cooldown - delta, 0.0)
-	if not input.firing or weapons_locked or bullet_system == null or _evade_time > 0.0:
+	if not input.firing or weapons_locked or bullet_system == null or _evade_time > 0.0 or _on_ground:
 		return
 	if _fire_cooldown > 0.0 or not has_guns():
 		return
@@ -975,8 +1549,16 @@ func _refresh_status_flags() -> void:
 		flags |= FLAG_BURNING
 	if _spawn_shield > 0.0:
 		flags |= FLAG_SHIELDED
-	if engine_power() <= 0.0 or _wing_lift() < 0.75 or is_part_gone(Part.TAIL):
+	if _on_ground:
+		flags |= FLAG_ON_GROUND
+		if _service_time >= SERVICE_DELAY and needs_service():
+			flags |= FLAG_SERVICING
+	elif engine_power() <= 0.0 or _wing_lift() < 0.75 or is_part_gone(Part.TAIL):
 		flags |= FLAG_GOING_DOWN
+	if _engine_running:
+		flags |= FLAG_ENGINE_ON
+	if _gear_lever_down:
+		flags |= FLAG_GEAR_DOWN
 	var offset: Vector3 = global_position - arena_center
 	offset.y = 0.0
 	if offset.length() > arena_radius:

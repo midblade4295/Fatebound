@@ -14,7 +14,7 @@ project in `../godot`; open `dogfight/project.godot` directly.
   exists yet and nothing has been tested with a second peer**.
 
 Reference captures (software-rendered at 1280x720): `docs/arena_hud.png`,
-`docs/hangar.png`, `docs/spitfire_model.png`.
+`docs/takeoff.png`, `docs/hangar.png`, `docs/spitfire_model.png`.
 
 ## Controls
 
@@ -24,9 +24,15 @@ Reference captures (software-rendered at 1280x720): `docs/arena_hud.png`,
 | Fire | FIRE button (hold) | Space |
 | Evade roll | ROLL button | Shift or Q |
 | Tactical gadget | gadget button (radial cooldown) | E |
+| Throttle | lever beside the buttons (stays where you leave it) | R / F or PgUp / PgDn |
+| Engine start / stop | ENGINE button (lamp = running) | I |
+| Undercarriage up / down | GEAR button (lamp = down) | G |
 
 Stick up = nose up. `Profile.invert_pitch` flips it. Mouse clicks act as touches
 on desktop (`emulate_touch_from_mouse`), so the on-screen controls work there too.
+A closed throttle on the ground is also the wheel brakes. The GEAR lever is
+locked while the plane is standing on its wheels, and the guns are safe on the
+ground.
 
 ## Folder structure
 
@@ -57,10 +63,10 @@ dogfight/
 │  ├─ camera/    chase_camera.gd
 │  ├─ control/   player_controller.gd, squad_ai.gd, squad_blackboard.gd
 │  ├─ match/     match_manager_5v5.gd, pilot_slot.gd, dogfight_arena.gd
-│  ├─ world/     arena_builder.gd
+│  ├─ world/     arena_builder.gd, airfield.gd
 │  ├─ fx/        toon_materials.gd, explosion_fx.gd, debris.gd
 │  ├─ ui/        hud.gd, hud_world_overlay.gd, radar.gd, touch_flight_stick.gd,
-│  │             action_button.gd, ui_style.gd
+│  │             throttle_lever.gd, action_button.gd, ui_style.gd
 │  └─ menu/      main_menu.gd, card_view.gd, match_lobby.gd
 ├─ shaders/      toon_plane.gdshader, ocean.gdshader, cloud.gdshader
 ├─ tests/        headless test scenes (see "Tests")
@@ -93,9 +99,10 @@ DogfightArena5v5 (Node3D)                 dogfight_arena.gd (wires camera + HUD)
 ├─ WorldEnvironment                       resources/env/arena_environment.tres
 ├─ Sun (DirectionalLight3D)               warm key light, 2-split shadows
 ├─ RimLight (DirectionalLight3D)          cool back light, no shadows
-├─ World                                  arena_builder.gd: ocean, islands, carrier, airfield, clouds
+├─ World                                  arena_builder.gd: ocean, islands, clouds, and an
+│  │                                      Airfield (airfield.gd) for each team
 │  └─ Sea (StaticBody3D, WorldBoundary)
-├─ SpawnPoints ─ Blue/Spawn1..5, Red/Spawn1..5   above the carrier / the airfield
+├─ SpawnPoints ─ Blue/Spawn1..5, Red/Spawn1..5   air starts, only used with GameSession.ground_start off
 ├─ Planes                                 every PlaneActor (the spawner's spawn path)
 ├─ PlaneSpawner (MultiplayerSpawner)
 ├─ BulletSystem                           bullet_system.gd
@@ -128,6 +135,8 @@ HUD (CanvasLayer)                         hud.gd
    ├─ CenterMessage, SubMessage
    ├─ Joystick                            touch_flight_stick.gd
    ├─ FireButton, RollButton, GadgetButton   action_button.gd
+   ├─ EngineButton, GearButton            action_button.gd (with an on/off lamp)
+   ├─ ThrottleLever                       throttle_lever.gd
    └─ Results                             victory/defeat, rewards, back to Hangar
 ```
 
@@ -200,8 +209,40 @@ HUD (CanvasLayer)                         hud.gd
   plane outright. Team-mates can collide too. Bots steer away from anything
   they are about to hit.
 - **Match rules** (`MatchManager5v5`): ticket drain, every plane lost gives the
-  other team a point, first to 25 or the higher score after 3 minutes, 5 s
-  respawn above the team's base with 2.5 s spawn protection.
+  other team a point, first to 25 or the higher score after 3 minutes. After
+  5 s a downed pilot gets a new plane parked on their own airfield, which
+  cannot be hurt until it leaves the ground (or 25 s pass).
+- **Ground handling** (`PlaneActor`, `Airfield`). Each team has an island
+  airfield with a 620 m runway pointing at the middle of the arena. Everyone
+  starts parked on it: engine off, wheels down, throttle closed.
+  - *Starting up.* The starter takes about two seconds before the engine
+    answers the throttle. A dead engine will not start.
+  - *The take-off run.* On the ground the engine can only push so hard
+    (`GROUND_THRUST`), so speed builds over a few hundred metres. The tail
+    comes up at around half flying speed. The plane stays on its wheels,
+    however hard the stick is pulled, until the wings can carry it (57% of
+    top speed with wheels and flaps down, about 170 km/h for the Hurricane)
+    *and* the stick is eased back. Running out of island first ends in the sea.
+  - *Undercarriage.* Wheels down costs 18% of top speed and brings the
+    landing flaps down with it (more lift, more drag). It takes two seconds
+    to travel, and goes with the wing it is bolted to.
+  - *Throttle.* In the air it sets the speed the engine holds, from gliding
+    speed (30% of top, well below the stall) to full. Below flying speed the
+    plane sinks and its nose drops, so an approach is flown on the throttle.
+  - *Landing.* Touching the airfield is judged by rate of descent, attitude
+    and wheels. Up to 5 m/s on the wheels is a landing; 5-10 m/s damages the
+    wings and fuselage; more, or nose-first, or steeply banked, destroys the
+    plane. With no wheels it can be slid on gently (under 6 m/s) at the cost
+    of the propeller and the underside. A low wingtip gets torn.
+  - *Repairs.* A plane standing still on its **own** airfield is repaired
+    after a moment: fires out, tank filled, holes patched, and shot-off parts
+    refitted one at a time (the model is rebuilt to show them). A
+    belly-landed plane is put back on its wheels. A plane that stops on the
+    *enemy's* airfield is lost after six seconds.
+  - *Bots* start up in turn from the front of the line, hold their own lane
+    down the runway, lift off, raise the wheels and climb out before joining
+    the fight. They do not attack planes on the ground. **They do not yet
+    come home to repair**; only a human pilot does that.
 - **HUD.** No health bars anywhere. The player has a diagram of their own
   plane showing each part's state (missing parts are drawn as outlines), a
   fuel readout once the tank is holed, and a message when a part is hit. The
@@ -242,8 +283,8 @@ All tuning numbers (costs, XP, damage, turn rates) are first-pass values.
   screen or depth textures.
 - Lighting: warm `Sun` with shadows, cool unshadowed `RimLight` from the
   opposite side, sky ambient, light fog, mild glow, +20% saturation.
-- Islands, the carrier and clouds are primitive meshes built in code
-  (`arena_builder.gd`). Planes are the Blender model described below.
+- Islands, the airfields and clouds are primitive meshes built in code
+  (`arena_builder.gd`, `airfield.gd`). Planes are the Blender model described below.
 
 ## Sound
 
@@ -251,8 +292,14 @@ All tuning numbers (costs, XP, damage, turn rates) are first-pass values.
   and gun samples: Hurricane = Merlin + .303 Brownings, Spitfire = Merlin +
   20 mm Hispano cannon, Mustang = Packard Merlin + .50 calibre. `PlaneAudio`
   (one per plane) plays them.
-- **Engine.** One seamless loop; pitch follows speed, level follows power. A
-  damaged engine misfires, a dead one coughs, winds down and leaves only wind.
+- **Engine.** One seamless loop; its note follows the throttle and, less,
+  the airspeed, and its level follows throttle and power. Starting up plays
+  the starter turning and the engine catching, with the loop fading in under
+  it. A damaged engine misfires, a dead one coughs, winds down and leaves
+  only wind.
+- **On the ground.** Wheels rumble with speed, tyres chirp on touchdown (metal
+  scrapes instead on a belly landing), and the undercarriage whines and
+  clunks home.
   Other planes are positional with Doppler, so a pass drops in pitch as it
   goes by; the player's own engine and guns are heard flat, from the cockpit.
 - **Guns.** One short sample per round actually fired, chosen at random from
@@ -282,8 +329,9 @@ plane and cuts it into the pieces the game breaks apart. It exports
 blender --background --python tools/blender/spitfire_stylized.py -- assets/models/spitfire_stylized.glb hero=1
 ```
 
-`hero=1` is the lighter in-game level of detail (about 12,000 triangles in 19
-pieces); leave it off for the smoother close-up version. The model faces -Z.
+`hero=1` is the lighter in-game level of detail (about 13,000 triangles in 22
+pieces, including two undercarriage legs that fold outward about their local
+forward axis and a fixed tail wheel); leave it off for the smoother close-up version. The model faces -Z.
 Hinged pieces have their local X axis along the hinge line (local Y for the
 rudder) with the origin on it. Surfaces are named `BodyPrimary`,
 `WingAccent_TeamColor`, `CanopyGlass`, `MetalDark`, `PropellerWood`,
@@ -317,6 +365,7 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 | `TestProgression` | card tables, upgrade flow, Commander Level thresholds, slot rules, stat building, save/load, bullet drop and drag, lead solution checked against a simulated bullet |
 | `TestDamageModel` | every part has a hit box from the model; bullet paths through them; live bullets with drop, drag and pass-through; no health value exists; shot-off parts leave the model as debris and take their attachments; each kind of damage changes handling against an undamaged reference; the pilot keeps control; planes are only lost by hitting the surface, credited to whoever crippled them |
 | `TestAudio` | every plane has its own engine loop and gun samples; the player's engine plays from the cockpit and the other nine in 3D; firing plays one of that plane's samples; a bullet passing 6 m away is heard once and one 60 m away is not; the engine note rises in a dive; a dead engine falls silent and the fire is heard. It checks wiring, not how anything sounds |
+| `TestGroundOps` | everyone starts parked on their own runway; the guns and an open throttle do nothing with the engine off; the ENGINE and throttle keys work; the plane cannot be pulled off the ground before flying speed and uses a believable length of runway; wheels-down drag; throttling back slows it until it sinks; a gentle landing, a hard one (wing damage), a nose-first one (destroyed) and a wheels-up one (survived); braking to a stop; repairs at home including refitting shot-off parts; a plane stopped on the enemy's airfield or run off the island is lost; bots left alone take off and raise their wheels |
 | `TestCollisions` | box-overlap maths; a wingtip clip damages only the wingtips; a head-on destroys both; a pass three metres apart does nothing; team-mates can collide |
 | `TestPlayerFlow` | 1 player + 9 bots through Input actions: fire, roll, nitro, crash gives a ticket, 5 s respawn |
 | `TestMatchSim` (3 seeds) | full bots-only match: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, few uncaused losses, few collisions, bot accuracy stays in a human-like 2-25% band |

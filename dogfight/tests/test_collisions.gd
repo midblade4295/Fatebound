@@ -33,6 +33,7 @@ func _ready() -> void:
 	Profile.reset_to_new_profile(false)
 	GameSession.local_player_enabled = false
 	GameSession.match_seed = 5
+	GameSession.ground_start = false  # This test is about flying: start in the air.
 	GameSession.match_duration = 180.0
 	_test_box_overlap()
 	var arena: Node = (load(GameSession.SCENE_ARENA) as PackedScene).instantiate()

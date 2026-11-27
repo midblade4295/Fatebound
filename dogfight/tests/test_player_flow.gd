@@ -33,6 +33,7 @@ func _ready() -> void:
 	Profile.reset_to_new_profile(false)
 	GameSession.local_player_enabled = true
 	GameSession.match_seed = 11
+	GameSession.ground_start = false  # This test is about flying: start in the air.
 	GameSession.match_duration = 180.0
 	GameSession.bot_skill = 0.0  # Gentle bots: this test is about the player.
 	var arena: Node = (load(GameSession.SCENE_ARENA) as PackedScene).instantiate()
@@ -123,7 +124,7 @@ func _physics_process(delta: float) -> void:
 					worst = maxf(worst, _player.part_damage_of(part_index as PlaneActor.Part))
 				_check(is_zero_approx(worst) and is_equal_approx(_player.fuel, 1.0), "respawned with every part intact and a full tank")
 				_check(_player.visual.has_piece(PlaneActor.Part.LEFT_WING) and _player.visual.has_piece(PlaneActor.Part.RUDDER), "the model is whole again")
-				_check(_player.global_position.z > 1000.0, "respawned over the BLUE carrier")
+				_check(_player.global_position.z > 1000.0, "respawned over the BLUE base")
 				_check(_player.has_flag(PlaneActor.FLAG_SHIELDED), "spawn protection is active")
 				_finish()
 			elif _step_time > 8.0:

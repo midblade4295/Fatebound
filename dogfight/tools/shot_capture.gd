@@ -16,6 +16,9 @@ var _steer_action: StringName = &""
 ## damage=1 shoots the right wingtip and the rudder off the player's plane
 ## once the fast-forward ends, to show break-up and debris.
 var _damage_demo: bool = false
+## takeoff=1 flies the player's plane off the runway: starter, full throttle,
+## stick back at flying speed, wheels up once clear of the ground.
+var _takeoff_demo: bool = false
 var _scene: Node
 ## Frames at the start that run at `_warp_scale` x speed to reach the action.
 var _warp_frames: int = 0
@@ -44,6 +47,8 @@ func _ready() -> void:
 		elif argument.begins_with("steer="):
 			_steer_action = {"left": GameSession.ACTION_STEER_LEFT, "right": GameSession.ACTION_STEER_RIGHT,
 					"up": GameSession.ACTION_PITCH_UP}.get(argument.trim_prefix("steer="), &"")
+		elif argument.begins_with("takeoff="):
+			_takeoff_demo = argument.trim_prefix("takeoff=") == "1"
 		elif argument.begins_with("damage="):
 			_damage_demo = argument.trim_prefix("damage=") == "1"
 		elif argument.begins_with("warp="):
@@ -66,6 +71,26 @@ func _apply_demo_damage() -> void:
 	plane.apply_damage(plane.stats.max_hp * PlaneActor.PART_STRENGTH[PlaneActor.Part.ENGINE] * 0.5, null, PlaneActor.Part.ENGINE)
 
 
+func _fly_takeoff() -> void:
+	var manager: MatchManager5v5 = _scene.get_node_or_null("MatchManager") as MatchManager5v5
+	if manager == null or manager.local_slot() == null:
+		return
+	var plane: PlaneActor = manager.local_slot().plane
+	if not plane.alive:
+		return
+	if not plane.has_flag(PlaneActor.FLAG_ENGINE_ON) and _frame % 60 == 20:
+		plane.input.press_engine()
+	plane.input.throttle = 1.0
+	if plane.is_on_ground():
+		if plane.speed >= plane.takeoff_speed() * 1.03:
+			Input.action_press(GameSession.ACTION_PITCH_UP, 0.6)
+	else:
+		# Hold a gentle climb and tidy the wheels away.
+		Input.action_press(GameSession.ACTION_PITCH_UP, clampf((deg_to_rad(10.0) - plane.pitch) * 4.0, 0.01, 1.0))
+		if plane.is_gear_down() and plane.height_above_ground() > 25.0 and _frame % 60 == 0:
+			plane.input.press_gear()
+
+
 func _process(_delta: float) -> void:
 	_frame += 1
 	Engine.time_scale = _warp_scale if _frame <= _warp_frames else 1.0
@@ -73,6 +98,8 @@ func _process(_delta: float) -> void:
 		_apply_demo_damage()
 	if _fire:
 		Input.action_press(GameSession.ACTION_FIRE)
+	if _takeoff_demo:
+		_fly_takeoff()
 	if _steer_action != &"" and _frame > _warp_frames:
 		Input.action_press(_steer_action)
 	var index: int = _frames.find(_frame)

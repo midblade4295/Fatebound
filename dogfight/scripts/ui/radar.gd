@@ -14,6 +14,8 @@ var match_manager: MatchManager5v5
 var player: PlaneActor
 ## Team drawn as "friendly" when there is no player plane (spectating).
 var view_team: Teams.Id = Teams.Id.TEAM_BLUE
+## The player's own airfield, drawn as a square. May be null.
+var home: Airfield
 
 
 func _process(_delta: float) -> void:
@@ -63,6 +65,17 @@ func _draw() -> void:
 			if hostile and plane.current_target == player:
 				# This enemy is hunting you.
 				draw_arc(blip_position, blip_radius + 6.0, 0.0, TAU, 16, Color(1.0, 0.9, 0.3, 0.9), 2.5, true)
+
+		if home != null and is_instance_valid(home):
+			# The pilot's own airfield: a square, pinned to the rim when far away.
+			var home_offset: Vector3 = home.global_position - origin
+			var home_flat: Vector2 = Vector2(home_offset.x, home_offset.z)
+			var home_blip: Vector2 = Vector2(home_flat.dot(right), -home_flat.dot(forward)) / radar_range
+			if home_blip.length() > 1.0:
+				home_blip = home_blip.normalized()
+			var home_position: Vector2 = center + home_blip * (dial_radius - 11.0)
+			draw_rect(Rect2(home_position - Vector2(8.0, 8.0), Vector2(16.0, 16.0)), UiStyle.OUTLINE)
+			draw_rect(Rect2(home_position - Vector2(5.5, 5.5), Vector2(11.0, 11.0)), Teams.color_of(home.team).lightened(0.4))
 
 	# Player arrow.
 	var arrow: PackedVector2Array = PackedVector2Array([

@@ -8,9 +8,15 @@ extends CanvasLayer
 ##   top-centre   compact score bar:  BLUE score | 5v5 + clock | RED score
 ##   top-right    circular radar
 ##   bottom-left  virtual flight stick
-##   bottom-right FIRE, EVADE ROLL and the Tactical Gadget button
+##   bottom-right FIRE, EVADE ROLL and the Tactical Gadget button, with the
+##                throttle lever beside them and ENGINE / GEAR above
 ##   centre       countdown / respawn / out-of-bounds messages, results panel
-##   world layer  target diamonds, threat arrows, gun pipper (HudWorldOverlay)
+##   world layer  target diamonds, threat arrows, gun pipper, and a marker
+##                on the player's own airfield (HudWorldOverlay)
+##
+## The centre line under the headline talks the pilot through whatever comes
+## next: start the engine, open the throttle, the speed to lift off at, raise
+## the wheels, and on the way home the approach speed and rate of descent.
 ##
 ## The HUD never changes gameplay state. It reads the match manager and the
 ## player's plane every frame and the touch controls press Input actions.
@@ -26,6 +32,10 @@ const PART_EFFECTS: Array[String] = [
 ]
 ## Headline for each PlaneActor.PartState (0 = repaired).
 const STATE_WORDS: Array[String] = ["PATCHED", "HIT", "CRITICAL", "SHOT OFF"]
+## How long the "land to repair" reminder stays up after the plane is damaged.
+const REPAIR_HINT_TIME: float = 7.0
+## Approach guidance appears inside this distance of home with the wheels down.
+const APPROACH_RANGE: float = 1600.0
 
 var match_manager: MatchManager5v5
 var player: PlaneActor
@@ -34,6 +44,8 @@ var camera: ChaseCamera
 var _feed_ages: Array[float] = []
 var _alert_text: String = ""
 var _alert_time: float = 0.0
+var _repair_hint_time: float = 0.0
+var _home: Airfield
 
 @onready var _overlay: HudWorldOverlay = %WorldOverlay
 @onready var _radar: Radar = %Radar
@@ -53,6 +65,9 @@ var _alert_time: float = 0.0
 @onready var _fire_button: ActionButton = %FireButton
 @onready var _roll_button: ActionButton = %RollButton
 @onready var _gadget_button: ActionButton = %GadgetButton
+@onready var _engine_button: ActionButton = %EngineButton
+@onready var _gear_button: ActionButton = %GearButton
+@onready var _throttle_lever: ThrottleLever = %ThrottleLever
 @onready var _results: PanelContainer = %Results
 @onready var _result_title: Label = %ResultTitle
 @onready var _result_score: Label = %ResultScore
@@ -95,12 +110,21 @@ func bind(manager: MatchManager5v5, chase_camera: ChaseCamera, local_plane: Plan
 	_fire_button.visible = has_player
 	_roll_button.visible = has_player
 	_gadget_button.visible = has_player
+	_engine_button.visible = has_player
+	_gear_button.visible = has_player
+	_throttle_lever.visible = has_player
+	_throttle_lever.plane = player
+	_home = player.home_airfield() if has_player else null
+	_overlay.home = _home
+	_radar.home = _home
 	_damage_diagram.plane = player
 	_damage_diagram.visible = has_player
 	for plane: PlaneActor in manager.get_planes():
 		plane.part_state_changed.connect(_on_part_state_changed)
 	if has_player:
 		player.damaged.connect(_on_player_damaged)
+		player.touched_down.connect(_on_player_touched_down)
+		player.serviced.connect(_on_player_serviced)
 		_gadget_button.caption = player.stats.gadget_name.to_upper() if player.has_gadget() else "NO GADGET"
 	var level: int = Profile.commander_level()
 	_level_label.text = str(level)
@@ -115,6 +139,7 @@ func _process(delta: float) -> void:
 	_update_flight_panel()
 	_update_buttons()
 	_alert_time = maxf(_alert_time - delta, 0.0)
+	_repair_hint_time = maxf(_repair_hint_time - delta, 0.0)
 	_update_messages()
 	_age_kill_feed(delta)
 
@@ -137,6 +162,8 @@ func _update_flight_panel() -> void:
 	if shown == null or not is_instance_valid(shown):
 		return
 	var readout: String = "SPD %3d km/h   ALT %4d m" % [roundi(shown.speed_kmh()), roundi(maxf(shown.altitude(), 0.0))]
+	if shown.gear_deploy > 0.02:
+		readout += "   GEAR %s" % ("DOWN" if shown.gear_deploy >= 0.98 else "...")
 	# Fuel only matters once the tank is holed, so it only shows then.
 	if shown.fuel < 0.995:
 		readout += "   FUEL %d%%" % roundi(shown.fuel * 100.0)
@@ -155,6 +182,18 @@ func _update_buttons() -> void:
 	var gadget_ratio: float = 0.0 if dead else player.gadget_cooldown_ratio()
 	_gadget_button.cooldown_ratio = gadget_ratio
 	_gadget_button.cooldown_seconds = gadget_ratio * player.stats.gadget_cooldown
+	var grounded: bool = player.is_on_ground()
+	_fire_button.disabled = _fire_button.disabled or grounded
+	_roll_button.disabled = _roll_button.disabled or grounded
+	# ENGINE: lamp on while it runs; greyed out when there is nothing to start.
+	var running: bool = player.is_engine_running()
+	_engine_button.disabled = dead or (not running and player.engine_power() <= 0.0)
+	_engine_button.lit = running
+	_engine_button.caption_text = "STOP" if running else "START"
+	# GEAR: lamp on while down; locked while the plane is standing on it.
+	_gear_button.disabled = dead or grounded
+	_gear_button.lit = player.is_gear_down()
+	_gear_button.caption_text = "GEAR UP" if player.is_gear_down() else "GEAR DN"
 
 
 func _update_messages() -> void:
@@ -164,24 +203,66 @@ func _update_messages() -> void:
 		MatchManager5v5.Phase.COUNTDOWN:
 			headline = str(ceili(match_manager.countdown_left))
 			detail = "First to %d takedowns" % match_manager.score_limit()
+			if player != null and player.alive and player.is_on_ground():
+				detail = "Start your engine and take off"
 		MatchManager5v5.Phase.ACTIVE:
 			var slot: PilotSlot = match_manager.local_slot()
 			if slot != null and slot.respawn_timer > 0.0:
 				headline = "SHOT DOWN"
-				detail = "Back in the air in %d" % ceili(slot.respawn_timer)
+				detail = "A new plane is being wheeled out: %d" % ceili(slot.respawn_timer)
 			elif player != null and player.alive and player.is_out_of_bounds():
 				headline = "RETURN TO BATTLE"
 				detail = "Autopilot is turning you around"
 			elif _alert_time > 0.0:
 				detail = _alert_text
-			elif player != null and player.alive and player.is_going_down():
-				detail = "You are going down - fly it as far as you can"
+			elif player != null and player.alive:
+				detail = _flight_guidance()
 		MatchManager5v5.Phase.FINISHED:
 			pass
 	if _center_message.text != headline:
 		_center_message.text = headline
 	if _sub_message.text != detail:
 		_sub_message.text = detail
+
+
+## One line telling the pilot what to do next, or "" when they need no telling.
+func _flight_guidance() -> String:
+	var takeoff_kmh: int = roundi(player.takeoff_speed() * 3.6)
+	if player.is_on_ground():
+		if player.is_servicing():
+			return "Repairing and refuelling... %d%%" % roundi(player.service_progress() * 100.0)
+		var at_home: bool = _home != null and _home.contains(player.global_position)
+		var wants_repair: bool = at_home and player.needs_service()
+		if wants_repair and player.speed < PlaneActor.SERVICE_MAX_SPEED:
+			return "Hold still - ground crew are on their way"
+		if wants_repair and player.input.throttle <= PlaneActor.BRAKE_THROTTLE:
+			return "Braking - stop to be repaired"
+		if not player.is_engine_running():
+			if player.engine_power() <= 0.0:
+				return "Engine dead - stop on your own airfield to have it repaired"
+			return "Press ENGINE to start up"
+		if player.input.throttle < 0.5 and player.speed < player.takeoff_speed() * 0.5:
+			return "Open the throttle to roll (closed throttle = brakes)"
+		if player.speed < player.takeoff_speed():
+			return "Take-off speed %d km/h" % takeoff_kmh
+		return "Ease the stick back to lift off"
+	if player.is_going_down():
+		return "You are going down - fly it as far as you can"
+	var home_distance: float = INF
+	if _home != null:
+		home_distance = Vector2(player.global_position.x - _home.global_position.x, player.global_position.z - _home.global_position.z).length()
+	if player.is_gear_down():
+		if home_distance < APPROACH_RANGE and player.height_above_ground() < 260.0:
+			var sink: float = maxf(-player.velocity.y, 0.0)
+			var verdict: String = "good" if sink <= PlaneActor.FIRM_LANDING_SINK else ("too fast!" if sink > PlaneActor.HARD_LANDING_SINK else "firm")
+			return "Approach: %d km/h (stalls below %d)   descent %.0f m/s - %s" % [roundi(player.speed_kmh()), takeoff_kmh, sink, verdict]
+		if player.speed > player.stats.top_speed * 0.6:
+			return "Wheels are down - press GEAR to raise them"
+	if _repair_hint_time > 0.0 and player.needs_service():
+		return "Damaged - land at your airfield and stop to be repaired"
+	if not player.is_engine_running() and player.engine_power() > 0.0:
+		return "Engine off - press ENGINE to restart"
+	return ""
 
 
 func _age_kill_feed(delta: float) -> void:
@@ -235,6 +316,8 @@ func _on_part_state_changed(plane: PlaneActor, part: PlaneActor.Part, state: Pla
 	if plane == player:
 		_alert_text = _describe_own_damage(part, state)
 		_alert_time = ALERT_TIME
+		if state != PlaneActor.PartState.OK:
+			_repair_hint_time = ALERT_TIME + REPAIR_HINT_TIME
 	elif state == PlaneActor.PartState.DESTROYED and plane.recent_attacker() == player:
 		_alert_text = "%s: %s shot off!" % [plane.pilot_name, part_name.to_lower()]
 		if not PlaneActor.PART_DETACHES[part]:
@@ -259,6 +342,22 @@ func _on_player_damaged(_victim: PlaneActor, _amount: float, _attacker: PlaneAct
 	_overlay.show_damage_flash()
 
 
+func _on_player_touched_down(_plane: PlaneActor, sink_speed: float, on_wheels: bool) -> void:
+	if not on_wheels:
+		_alert_text = "BELLY LANDING - propeller bent"
+	elif sink_speed > PlaneActor.FIRM_LANDING_SINK:
+		_alert_text = "HARD LANDING - %.0f m/s" % sink_speed
+	else:
+		_alert_text = "Down safely - close the throttle to brake"
+	_alert_time = ALERT_TIME
+
+
+func _on_player_serviced(_plane: PlaneActor) -> void:
+	_alert_text = "Repaired and refuelled - cleared for take-off"
+	_alert_time = ALERT_TIME
+	_repair_hint_time = 0.0
+
+
 func _on_match_ended(winning_team: int) -> void:
 	var view_team: Teams.Id = player.team if player != null else Teams.Id.TEAM_BLUE
 	if winning_team == MatchManager5v5.DRAW:
@@ -278,6 +377,9 @@ func _on_match_ended(winning_team: int) -> void:
 	_fire_button.visible = false
 	_roll_button.visible = false
 	_gadget_button.visible = false
+	_engine_button.visible = false
+	_gear_button.visible = false
+	_throttle_lever.visible = false
 
 
 func _describe_rewards() -> String:

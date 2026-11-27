@@ -19,11 +19,14 @@ Pieces and hierarchy (every name below is a mesh node in the .glb)
   ├─ WingL / WingR          inner wing panel with its cannon
   │  ├─ MuzzleL / MuzzleR   empty marking the gun muzzle (no mesh)
   │  ├─ FlapL / FlapR       hinged: rotate around local X
+  │  ├─ GearL / GearR       undercarriage leg, wheel and door, origin on the
+  │  │                      pivot: rotate around local Y to retract outward
   │  └─ WingTipL / WingTipR outer wing panel
   │     └─ AileronL / AileronR   hinged: rotate around local X
   └─ Tail                   rear fuselage
      ├─ StabiliserL / StabiliserR
      ├─ ElevatorL / ElevatorR     hinged: rotate around local X
+     ├─ TailWheel                 fixed tail wheel and strut
      └─ Fin
         └─ Rudder                 hinged: rotate around local Y
 
@@ -131,6 +134,18 @@ CANOPY_RADII = Vector((0.56, 1.02, 0.58))
 CANNON_SPAN_FRACTION = 0.40   # One chunky cannon on each inner wing panel.
 CANNON_RADIUS = 0.17
 CANNON_LENGTH = 1.05
+
+# --- Undercarriage (build space; a tail-dragger, like the real thing) --------
+GEAR_TRACK_X = 1.22           # Leg pivot, metres from the centre line.
+GEAR_PIVOT_Y = -0.82          # Under the wing, ahead of the centre of gravity.
+GEAR_AXLE = Vector((0.0, -1.06, -1.70))   # Wheel centre (x is set per side).
+GEAR_WHEEL_RADIUS = 0.42      # Oversized, like everything else.
+GEAR_WHEEL_WIDTH = 0.30
+GEAR_LEG_RADIUS = 0.085
+TAIL_WHEEL_CENTRE = Vector((0.0, 2.44, -1.03))
+TAIL_WHEEL_RADIUS = 0.22
+TAIL_WHEEL_WIDTH = 0.17
+TAIL_STRUT_TOP = Vector((0.0, 2.28, -0.18))
 
 # --- Where the plane comes apart (fractions of span / height / chord) --------
 # Break lines. Wing panels start inside the fuselage so no seam shows.
@@ -563,6 +578,81 @@ def make_cannon(materials, side: float) -> bpy.types.Mesh:
     return finish_part("Cannon", bm, materials, bevel_width=0.025)
 
 
+def strut(bm: bmesh.types.BMesh, start: Vector, end: Vector, radius: float, segments: int = 8) -> None:
+    """A straight tube between two points."""
+    along = (end - start).normalized()
+    side_axis = along.cross(Vector((0.0, 1.0, 0.0)))
+    if side_axis.length < 1e-4:
+        side_axis = Vector((1.0, 0.0, 0.0))
+    side_axis.normalize()
+    other_axis = along.cross(side_axis).normalized()
+    loft_rings(bm, [ellipse_ring(point, side_axis, other_axis, radius, radius, segments) for point in (start, end)])
+
+
+def wheel(bm: bmesh.types.BMesh, centre: Vector, radius: float, width: float, segments: int = 14) -> None:
+    """A fat tyre with a dished hub, axle along X."""
+    half = width * 0.5
+    profile = [(-half, radius * 0.50), (-half, radius * 0.90), (-half * 0.5, radius), (half * 0.5, radius),
+               (half, radius * 0.90), (half, radius * 0.50)]
+    rings = [ellipse_ring(centre + Vector((x, 0.0, 0.0)), Vector((0, 1, 0)), Vector((0, 0, 1)), ring_radius, ring_radius, segments)
+             for x, ring_radius in profile]
+    loft_rings(bm, rings)
+
+
+def gear_pivot(side: float) -> Vector:
+    """Where an undercarriage leg hinges, just inside the wing's underside."""
+    rise = math.tan(math.radians(WING_DIHEDRAL_DEG))
+    return Vector((side * GEAR_TRACK_X, GEAR_PIVOT_Y, WING_CENTRE.z + GEAR_TRACK_X * rise - WING_THICKNESS * 0.08))
+
+
+def make_gear(materials, side: float) -> bpy.types.Mesh:
+    """One main undercarriage unit: raked leg, wheel on its inboard side and a
+    door on its outboard side. Modelled down and locked."""
+    pivot = gear_pivot(side)
+    leg_foot = Vector((pivot.x + side * 0.10, GEAR_AXLE.y, GEAR_AXLE.z))
+    wheel_centre = Vector((leg_foot.x - side * (GEAR_WHEEL_WIDTH * 0.5 + 0.10), GEAR_AXLE.y, GEAR_AXLE.z))
+    parts = []
+
+    bm = bmesh.new()
+    strut(bm, pivot, leg_foot, GEAR_LEG_RADIUS)
+    strut(bm, leg_foot, wheel_centre, GEAR_LEG_RADIUS * 0.8, 6)
+    paint(bm, lambda _centre: METAL)
+    parts.append(finish_part("GearLeg", bm, materials, bevel_width=0.02, subdiv_levels=0))
+
+    bm = bmesh.new()
+    wheel(bm, wheel_centre, GEAR_WHEEL_RADIUS, GEAR_WHEEL_WIDTH)
+    # Hub caps in the team colour, tyre in dark rubber.
+    paint(bm, lambda centre: ACCENT if abs(centre.x - wheel_centre.x) > GEAR_WHEEL_WIDTH * 0.49 else METAL)
+    parts.append(finish_part("GearWheel", bm, materials, bevel_width=0.05, bevel_segments=2, subdiv_levels=0))
+
+    # Door: a slab on the outside of the leg that closes the wheel well.
+    bm = bmesh.new()
+    door_x = leg_foot.x + side * (GEAR_LEG_RADIUS + 0.05)
+    top = Vector((door_x - side * 0.06, pivot.y, pivot.z - 0.10))
+    bottom = Vector((door_x, (pivot.y + GEAR_AXLE.y) * 0.5, GEAR_AXLE.z + 0.62))
+    rings = []
+    for point, half_chord in ((top, 0.24), (bottom, 0.20)):
+        rings.append([point + Vector((sx * 0.03, sy * half_chord, 0.0)) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+    loft_rings(bm, rings)
+    paint(bm, lambda _centre: BODY)
+    parts.append(finish_part("GearDoor", bm, materials, bevel_width=0.02, subdiv_levels=0))
+    return merge_meshes("Gear", parts, materials)
+
+
+def make_tail_wheel(materials) -> bpy.types.Mesh:
+    """Fixed tail wheel on a short strut."""
+    parts = []
+    bm = bmesh.new()
+    strut(bm, TAIL_STRUT_TOP, TAIL_WHEEL_CENTRE + Vector((0.0, -0.02, 0.06)), 0.08, 6)
+    paint(bm, lambda _centre: METAL)
+    parts.append(finish_part("TailStrut", bm, materials, bevel_width=0.015, subdiv_levels=0))
+    bm = bmesh.new()
+    wheel(bm, TAIL_WHEEL_CENTRE, TAIL_WHEEL_RADIUS, TAIL_WHEEL_WIDTH, 10)
+    paint(bm, lambda _centre: METAL)
+    parts.append(finish_part("TailTyre", bm, materials, bevel_width=0.03, subdiv_levels=0))
+    return merge_meshes("TailWheel", parts, materials)
+
+
 def make_exhaust(materials, side: float, index: int) -> bpy.types.Mesh:
     """Stubby exhaust pipe on the cowling, swept back and outward."""
     bm = bmesh.new()
@@ -863,6 +953,7 @@ def build_plane() -> list[bpy.types.Object]:
     tail = piece("Tail", tail_mesh, at(Vector((0.0, tail_joint, 0.08))), body)
     fin_object = piece("Fin", fin, at(final_point(FIN_BASE)), tail)
     piece("Rudder", rudder_mesh, rudder_frame, fin_object)
+    piece("TailWheel", make_tail_wheel(materials), at(final_point(TAIL_STRUT_TOP)), tail)
     for tag, side in (("R", 1.0), ("L", -1.0)):
         stabiliser_root = final_point(TAILPLANE_CENTRE) + Vector((side * STABILISER_ROOT_X, 0.0, 0.0))
         piece("Stabiliser" + tag, stabilisers["Stabiliser" + tag], at(stabiliser_root), tail)
@@ -884,6 +975,9 @@ def build_plane() -> list[bpy.types.Object]:
         muzzle.parent = panel
         muzzle.matrix_parent_inverse = panel.matrix_world.inverted()
         markers.append(muzzle)
+        # Undercarriage: bolted to the inner panel, so it goes with the wing.
+        # Its origin is the pivot; turning it about local Y folds it outward.
+        piece("Gear" + tag, make_gear(materials, -side), at(final_point(gear_pivot(-side))), panel)
         tip = piece("WingTip" + tag, wing_panels["WingTip" + tag], at(break_pivot), panel)
         surface, frame = wing_surfaces["Aileron" + tag]
         piece("Aileron" + tag, surface, frame, tip)

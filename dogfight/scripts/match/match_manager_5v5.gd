@@ -10,8 +10,10 @@ extends Node
 ##    another aircraft too hard to survive. Whoever crippled it gets the credit.
 ##  - First team to the score limit wins, otherwise the higher score when the
 ##    clock runs out. Equal scores are a draw.
-##  - A downed pilot respawns above their own carrier/airfield after a delay,
-##    with a couple of seconds of spawn protection.
+##  - Everyone starts parked on their own airfield with the engine off, and
+##    has to start up and take off. A downed pilot gets a new plane on the
+##    same airfield after a delay, protected until it leaves the ground.
+##  - A damaged plane that lands at its own airfield and stops is repaired.
 ##
 ## Networking: this node only does work on the server (or offline, where the
 ## local instance is the server). Planes are added under `planes_root`, which
@@ -30,6 +32,9 @@ enum Phase { COUNTDOWN, ACTIVE, FINISHED }
 ## `winning_team` value for a tied match.
 const DRAW: int = -1
 const COUNTDOWN_TIME: float = 3.0
+## A parking spot is busy if another plane is on the ground this close to it (m).
+const PARKING_CLEARANCE: float = 24.0
+const PARKING_RETRY_TIME: float = 0.5
 const BOT_NAMES: Array[String] = [
 	"Biggles", "Maverick", "Dusty", "Skipper", "Red Baroness", "Lucky", "Ginger",
 	"Hawk", "Whiskey", "Bandit", "Rocket", "Duchess", "Tailspin", "Flak", "Ace of Clubs",
@@ -42,6 +47,9 @@ const BOT_NAMES: Array[String] = [
 @export var controllers_root: Node
 @export var bullet_system: BulletSystem
 @export var midair_collisions: MidairCollisions
+## The arena, for its airfields. Without one (or with GameSession.ground_start
+## off) planes start in the air at the spawn markers instead.
+@export var arena: ArenaBuilder
 @export var blue_spawns: Node3D
 @export var red_spawns: Node3D
 @export var arena_center: Vector3 = Vector3.ZERO
@@ -230,14 +238,19 @@ func _spawn_plane(slot: PilotSlot) -> void:
 	plane.arena_radius = arena_radius
 	plane.arena_ceiling = arena_ceiling
 	plane.bullet_system = bullet_system
+	if arena != null:
+		plane.airfields = arena.airfields
 	planes_root.add_child(plane, true)
+	for field: Airfield in plane.airfields:
+		# Planes stand on the airfield by arithmetic, not by bumping into it.
+		plane.add_collision_exception_with(field.ground_body)
 	slot.plane = plane
 	_planes.append(plane)
 	bullet_system.register_plane(plane)
 	if midair_collisions != null:
 		midair_collisions.register_plane(plane)
 	plane.died.connect(_on_plane_died)
-	plane.respawn(_spawn_transform(slot))
+	_place_plane(slot, true)
 	_attach_controller(slot)
 
 
@@ -284,8 +297,59 @@ func _build_bot_stats(data: PlaneData, commander_level: int) -> PlaneStats:
 	return data.build_stats(commander_level, cards, levels)
 
 
+## Puts a seat's plane into the match, factory fresh: parked on its own
+## airfield, or in the air if there is no airfield to park on. Returns false
+## (and does nothing) if every parking spot is busy and [param force] is off.
+func _place_plane(slot: PilotSlot, force: bool) -> bool:
+	var field: Airfield = _home_airfield(slot.team)
+	if field == null:
+		slot.plane.respawn(_air_spawn_transform(slot))
+		return true
+	var spot: int = _free_parking_spot(field, slot)
+	if spot < 0:
+		if not force:
+			return false
+		spot = slot.seat
+	slot.plane.respawn(field.parking_transform(spot), true)
+	return true
+
+
+func _home_airfield(team: Teams.Id) -> Airfield:
+	if arena == null or not GameSession.ground_start:
+		return null
+	return arena.airfield_for(team)
+
+
+## The seat's own parking spot if nothing is standing on it or about to roll
+## through it, otherwise the first spare one that is clear. -1 if none is.
+func _free_parking_spot(field: Airfield, slot: PilotSlot) -> int:
+	var candidates: Array[int] = [slot.seat % field.parking_spot_count()]
+	for spot: int in range(field.parking_spot_count() - 1, -1, -1):
+		if not candidates.has(spot):
+			candidates.append(spot)
+	for spot: int in candidates:
+		if _is_parking_spot_clear(field, spot, slot.plane):
+			return spot
+	return -1
+
+
+func _is_parking_spot_clear(field: Airfield, spot: int, for_plane: PlaneActor) -> bool:
+	var place: Vector2 = field.runway_coordinates(field.parking_transform(spot).origin)
+	for other: PlaneActor in _planes:
+		if other == for_plane or not other.alive or not other.is_on_ground():
+			continue
+		var where: Vector2 = field.runway_coordinates(other.global_position)
+		if where.distance_to(place) < PARKING_CLEARANCE:
+			return false
+		# Something further back in the same lane is already rolling this way.
+		var same_lane: bool = absf(where.x - place.x) < PARKING_CLEARANCE * 0.5
+		if same_lane and where.y < place.y and other.speed > 1.0:
+			return false
+	return true
+
+
 ## Airborne spawn above the team's base, nose pointed at the middle of the arena.
-func _spawn_transform(slot: PilotSlot) -> Transform3D:
+func _air_spawn_transform(slot: PilotSlot) -> Transform3D:
 	var group: Node3D = blue_spawns if slot.team == Teams.Id.TEAM_BLUE else red_spawns
 	var marker: Node3D = group.get_child(slot.seat % group.get_child_count()) as Node3D
 	var origin: Vector3 = marker.global_position
@@ -328,8 +392,8 @@ func _tick_respawns(delta: float) -> void:
 			continue
 		slot.respawn_timer -= delta
 		if slot.respawn_timer <= 0.0:
-			slot.respawn_timer = 0.0
-			slot.plane.respawn(_spawn_transform(slot))
+			# If the airfield is crowded the new plane waits a moment longer.
+			slot.respawn_timer = 0.0 if _place_plane(slot, false) else PARKING_RETRY_TIME
 
 
 func _finish_match() -> void:

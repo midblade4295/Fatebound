@@ -1,8 +1,8 @@
 class_name ArenaBuilder
 extends Node3D
 ## Builds the whole battlefield out of primitive meshes at load time: ocean,
-## chunky cliff islands, the Blue carrier, the Red island airfield and a ring of
-## puffy clouds. Everything is generated from one seed, so every peer in an
+## chunky cliff islands, an island airfield for each team and a ring of puffy
+## clouds. Everything is generated from one seed, so every peer in an
 ## online match builds the identical arena without replicating any of it.
 ##
 ## Solid things get a StaticBody3D on the "world" physics layer (planes crash
@@ -15,10 +15,6 @@ const CLIFF_COLOR: Color = Color("c9a878")
 const CLIFF_DARK_COLOR: Color = Color("a8875c")
 const GRASS_COLOR: Color = Color("5fc24a")
 const GRASS_DARK_COLOR: Color = Color("3f9d3a")
-const STEEL_COLOR: Color = Color("8e9aa8")
-const DECK_COLOR: Color = Color("4b5563")
-const RUNWAY_COLOR: Color = Color("5b6470")
-const MARKING_COLOR: Color = Color("ffe27a")
 
 @export var arena_seed: int = 1942
 @export var arena_radius: float = 1500.0
@@ -26,9 +22,15 @@ const MARKING_COLOR: Color = Color("ffe27a")
 @export var cloud_count: int = 46
 ## Light whose direction tints the sun-facing side of the clouds.
 @export var sun: DirectionalLight3D
-## Where each team's home base is built (the spawn markers sit above these).
-@export var blue_base_position: Vector3 = Vector3(0.0, 0.0, 1250.0)
-@export var red_base_position: Vector3 = Vector3(0.0, 0.0, -1250.0)
+## Where each team's airfield is built. Each runway points at the arena centre.
+@export var blue_base_position: Vector3 = Vector3(0.0, 0.0, 1080.0)
+@export var red_base_position: Vector3 = Vector3(0.0, 0.0, -1080.0)
+## Islands are kept this far (metres) from the line the runways lie on, so
+## nothing stands in the way of a take-off or an approach.
+@export var runway_corridor: float = 520.0
+
+## Both airfields, indexed by Teams.Id.
+var airfields: Array[Airfield] = []
 
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _cylinder: CylinderMesh
@@ -52,8 +54,10 @@ func _ready() -> void:
 	_sphere.rings = 6
 	_build_ocean()
 	_build_islands()
-	_build_carrier(blue_base_position)
-	_build_airfield(red_base_position)
+	airfields = [
+		_build_airfield(blue_base_position, Teams.Id.TEAM_BLUE),
+		_build_airfield(red_base_position, Teams.Id.TEAM_RED),
+	]
 	_build_clouds()
 
 
@@ -70,14 +74,16 @@ func _build_ocean() -> void:
 
 func _build_islands() -> void:
 	for index: int in range(island_count):
-		# Spread islands around a ring, leaving the centre open for the furball
-		# and keeping clear of both home bases on the north-south axis.
+		# Spread islands around a ring, leaving the centre open for the furball.
 		var angle: float = TAU * (float(index) + 0.5) / float(island_count) + _rng.randf_range(-0.2, 0.2)
-		if absf(sin(angle)) > 0.93:
-			angle += 0.45
 		var distance: float = _rng.randf_range(0.3, 0.72) * arena_radius
 		var center: Vector3 = Vector3(cos(angle) * distance, 0.0, sin(angle) * distance)
-		_build_island(center, _rng.randf_range(90.0, 190.0), _rng.randf_range(60.0, 200.0), "Island%d" % index)
+		var radius: float = _rng.randf_range(90.0, 190.0)
+		# Slide the island sideways out of the runway corridor if it landed in it.
+		var clear_of_runways: float = runway_corridor + radius * 1.32
+		if absf(center.x) < clear_of_runways:
+			center.x = clear_of_runways * (1.0 if center.x >= 0.0 else -1.0)
+		_build_island(center, radius, _rng.randf_range(60.0, 200.0), "Island%d" % index)
 
 
 ## A stack of tapered cylinders: sand skirt, rock cliff, grass cap, plus a rock
@@ -122,47 +128,24 @@ func _add_frustum(parent: Node3D, part_name: String, color: Color, top_radius: f
 	parent.add_child(instance)
 
 
-func _add_box(parent: Node3D, part_name: String, color: Color, size: Vector3, center: Vector3) -> void:
-	var instance: MeshInstance3D = MeshInstance3D.new()
-	instance.name = part_name
-	instance.mesh = _box
-	instance.material_override = ToonMaterials.toon(color, 0.0, 0.2)
-	instance.scale = size
-	instance.position = center
-	parent.add_child(instance)
+## The airfield for [param team], or null if the arena has not been built.
+func airfield_for(team: Teams.Id) -> Airfield:
+	return airfields[team] if int(team) < airfields.size() else null
 
 
-## Blue home: an aircraft carrier pointing at the fight.
-func _build_carrier(center: Vector3) -> void:
-	var body: StaticBody3D = StaticBody3D.new()
-	body.name = "BlueCarrier"
-	body.position = center
-	body.collision_layer = PlaneActor.COLLISION_LAYER_WORLD
-	body.collision_mask = 0
-	add_child(body)
-	_add_box(body, "Hull", STEEL_COLOR, Vector3(46.0, 24.0, 250.0), Vector3(0.0, 6.0, 0.0))
-	_add_box(body, "Deck", DECK_COLOR, Vector3(58.0, 3.0, 270.0), Vector3(0.0, 19.5, 0.0))
-	_add_box(body, "DeckStripe", MARKING_COLOR, Vector3(2.5, 3.2, 240.0), Vector3(0.0, 19.6, 0.0))
-	_add_box(body, "Tower", STEEL_COLOR, Vector3(12.0, 26.0, 34.0), Vector3(22.0, 34.0, 20.0))
-	_add_box(body, "Bridge", Teams.COLOR_BLUE, Vector3(14.0, 6.0, 20.0), Vector3(22.0, 50.0, 20.0))
-	var shape: BoxShape3D = BoxShape3D.new()
-	shape.size = Vector3(58.0, 54.0, 270.0)
-	var collider: CollisionShape3D = CollisionShape3D.new()
-	collider.name = "CollisionShape3D"
-	collider.shape = shape
-	collider.position.y = 27.0
-	body.add_child(collider)
-
-
-## Red home: a low, flat island with a runway and two hangars.
-func _build_airfield(center: Vector3) -> void:
-	var island: StaticBody3D = _build_island(center, 230.0, 34.0, "RedAirfield")
-	island.rotation.y = 0.0
-	var top: float = 34.0 + 34.0 * 0.16 * 1.65
-	_add_box(island, "Runway", RUNWAY_COLOR, Vector3(30.0, 1.2, 190.0), Vector3(0.0, top, 0.0))
-	_add_box(island, "RunwayStripe", MARKING_COLOR, Vector3(1.6, 1.4, 160.0), Vector3(0.0, top, 0.0))
-	for side: float in [-1.0, 1.0]:
-		_add_box(island, "Hangar", Teams.COLOR_RED, Vector3(26.0, 14.0, 34.0), Vector3(side * 42.0, top + 7.0, 40.0))
+## A team's home: a low island with a runway aimed at the middle of the arena.
+func _build_airfield(center: Vector3, team: Teams.Id) -> Airfield:
+	var airfield: Airfield = Airfield.new()
+	airfield.name = "%sAirfield" % Teams.name_of(team)
+	add_child(airfield)
+	airfield.position = center
+	# Local -Z is the take-off direction: turn it toward the centre.
+	var to_center: Vector3 = -center
+	to_center.y = 0.0
+	if to_center.length_squared() > 1.0:
+		airfield.rotation.y = atan2(-to_center.x, -to_center.z)
+	airfield.build(team)
+	return airfield
 
 
 ## All cloud puffs live in one MultiMesh: a few hundred spheres, one draw call.

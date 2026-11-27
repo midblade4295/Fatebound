@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
 [ext_resource type="Script" path="res://scripts/ui/hud_world_overlay.gd" id="2_overlay"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/ui/touch_flight_stick.gd" id="4_stick"]
 [ext_resource type="Script" path="res://scripts/ui/action_button.gd" id="5_button"]
 [ext_resource type="Script" path="res://scripts/ui/damage_diagram.gd" id="6_damage"]
+[ext_resource type="Script" path="res://scripts/ui/throttle_lever.gd" id="7_throttle"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
@@ -304,6 +305,65 @@ action = &"gadget"
 caption = "GADGET"
 color = Color(0.6, 0.3, 0.95, 1)
 icon_kind = 2
+
+[node name="ThrottleLever" type="Control" parent="Root"]
+unique_name_in_owner = true
+script = ExtResource("7_throttle")
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1
+anchor_top = 1
+anchor_right = 1
+anchor_bottom = 1
+offset_left = -620.0
+offset_top = -510.0
+offset_right = -480.0
+offset_bottom = -30.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="EngineButton" type="Control" parent="Root"]
+unique_name_in_owner = true
+script = ExtResource("5_button")
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1
+anchor_top = 1
+anchor_right = 1
+anchor_bottom = 1
+offset_left = -326.0
+offset_top = -640.0
+offset_right = -190.0
+offset_bottom = -496.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+action = &"toggle_engine"
+caption = "ENGINE"
+color = Color(0.93, 0.6, 0.14, 1)
+icon_kind = 3
+
+[node name="GearButton" type="Control" parent="Root"]
+unique_name_in_owner = true
+script = ExtResource("5_button")
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1
+anchor_top = 1
+anchor_right = 1
+anchor_bottom = 1
+offset_left = -176.0
+offset_top = -640.0
+offset_right = -40.0
+offset_bottom = -496.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+action = &"toggle_gear"
+caption = "GEAR"
+color = Color(0.27, 0.62, 0.55, 1)
+icon_kind = 4
 
 [node name="Results" type="PanelContainer" parent="Root"]
 unique_name_in_owner = true

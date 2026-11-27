@@ -23,6 +23,7 @@ func _ready() -> void:
 	GameSession.local_player_enabled = true
 	GameSession.match_seed = 11
 	GameSession.bot_skill = 0.0
+	GameSession.ground_start = false  # This test is about flying: start in the air.
 	_test_catalogue()
 	var arena: Node = (load(GameSession.SCENE_ARENA) as PackedScene).instantiate()
 	add_child(arena)

@@ -9,7 +9,7 @@ extends Node3D
 ## be, so fast bullets can never tunnel through anything.
 ##
 ## Hits are decided by where the bullet actually goes:
-##  - against the world (cliffs, carrier, sea) with one physics ray;
+##  - against the world (cliffs, airfields, sea) with one physics ray;
 ##  - against each enemy plane by tracing the bullet's path, relative to that
 ##    plane's own motion, through its per-part hit boxes (PlaneHitboxes). The
 ##    first box entered is the part that is hit, and the trace carries on

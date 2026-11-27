@@ -8,6 +8,7 @@ extends Node
 ## Structure: a slow "think" (5 Hz, staggered between bots) chooses a state and
 ## a target; a fast "fly" (every physics tick) turns that into stick input.
 ##
+##   TAKEOFF  parked on the airfield -> start up, roll, lift off, wheels up, climb out.
 ##   RECOVER  about to hit the sea/a cliff or above the ceiling -> pull away. Always wins.
 ##   EVADE    someone is shooting us from behind -> break turn, roll, smoke.
 ##   ENGAGE   chase the chosen target, lead it, fire when the guns bear.
@@ -28,7 +29,7 @@ extends Node
 ## team-mates already claimed (SquadBlackboard), every bot approaches from its
 ## own offset "lane", and a separation force pushes nearby planes apart.
 
-enum State { PATROL, ENGAGE, EVADE, RECOVER }
+enum State { PATROL, ENGAGE, EVADE, RECOVER, TAKEOFF }
 
 const THINK_INTERVAL: float = 0.2
 const DETECT_RANGE: float = 1500.0
@@ -56,6 +57,18 @@ const PREFERRED_ALTITUDE_MAX: float = 480.0
 ## A shot is taken when the gun line passes within this many metres of the
 ## aim point, even if the angular fire cone says no (close-range snapshots).
 const SNAPSHOT_MISS_DISTANCE: float = 7.0
+## After take-off the bot climbs straight ahead to this height above the
+## airfield before it thinks about anything else.
+const TAKEOFF_CLIMB_HEIGHT: float = 120.0
+const TAKEOFF_CLIMB_PITCH: float = deg_to_rad(13.0)
+## Wheels come up once this far off the ground.
+const GEAR_UP_HEIGHT: float = 10.0
+## Planes parked further back wait this much longer per metre before starting
+## up, so the line leaves from the front.
+const START_DELAY_PER_METRE: float = 0.07
+## A plane on the ground this close ahead in the same lane means "wait".
+const TAXI_HOLD_DISTANCE: float = 55.0
+const TAXI_LANE_WIDTH: float = 11.0
 
 ## 0 = rookie (slow, sloppy aim) .. 1 = ace.
 @export_range(0.0, 1.0) var skill: float = 0.55
@@ -104,6 +117,11 @@ var _track_count: int = 0
 ## Personal approach lane: x = sideways, y = vertical, both -1..1.
 var _lane: Vector2 = Vector2.ZERO
 var _patrol_phase: float = 0.0
+## Take-off: seconds left before pressing the starter, and the line on the
+## runway (metres right of the centre line) this bot rolls along.
+var _start_delay: float = 0.0
+var _takeoff_lane: float = 0.0
+var _starter_wait: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
@@ -131,6 +149,9 @@ func setup(controlled_plane: PlaneActor, manager: MatchManager5v5, shared_blackb
 	_track_velocities.resize(TRACK_SAMPLES)
 	plane.damaged.connect(_on_plane_damaged)
 	plane.died.connect(_on_plane_died)
+	plane.respawned.connect(_on_plane_respawned)
+	if plane.is_node_ready() and plane.alive:
+		_on_plane_respawned(plane)
 
 
 func _exit_tree() -> void:
@@ -140,6 +161,8 @@ func _exit_tree() -> void:
 			plane.damaged.disconnect(_on_plane_damaged)
 		if plane.died.is_connected(_on_plane_died):
 			plane.died.disconnect(_on_plane_died)
+		if plane.respawned.is_connected(_on_plane_respawned):
+			plane.respawned.disconnect(_on_plane_respawned)
 
 
 func _physics_process(delta: float) -> void:
@@ -158,6 +181,15 @@ func _physics_process(delta: float) -> void:
 		# Settle on a new (wrong) idea of how much to lead for a few seconds.
 		_lead_bias_timer = _rng.randf_range(2.0, 4.5)
 		_lead_bias = _rng.randfn(0.0, lerpf(0.35, 0.08, skill))
+	if state == State.TAKEOFF or plane.is_on_ground():
+		# Getting off the ground is a job of its own: no fighting until it is done.
+		state = State.TAKEOFF
+		_set_target(null)
+		_fly_takeoff(delta)
+		_stick = _stick.move_toward(plane.input.steer, _stick_speed * delta)
+		plane.input.steer = _stick
+		return
+	plane.input.throttle = 1.0
 	_record_target()
 	_think_timer -= delta
 	if _think_timer <= 0.0:
@@ -228,9 +260,11 @@ func _score_target(enemy: PlaneActor) -> float:
 	return score
 
 
+## Planes on the ground are left alone: strafing an airfield is a good way
+## for a bot to fly into it.
 func _is_valid_target(other: PlaneActor) -> bool:
 	return other != null and is_instance_valid(other) and other.alive \
-			and plane.is_hostile_to(other) and not other.is_concealed()
+			and plane.is_hostile_to(other) and not other.is_concealed() and not other.is_on_ground()
 
 
 func _set_target(new_target: PlaneActor) -> void:
@@ -287,6 +321,68 @@ func _fly() -> void:
 			_fly_engage(input)
 		State.PATROL:
 			_fly_patrol(input)
+
+
+## Start up, roll down the runway in this bot's own lane, lift off when there
+## is flying speed, raise the wheels and climb straight out.
+func _fly_takeoff(delta: float) -> void:
+	var input: PlaneInput = plane.input
+	input.firing = false
+	var field: Airfield = plane.airfield_at(plane.global_position)
+	var steer: Vector2 = Vector2.ZERO
+	if plane.is_on_ground() and field != null:
+		_start_delay -= delta
+		if not plane.has_flag(PlaneActor.FLAG_ENGINE_ON):
+			input.throttle = 0.0
+			_starter_wait -= delta
+			if _start_delay <= 0.0 and _starter_wait <= 0.0:
+				input.press_engine()
+				_starter_wait = 1.0  # Give the press a moment before trying again.
+			input.steer = steer
+			return
+		var place: Vector2 = field.runway_coordinates(plane.global_position)
+		input.throttle = 0.0 if _taxi_blocked(field, place) else 1.0
+		# Hold the lane: aim a little toward it, then straight down the runway.
+		var direction: Vector3 = field.takeoff_direction()
+		var runway_yaw: float = atan2(-direction.x, -direction.z)
+		var desired_yaw: float = runway_yaw - atan((_takeoff_lane - place.x) / 70.0)
+		steer.x = clampf(-wrapf(desired_yaw - plane.yaw, -PI, PI) * 4.0, -1.0, 1.0)
+		if plane.speed >= plane.takeoff_speed() * 1.05:
+			steer.y = 0.6
+		input.steer = steer
+		return
+	if plane.is_on_ground():
+		# On the ground somewhere that is not an airfield top: nothing to do.
+		input.throttle = 0.0
+		input.steer = steer
+		return
+	# Airborne: wheels up, hold a steady climb, then go and fight.
+	input.throttle = 1.0
+	var home: Airfield = plane.home_airfield()
+	var field_height: float = home.surface_y() if home != null else 0.0
+	var height: float = plane.global_position.y - field_height
+	if plane.is_gear_down() and height > GEAR_UP_HEIGHT:
+		_starter_wait -= delta
+		if _starter_wait <= 0.0:
+			input.press_gear()
+			_starter_wait = 1.0
+	steer.y = clampf((TAKEOFF_CLIMB_PITCH - plane.pitch) * 4.0, -1.0, 1.0)
+	input.steer = steer
+	if height >= TAKEOFF_CLIMB_HEIGHT:
+		state = State.PATROL
+		_think_timer = 0.0
+
+
+## True when another plane is on the ground just ahead in this bot's lane.
+func _taxi_blocked(field: Airfield, place: Vector2) -> bool:
+	for other: PlaneActor in match_manager.get_planes():
+		if other == plane or not other.alive or not other.is_on_ground():
+			continue
+		var where: Vector2 = field.runway_coordinates(other.global_position)
+		var ahead: float = where.y - place.y
+		if ahead > 0.0 and ahead < TAXI_HOLD_DISTANCE and absf(where.x - place.x) < TAXI_LANE_WIDTH and other.speed < plane.speed + 4.0:
+			return true
+	return false
 
 
 func _fly_recover(input: PlaneInput) -> void:
@@ -550,6 +646,26 @@ func _on_plane_damaged(_victim: PlaneActor, _amount: float, attacker: PlaneActor
 	if attacker_behind and _rng.randf() < lerpf(0.25, 0.7, skill) * (1.5 - plane.condition()):
 		_evade_timer = _rng.randf_range(1.4, 2.6)
 		_evade_side = 1.0 if _rng.randf() > 0.5 else -1.0
+
+
+## A new plane: if it is parked, work out when to start up and which line to
+## roll along. The further back in the queue, the longer the wait.
+func _on_plane_respawned(_plane: PlaneActor) -> void:
+	_stick = Vector2.ZERO
+	_starter_wait = 0.0
+	if not plane.is_on_ground():
+		state = State.PATROL
+		plane.input.throttle = 1.0
+		return
+	state = State.TAKEOFF
+	plane.input.throttle = 0.0
+	_start_delay = _rng.randf_range(0.4, 1.3)
+	_takeoff_lane = 0.0
+	var field: Airfield = plane.airfield_at(plane.global_position)
+	if field != null:
+		var place: Vector2 = field.runway_coordinates(plane.global_position)
+		_takeoff_lane = place.x
+		_start_delay += maxf(Airfield.PARKING_SPOTS[0].y - place.y, 0.0) * START_DELAY_PER_METRE
 
 
 func _on_plane_died(_victim: PlaneActor, _killer: PlaneActor) -> void:
