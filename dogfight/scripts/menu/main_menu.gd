@@ -1,8 +1,11 @@
 extends Node3D
 ## Main menu / Hangar (scenes/menu/MainMenu.tscn).
 ##
-## A turntable shows the selected plane in 3D; the UI on top is the whole
-## progression loop:
+## The selected plane stands in the middle, engine stopped, and the player can
+## look it over: drag with one finger to move the camera round it, pinch to
+## zoom in and out, drag with two fingers to slide the plane about the screen,
+## double-tap to put the view back. (With a mouse: drag, wheel, right-drag.)
+## The UI on top is the whole progression loop:
 ##   - Commander Level badge + Hangar XP bar, coin counter
 ##   - plane picker (planes unlock by Commander Level)
 ##   - the mounts on the plane: four gun stations, propeller, engine,
@@ -17,7 +20,29 @@ extends Node3D
 ## Everything is rebuilt from Profile whenever it emits `changed`, so the
 ## screen can never show stale numbers.
 
-const TURNTABLE_SPEED: float = 0.5
+# --- Looking round the plane ---------------------------------------------------
+## Where the camera starts: off the nose to one side, looking slightly down.
+const VIEW_YAW: float = deg_to_rad(148.0)
+const VIEW_PITCH: float = deg_to_rad(14.0)
+const VIEW_DISTANCE: float = 41.0
+## The plane sits left of and above the middle of the screen, clear of the
+## panels: this far from the middle, as a share of the screen's height.
+const VIEW_OFFSET: Vector2 = Vector2(0.106, -0.113)
+const MIN_PITCH: float = deg_to_rad(-3.0)
+const MAX_PITCH: float = deg_to_rad(78.0)
+const MIN_DISTANCE: float = 13.0
+const MAX_DISTANCE: float = 75.0
+## How far the plane can be slid from where it starts, as a share of the
+## screen's height.
+const MAX_PAN: float = 0.32
+## Radians of orbit per pixel dragged.
+const ORBIT_SPEED: float = 0.006
+## Zoom per notch of a mouse wheel.
+const WHEEL_ZOOM: float = 0.9
+## How quickly the camera settles onto where it has been sent (1/s).
+const VIEW_SMOOTHING: float = 12.0
+const DOUBLE_TAP_TIME: float = 0.3
+const TAP_SLOP: float = 14.0
 
 var _plane_index: int = 0
 var _selected_card_id: StringName = &""
@@ -26,10 +51,27 @@ var _selected_mount: int = -1
 ## The loadout the turntable plane was last built with.
 var _shown_fittings: String = ""
 var _preview: PlaneVisual
+# Where the camera has been sent (the camera itself eases toward it).
+var _view_yaw: float = VIEW_YAW
+var _view_pitch: float = VIEW_PITCH
+var _view_distance: float = VIEW_DISTANCE
+var _view_pan: Vector2 = Vector2.ZERO
+# And where it is now.
+var _shown_yaw: float = VIEW_YAW
+var _shown_pitch: float = VIEW_PITCH
+var _shown_distance: float = VIEW_DISTANCE
+var _shown_pan: Vector2 = Vector2.ZERO
+## Fingers on the empty part of the screen: touch index -> position.
+var _touches: Dictionary[int, Vector2] = {}
+var _last_tap_time: float = -1.0
+var _tap_start: Vector2 = Vector2.ZERO
+var _tap_moved: bool = false
+var _clock: float = 0.0
 var _collection_views: Array[CardView] = []
 var _slot_views: Array[CardView] = []
 
 @onready var _turntable: Node3D = $Stage/Turntable
+@onready var _camera: Camera3D = $Camera3D
 @onready var _level_label: Label = %LevelLabel
 @onready var _commander_title: Label = %CommanderTitle
 @onready var _xp_bar: ProgressBar = %XpBar
@@ -67,10 +109,115 @@ func _ready() -> void:
 	_selected_card_id = Profile.loadout[0]
 	_refresh()
 	_show_plane()
+	_build_view_hint()
+	_place_camera()
 
 
 func _process(delta: float) -> void:
-	_turntable.rotate_y(TURNTABLE_SPEED * delta)
+	_clock += delta
+	var blend: float = 1.0 - exp(-VIEW_SMOOTHING * delta)
+	_shown_yaw = lerp_angle(_shown_yaw, _view_yaw, blend)
+	_shown_pitch = lerpf(_shown_pitch, _view_pitch, blend)
+	_shown_distance = lerpf(_shown_distance, _view_distance, blend)
+	_shown_pan = _shown_pan.lerp(_view_pan, blend)
+	_place_camera()
+
+
+## Touches that land on a panel never get here, so anything that does is on
+## the open part of the screen around the plane.
+func _unhandled_input(event: InputEvent) -> void:
+	var touch: InputEventScreenTouch = event as InputEventScreenTouch
+	if touch != null:
+		if touch.pressed:
+			_touches[touch.index] = touch.position
+			if _touches.size() == 1:
+				_tap_start = touch.position
+				_tap_moved = false
+		else:
+			var was_only_touch: bool = _touches.size() == 1 and _touches.has(touch.index)
+			_touches.erase(touch.index)
+			if was_only_touch and not _tap_moved:
+				# A tap. Two in quick succession put the view back.
+				if _clock - _last_tap_time <= DOUBLE_TAP_TIME:
+					reset_view()
+					_last_tap_time = -1.0
+				else:
+					_last_tap_time = _clock
+		return
+	var drag: InputEventScreenDrag = event as InputEventScreenDrag
+	if drag != null and _touches.has(drag.index):
+		_drag_touch(drag.index, drag.position)
+		return
+	var button: InputEventMouseButton = event as InputEventMouseButton
+	if button != null and button.pressed:
+		if button.button_index == MOUSE_BUTTON_WHEEL_UP:
+			zoom_view(WHEEL_ZOOM)
+		elif button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			zoom_view(1.0 / WHEEL_ZOOM)
+		return
+	var motion: InputEventMouseMotion = event as InputEventMouseMotion
+	if motion != null and motion.button_mask & MOUSE_BUTTON_MASK_RIGHT != 0:
+		pan_view(motion.relative)
+
+
+## Swings the camera round the plane: [param pixels] of drag, right and down.
+func orbit_view(pixels: Vector2) -> void:
+	_view_yaw = wrapf(_view_yaw - pixels.x * ORBIT_SPEED, -PI, PI)
+	_view_pitch = clampf(_view_pitch + pixels.y * ORBIT_SPEED, MIN_PITCH, MAX_PITCH)
+
+
+## Moves the camera in (factor below 1) or out (above 1).
+func zoom_view(factor: float) -> void:
+	_view_distance = clampf(_view_distance * factor, MIN_DISTANCE, MAX_DISTANCE)
+
+
+## Slides the plane about the screen by [param pixels].
+func pan_view(pixels: Vector2) -> void:
+	# Kept as a share of the screen's height, so the plane stays under the
+	# fingers, and stays put on the screen while zooming.
+	_view_pan = (_view_pan + pixels / maxf(float(get_viewport().get_visible_rect().size.y), 1.0)).limit_length(MAX_PAN)
+
+
+## Puts the camera and the plane back where they started.
+func reset_view() -> void:
+	_view_yaw = VIEW_YAW
+	_view_pitch = VIEW_PITCH
+	_view_distance = VIEW_DISTANCE
+	_view_pan = Vector2.ZERO
+
+
+func _drag_touch(index: int, new_position: Vector2) -> void:
+	var old_position: Vector2 = _touches[index]
+	if new_position.distance_to(_tap_start) > TAP_SLOP:
+		_tap_moved = true
+	if _touches.size() == 1:
+		orbit_view(new_position - old_position)
+	elif _touches.size() >= 2:
+		# Two fingers: the change in their spread zooms, the movement of the
+		# point between them slides the plane.
+		var other: Vector2 = Vector2.ZERO
+		for other_index: int in _touches:
+			if other_index != index:
+				other = _touches[other_index]
+				break
+		var old_spread: float = maxf(old_position.distance_to(other), 1.0)
+		var new_spread: float = maxf(new_position.distance_to(other), 1.0)
+		zoom_view(old_spread / new_spread)
+		pan_view((new_position - old_position) * 0.5)
+		_tap_moved = true
+	_touches[index] = new_position
+
+
+func _place_camera() -> void:
+	var orbit: Basis = Basis(Vector3.UP, _shown_yaw) * Basis(Vector3.RIGHT, -_shown_pitch)
+	_camera.global_transform = Transform3D(orbit, _turntable.global_position + orbit * Vector3(0.0, 0.0, _shown_distance))
+	# Sliding the plane is done by shifting the lens, so the camera still
+	# circles the plane itself wherever it has been slid to. The shift is a
+	# share of what the lens sees at this distance, so zooming does not move
+	# the plane across the screen.
+	var view_height: float = 2.0 * _shown_distance * tan(deg_to_rad(_camera.fov) * 0.5)
+	_camera.h_offset = (VIEW_OFFSET.x - _shown_pan.x) * view_height
+	_camera.v_offset = (VIEW_OFFSET.y + _shown_pan.y) * view_height
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +236,23 @@ func _build_stage_floor() -> void:
 	floor_mesh.material_override = ToonMaterials.toon(Color("3b4a66"), 0.0, 0.15)
 	floor_mesh.position = Vector3(0.0, -3.4, 0.0)
 	$Stage.add_child(floor_mesh)
+
+
+## One line under the top bar saying how to look round the plane.
+func _build_view_hint() -> void:
+	var hint: Label = Label.new()
+	hint.name = "ViewHint"
+	hint.text = "Drag to look round  -  pinch to zoom\nTwo fingers to move  -  double-tap to reset"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	# Between the Commander panel and the coin counter.
+	hint.offset_left = -340.0
+	hint.offset_right = 300.0
+	hint.offset_top = 30.0
+	hint.offset_bottom = 96.0
+	UiStyle.style_label(hint, 20, Color(0.85, 0.93, 1.0, 0.85), 5)
+	$UI/Root.add_child(hint)
 
 
 func _build_card_views() -> void:
@@ -120,7 +284,8 @@ func _show_plane() -> void:
 		_turntable.add_child(_preview)
 	_shown_fittings = ",".join(Profile.loadout)
 	_preview.build(data, GameSession.local_team, Profile.equipped_cards())
-	_preview.set_propeller(0.25)
+	# Parked in the hangar: engine stopped, wheels down.
+	_preview.set_propeller(0.0, true)
 	_preview.set_gear(1.0)
 	_refresh_plane_panel()
 

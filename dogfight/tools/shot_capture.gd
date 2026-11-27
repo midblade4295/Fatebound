@@ -22,6 +22,9 @@ var _takeoff_demo: bool = false
 ## roughlanding=<m/s> drops the player's plane onto its own runway at that
 ## rate of descent on frame 30, to show what a rough landing breaks.
 var _rough_landing: float = 0.0
+## look=<x>,<y>,<zoom> drags the hangar camera by that many pixels and zooms
+## by that factor on frame 20 (below 1 = closer).
+var _look: Vector3 = Vector3.ZERO
 var _scene: Node
 ## Frames at the start that run at `_warp_scale` x speed to reach the action.
 var _warp_frames: int = 0
@@ -52,6 +55,10 @@ func _ready() -> void:
 		elif argument.begins_with("steer="):
 			_steer_action = {"left": GameSession.ACTION_STEER_LEFT, "right": GameSession.ACTION_STEER_RIGHT,
 					"up": GameSession.ACTION_PITCH_UP}.get(argument.trim_prefix("steer="), &"")
+		elif argument.begins_with("look="):
+			var parts: PackedStringArray = argument.trim_prefix("look=").split(",")
+			if parts.size() == 3:
+				_look = Vector3(float(parts[0]), float(parts[1]), float(parts[2]))
 		elif argument.begins_with("roughlanding="):
 			_rough_landing = float(argument.trim_prefix("roughlanding="))
 		elif argument.begins_with("takeoff="):
@@ -137,6 +144,9 @@ func _process(_delta: float) -> void:
 		Input.action_press(GameSession.ACTION_FIRE)
 	if _takeoff_demo:
 		_fly_takeoff()
+	if _look.z > 0.0 and _frame == 20 and _scene.has_method(&"orbit_view"):
+		_scene.call(&"orbit_view", Vector2(_look.x, _look.y))
+		_scene.call(&"zoom_view", _look.z)
 	if _rough_landing > 0.0 and _frame == 30:
 		_drop_player()
 	if _steer_action != &"" and _frame > _warp_frames:

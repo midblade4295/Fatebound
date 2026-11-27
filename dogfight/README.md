@@ -30,6 +30,11 @@ Reference captures (software-rendered at 1280x720): `docs/arena_hud.png`,
 
 Stick up = nose up. `Profile.invert_pitch` flips it. Mouse clicks act as touches
 on desktop (`emulate_touch_from_mouse`), so the on-screen controls work there too.
+In the hangar the plane stands with its engine stopped. Drag with one finger
+to move the camera round it, pinch to zoom, drag with two fingers to slide the
+plane about the screen, double-tap to put the view back (mouse: drag, wheel,
+right-drag). Touches that start on a panel do not move the camera.
+
 A closed throttle on the ground is also the wheel brakes. The GEAR lever is
 locked while the plane is standing on its wheels, and the guns are safe on the
 ground.
@@ -438,6 +443,7 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 
 | Test | What it checks |
 | --- | --- |
+| `TestHangar` | the hangar plane's propeller is stopped and stays stopped after a refit; touch gestures fed to the menu: one-finger drag orbits at the same distance and cannot go under the floor, spreading and pinching zoom between limits while the plane stays put on screen, two fingers slide it but not off the screen, a double tap resets; taking a gun off shows on the plane |
 | `TestProgression` | item tables (units, spares, Marks, costs), what each item does to the stats, weight and stalling speed, one gun fitted is one gun, mixed guns, locked mounts, the upgrade flow, loadout rules, **the model shows exactly what is fitted** (gun pieces counted, propeller, intake, armour, wingtips changing the hit boxes, bigger wheels), save/load including a save from before items were fittings, Commander Level thresholds, bullet drop and drag, lead solution checked against a simulated bullet |
 | `TestDamageModel` | every part has a hit box from the model; bullet paths through them; live bullets with drop, drag and pass-through; no health value exists; shot-off parts leave the model as debris and take their attachments; each kind of damage changes handling against an undamaged reference; the pilot keeps control; planes are only lost by hitting the surface, credited to whoever crippled them |
 | `TestAudio` | every plane has its own engine loop and every kind of gun its own samples; the player's engine plays from the cockpit and the other nine in 3D; firing plays one of the fitted gun's samples; a bullet passing 6 m away is heard once and one 60 m away is not; the engine note rises in a dive; a dead engine falls silent and the fire is heard. It checks wiring, not how anything sounds |

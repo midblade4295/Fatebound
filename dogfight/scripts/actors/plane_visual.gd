@@ -320,9 +320,12 @@ func flash_muzzle(index: int) -> void:
 	_muzzle_timers[index] = MUZZLE_FLASH_TIME
 
 
-## 0 = propeller stopped, 1 = full throttle.
-func set_propeller(ratio: float) -> void:
+## 0 = propeller stopped, 1 = full throttle. It spools up and winds down to
+## the new speed unless [param at_once] is set (a plane standing in a hangar).
+func set_propeller(ratio: float, at_once: bool = false) -> void:
 	_prop_target = 0.0 if ratio <= 0.0 else lerpf(8.0, 62.0, clampf(ratio, 0.0, 1.5))
+	if at_once:
+		_prop_speed = _prop_target
 
 
 ## A smashed propeller is shown as stumps on a stopped hub.

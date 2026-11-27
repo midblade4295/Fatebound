@@ -65,6 +65,7 @@ run() {   # run <name> <marker> <timeout> <scene> [user args...]
 }
 
 run progression        PROGRESSION_OK  60 res://tests/TestProgression.tscn
+run hangar             HANGAR_OK       60 res://tests/TestHangar.tscn
 run player_flow        PLAYER_FLOW_OK  90 res://tests/TestPlayerFlow.tscn
 run damage_model       DAMAGE_MODEL_OK 90 res://tests/TestDamageModel.tscn
 run collisions         COLLISIONS_OK   60 res://tests/TestCollisions.tscn
