@@ -187,6 +187,9 @@ const BRAKE_THROTTLE: float = 0.04
 ## The plane counts as on the ground while the ground carries more than this
 ## share of its weight, and as flying again once nothing has touched for
 ## this long (a bounce is not a take-off).
+## Miles an hour in a metre a second: every speed shown to the player is in
+## mph, as on these aeroplanes' own instruments. Everything inside is SI.
+const MPH: float = 2.236936
 const ON_GROUND_WEIGHT: float = 0.02
 const AIRBORNE_AFTER: float = 0.3
 ## While a wheel is on the ground the stick's sideways travel works the rudder
@@ -324,7 +327,7 @@ const FLAG_PROP_BROKEN: int = 8192
 # --- Arena limits, set by the match manager ---------------------------------
 var arena_center: Vector3 = Vector3.ZERO
 var arena_radius: float = 3200.0
-var arena_ceiling: float = 4500.0
+var arena_ceiling: float = 9000.0
 
 ## Places a plane can land. Set by the match manager; with none, there is no
 ## ground to stand on and every surface is a crash.
@@ -734,9 +737,14 @@ func altitude() -> float:
 	return global_position.y
 
 
-## Indicated airspeed in km/h, as on the HUD.
-func speed_kmh() -> float:
-	return indicated_speed() * 3.6
+## Indicated airspeed in miles an hour, as on the HUD.
+func speed_mph() -> float:
+	return indicated_speed() * MPH
+
+
+## True airspeed in miles an hour: how fast it is really covering the sky.
+func true_speed_mph() -> float:
+	return speed * MPH
 
 
 ## True when at least one fitted gun is still attached to the plane.

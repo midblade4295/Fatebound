@@ -138,6 +138,11 @@ const RUDDER_HEAVY_SPEED: float = 150.0
 # --- Propeller ------------------------------------------------------------------------
 ## Share of shaft power the propeller turns into thrust at speed.
 const PROP_EFFICIENCY: float = 0.8
+## The exhaust stacks point backwards and the hot gas is a small jet: newtons
+## of thrust per watt of shaft power (about 150 lb from a Merlin's ejector
+## exhausts). Little beside the propeller at take-off, a tenth of the push at
+## top speed, where the propeller's thrust has fallen away.
+const EXHAUST_THRUST: float = 0.00065
 ## Share of the ideal (momentum-theory) static thrust it actually makes.
 const STATIC_THRUST_SHARE: float = 0.5
 ## Propeller speed at full power (rad/s; about 1,250 rpm) and its inertia as a
@@ -228,8 +233,13 @@ var static_thrust_factor: float = 1.0
 var roll_factor: float = 1.0
 ## Moments of inertia about the pitch (X), yaw (Y) and roll (Z) axes.
 var inertia: Vector3 = Vector3(10000.0, 17000.0, 7000.0)
-## Height (m above sea level) up to which the supercharger holds full power.
+## Height (m above sea level) up to which the supercharger holds the boost,
+## and the share of sea-level power the engine still gives there. Driving
+## the supercharger hard enough to hold the pressure that high costs power,
+## so the share falls steadily on the way up; above the critical altitude
+## the boost itself falls away with the air.
 var critical_altitude: float = 3500.0
+var altitude_power: float = 1.0
 
 # --- State: integrated by step() -------------------------------------------------------
 ## Velocity in the world, m/s.
@@ -365,8 +375,9 @@ static var _performance_cache: Dictionary = {}
 
 ## Sets the aeroplane up from its vital statistics.
 func configure(plane_mass: float, area: float, span: float, shaft_power: float, zero_lift_drag: float, max_lift: float,
-		thrust_factor: float = 1.0, roll: float = 1.0, full_power_height: float = 3500.0) -> void:
+		thrust_factor: float = 1.0, roll: float = 1.0, full_power_height: float = 3500.0, power_at_height: float = 1.0) -> void:
 	critical_altitude = full_power_height
+	altitude_power = power_at_height
 	mass = plane_mass
 	wing_area = area
 	wing_span = span
@@ -536,13 +547,14 @@ static func sound_speed_at(height: float) -> float:
 	return sqrt(SOUND_SPEED_FACTOR * temperature_at(height))
 
 
-## Share of its sea-level power the engine gives at [param height]: all of it
-## up to the supercharger's critical altitude, then falling with the air.
+## Share of its sea-level power the engine gives at [param height]: easing
+## down to altitude_power at the supercharger's critical altitude, then
+## falling with the air.
 func power_share_at(height: float) -> float:
 	if height <= critical_altitude:
-		return 1.0
+		return lerpf(1.0, altitude_power, clampf(height / maxf(critical_altitude, 1.0), 0.0, 1.0))
 	var thinner: float = density_at(height) / density_at(critical_altitude)
-	return clampf((1.0 + POWER_LAPSE) * thinner - POWER_LAPSE, 0.0, 1.0)
+	return altitude_power * clampf((1.0 + POWER_LAPSE) * thinner - POWER_LAPSE, 0.0, 1.0)
 
 
 func _set_altitude(value: float) -> void:
@@ -808,7 +820,7 @@ func _measure_performance() -> void:
 
 
 func _performance_key() -> String:
-	return "%.1f/%.3f/%.3f/%.0f/%.5f/%.3f/%.3f/%.0f" % [mass, wing_area, wing_span, power, cd0, cl_max, static_thrust_factor, critical_altitude]
+	return "%.1f/%.3f/%.3f/%.0f/%.5f/%.3f/%.3f/%.0f/%.3f" % [mass, wing_area, wing_span, power, cd0, cl_max, static_thrust_factor, critical_altitude, altitude_power]
 
 
 ## Force to spare along the nose (thrust minus drag, N) in trimmed level
@@ -1004,7 +1016,7 @@ func _thrust_at(forward_speed: float, throttle_setting: float, output: float) ->
 	# propeller gives the lesser, blended smoothly.
 	var standing: float = _static_thrust * pow(shaft_power / power, 2.0 / 3.0) * pow(density_ratio, 1.0 / 3.0)
 	var moving: float = PROP_EFFICIENCY * shaft_power / maxf(forward_speed, 5.0)
-	return 1.0 / sqrt(1.0 / (standing * standing) + 1.0 / (moving * moving))
+	return 1.0 / sqrt(1.0 / (standing * standing) + 1.0 / (moving * moving)) + EXHAUST_THRUST * shaft_power
 
 
 ## Everything that pushes on the aeroplane except gravity (the air on every

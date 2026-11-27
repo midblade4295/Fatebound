@@ -34,9 +34,11 @@ const WING_AREA_PER_SPAN: float = 0.6
 @export var base_max_lift: float = 1.5
 ## Aileron power: 1.0 rolls like a Spitfire.
 @export var base_roll: float = 1.0
-## Height (m) up to which the engine's supercharger holds full power. Above
-## it the engine fades with the thinning air.
+## Height (m) up to which the engine's supercharger holds its boost: where
+## the aeroplane is fastest. Above it the engine fades with the thinning air.
 @export var base_critical_altitude: float = 3500.0
+## Share of its sea-level power the engine still gives at that height.
+@export var base_altitude_power: float = 1.0
 
 @export_group("Sound")
 ## Seamless loop of this aircraft's engine at cruise power.
@@ -75,6 +77,7 @@ func _begin_stats(commander_level: int) -> PlaneStats:
 	stats.speed_factor = CommanderProgression.speed_multiplier(commander_level)
 	stats.max_lift = base_max_lift
 	stats.critical_altitude = base_critical_altitude
+	stats.altitude_power = base_altitude_power
 	stats.roll_power = base_roll
 	stats.fittings.resize(CommanderProgression.MOUNT_COUNT)
 	stats.fitting_marks.resize(CommanderProgression.MOUNT_COUNT)
@@ -97,7 +100,7 @@ func _finish_stats(stats: PlaneStats) -> void:
 	stats.drag = base_drag * stats.power_factor / pow(stats.speed_factor, 3.0)
 	var flight: FlightDynamics = stats.make_flight()
 	stats.top_speed = flight.level_top_speed()
-	stats.top_speed_high = flight.top_speed_at(PlaneStats.HIGH_ALTITUDE)
+	stats.top_speed_high = flight.top_speed_at(stats.critical_altitude)
 	stats.stall_speed = flight.stall_speed(0.0)
 	stats.landing_stall_speed = flight.stall_speed(1.0)
 	stats.climb_rate = flight.best_climb_rate()

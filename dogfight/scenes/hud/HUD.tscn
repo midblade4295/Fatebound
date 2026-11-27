@@ -95,7 +95,7 @@ value = 40.0
 [node name="FlightLabel" type="Label" parent="Root/TopLeft/Row/Info"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "SPD 300 km/h   ALT 250 m"
+text = "SPD 300 mph   ALT 250 m"
 
 [node name="DamageDiagram" type="Control" parent="Root"]
 unique_name_in_owner = true

@@ -6,8 +6,6 @@ extends RefCounted
 ## PlaneActor reads the numbers; PlaneVisual reads the fittings to decide which
 ## pieces of the model to show.
 
-## Height (m) at which top_speed_high is measured.
-const HIGH_ALTITUDE: float = 4000.0
 
 # --- Airframe: the real figures the flight model is built from ---
 ## Toughness: how much punishment the parts take (see PlaneActor.PART_STRENGTH).
@@ -27,12 +25,14 @@ var max_lift: float = 1.5
 var static_thrust: float = 1.0
 ## Aileron power relative to the standard wing: how fast it rolls.
 var roll_power: float = 1.0
-## Height (m) up to which the supercharger holds full power.
+## Height (m) up to which the supercharger holds its boost, and the share of
+## sea-level power the engine still gives there.
 var critical_altitude: float = 3500.0
+var altitude_power: float = 1.0
 
 # --- What that adds up to: measured from the flight model by PlaneData ---
 ## Level-flight top speed at full power at sea level, m/s, and the true
-## airspeed it reaches at HIGH_ALTITUDE, where the air is thinner.
+## airspeed it reaches at its critical altitude, where it is fastest.
 var top_speed: float = 130.0
 var top_speed_high: float = 140.0
 ## Speed (m/s) below which the clean wing no longer carries the plane, and the
@@ -101,7 +101,7 @@ func fitting_in(slot: ComponentCard.Slot) -> ComponentCard:
 ## A flight model set up as this aeroplane.
 func make_flight() -> FlightDynamics:
 	var flight: FlightDynamics = FlightDynamics.new()
-	flight.configure(mass, wing_area, wing_span, engine_power, drag, max_lift, static_thrust, roll_power, critical_altitude)
+	flight.configure(mass, wing_area, wing_span, engine_power, drag, max_lift, static_thrust, roll_power, critical_altitude, altitude_power)
 	return flight
 
 

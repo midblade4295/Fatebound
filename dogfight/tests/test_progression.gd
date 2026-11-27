@@ -128,7 +128,11 @@ func _test_stat_building() -> void:
 	_check(stock.wing_loading() > base.wing_loading(), "and loads the wing more, which is what turning is paid for with")
 	# The figures are the real aeroplane's, and what it can do comes from flying it.
 	_near(base.mass, plane.base_mass, "the bare aeroplane weighs what the real one did")
-	_check(base.top_speed * 3.6 > 380.0 and base.top_speed * 3.6 < 480.0, "a Hurricane's top speed at sea level is a real one (%.0f km/h)" % (base.top_speed * 3.6))
+	_check(base.top_speed * PlaneActor.MPH > 273.0 and base.top_speed * PlaneActor.MPH < 295.0, "a Hurricane's top speed at sea level is a real one (%.0f mph)" % (base.top_speed * PlaneActor.MPH))
+	_check(base.top_speed_high * PlaneActor.MPH > 332.0 and base.top_speed_high * PlaneActor.MPH < 350.0, "and at 21,000 ft, where it is fastest, it does the real 340 mph (%.0f)" % (base.top_speed_high * PlaneActor.MPH))
+	var mustang_stats: PlaneStats = GameCatalog.find_plane(&"mustang").build_base_stats(1)
+	_check(mustang_stats.top_speed * PlaneActor.MPH > 365.0 and mustang_stats.top_speed * PlaneActor.MPH < 390.0 and mustang_stats.top_speed_high * PlaneActor.MPH > 428.0 and mustang_stats.top_speed_high * PlaneActor.MPH < 447.0,
+			"a Mustang does the real 375 mph at sea level and 437 mph at 25,000 ft (%.0f and %.0f)" % [mustang_stats.top_speed * PlaneActor.MPH, mustang_stats.top_speed_high * PlaneActor.MPH])
 	_check(base.stall_speed * 3.6 > 115.0 and base.stall_speed * 3.6 < 160.0, "and so is its stalling speed (%.0f km/h)" % (base.stall_speed * 3.6))
 	var spitfire: PlaneStats = GameCatalog.find_plane(&"spitfire").build_base_stats(1)
 	var mustang: PlaneStats = GameCatalog.find_plane(&"mustang").build_base_stats(1)

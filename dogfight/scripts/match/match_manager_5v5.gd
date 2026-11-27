@@ -54,7 +54,7 @@ const BOT_NAMES: Array[String] = [
 @export var red_spawns: Node3D
 @export var arena_center: Vector3 = Vector3.ZERO
 @export var arena_radius: float = 3200.0
-@export var arena_ceiling: float = 4500.0
+@export var arena_ceiling: float = 9000.0
 
 var phase: Phase = Phase.COUNTDOWN
 var time_left: float = 300.0

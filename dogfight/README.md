@@ -255,36 +255,57 @@ HUD (CanvasLayer)                         hud.gd
   - *Ground effect*: within 10 m of an airfield, more lift and less drag.
   - *The air* is the standard atmosphere (`FlightDynamics.altitude`):
     it cools 6.5 degrees per kilometre and thins as it does, to 82% of its
-    sea-level density at 2,000 m and 64% at 4,500 m. Every force the air
+    sea-level density at 2,000 m and 54% at 6,000 m. Every force the air
     makes goes with that density. So the higher a plane is, the faster it
-    has to go to stay up (a Spitfire stalls at 37 m/s true at sea level and
-    46 at 4,000 m), the wider it turns and the lazier its controls are at
+    has to go to stay up (a Spitfire stalls at 83 mph true at sea level and
+    113 at 6,000 m), the wider it turns and the lazier its controls are at
     the same true speed, and the less drag it has. The airspeed indicator
     (the HUD's speed, `PlaneActor.indicated_speed`) shows what the wings
     feel, not how fast the ground goes by, so the stall and take-off numbers
-    on it are the same at any height.
-  - *The engine breathes that air too.* A supercharger holds full power up
-    to the engine's critical altitude (Hurricane 3,000 m, Spitfire 3,600,
-    Mustang 4,200); above it power falls with the air, a little faster than
-    the density does. Until then thinner air only means less drag, so each
-    plane is fastest near its critical altitude and slower again above it.
+    on it are the same at any height. Once the two differ the HUD gives the
+    true speed beside it; that is the figure the books quote. Speeds are
+    shown in miles an hour, as on these aeroplanes' own instruments.
+  - *The engine breathes that air too.* A supercharger holds the boost up
+    to the engine's critical altitude: 6,400 m (21,000 ft) for the
+    Hurricane's Merlin XX, 6,100 m (20,000 ft) for the Spitfire's Merlin 45,
+    7,600 m (25,000 ft) for the Mustang's Packard Merlin. Holding it costs
+    power, more the higher it has to be held, so the engine gives a
+    steadily smaller share on the way up (`altitude_power`: 90%, 76% and
+    74% of sea-level power at those heights, about what the real engines
+    gave). Thin air takes drag away faster than that takes power away, so
+    each plane keeps getting faster up to its critical altitude. Above it
+    the boost itself falls with the air and the plane gets slower again.
     The propeller also has less air to bite, so static thrust falls a
     little with height. Engines with a two-stage supercharger (Merlin 61,
-    Griffon 65) hold their power 1,000 to 1,500 m higher.
+    Griffon 65) hold on 1,000 to 1,500 m higher still.
+  - *Exhaust thrust.* The backward-pointing exhaust stacks are a small jet
+    (`EXHAUST_THRUST`): nothing much at take-off, about a tenth of the push
+    at top speed.
   - *Compressibility.* Sound is slower in the cold (340 m/s at the sea,
-    323 at 4,500 m). Past Mach 0.68, which is a steep dive from height and
+    310 at 7,600 m). Past Mach 0.68, which is a steep dive from height and
     nothing else, drag climbs steeply and the controls lose their grip.
 
   What comes out, measured from the model rather than typed in
-  (`PlaneData._finish_stats`, shown in the hangar):
+  (`PlaneData._finish_stats`, shown in the hangar), beside the real
+  aeroplane's published figures:
 
-  | | Top speed at sea level | at 3,000 m | at 4,000 m | Stalls at (indicated) | Climb | Weight | Power |
-  | --- | --- | --- | --- | --- | --- | --- | --- |
-  | Hurricane II | 119 m/s (430 km/h) | 131 (470) | 130 (465), 89% power | 39 m/s (140 km/h) | 12 m/s | 3,260 kg | 1,280 hp |
-  | Spitfire V | 135 m/s (485 km/h) | 149 (535) | 152 (545), 95% power | 38 m/s (135 km/h) | 16 m/s | 2,960 kg | 1,470 hp |
-  | Mustang | 152 m/s (545 km/h) | 167 (600) | 173 (620), full power | 47 m/s (170 km/h) | 13 m/s | 4,130 kg | 1,720 hp |
+  | | Top speed at sea level | Top speed at best height | Climb | Stalls at (indicated) | Weight | Power |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Hurricane II | 283 mph (real: about 283) | 340 mph at 6,400 m (real: 340 at 21,000 ft) | 13.9 m/s (real: 14.1) | 86 mph | 3,260 kg | 1,280 hp |
+  | Spitfire V | 332 mph (real: about 332 on emergency boost, 298 on normal) | 371 mph at 6,100 m (real: 367 to 375 at 20,000 ft) | 19.1 m/s (real: 14.5 on normal boost) | 83 mph | 2,960 kg | 1,470 hp |
+  | Mustang (P-51D) | 375 mph (real: 375 at war emergency power) | 437 mph at 7,600 m (real: 437 at 25,000 ft) | 16.0 m/s (real: 16.3 to 17.6) | 104 mph | 4,130 kg | 1,720 hp |
 
-  A Spitfire rolls at about 100 degrees a second, loops from top speed in 17
+  Each plane's drag was set so the model does the real sea-level speed on
+  the real power, and its `altitude_power` so it does the real speed at the
+  real height; the drag coefficients that took (0.0237, 0.0182, 0.0153) are
+  close to the ones measured for the real aeroplanes. The climb rates were
+  not fitted: they are what the model then gives. The Spitfire and Hurricane
+  sea-level speeds come from flight-simulator reference tables rather than
+  from an original trial report, so treat those two as good to a few mph.
+  Engines here always give their emergency rating at full throttle, with no
+  time limit and no overheating.
+
+  A Spitfire rolls at about 100 degrees a second, loops from top speed in 19
   seconds going 500 m up and over, glides about 1 in 9 with a dead engine and
   a windmilling propeller, and holds a 60-degree bank at 2 g, turning at
   g x tan(bank) / speed like anything else.
@@ -335,8 +356,10 @@ HUD (CanvasLayer)                         hud.gd
   cannot be hurt until it leaves the ground (or 25 s pass).
 - **Ground handling** (`PlaneActor`, `Airfield`). Each team has an island
   airfield with a 900 m runway pointing at the middle of the arena, 2.3 km
-  from it. The battle area is 3.2 km in radius with a 4.5 km ceiling. Everyone
-  starts parked on it: engine off, wheels down, throttle closed.
+  from it. The battle area is 3.2 km in radius with a 9 km ceiling (no one gets
+  near it in a five-minute match: it is ten minutes' climb to where these
+  planes are fastest). Everyone starts parked on their own runway: engine
+  off, wheels down, throttle closed.
   - *Starting up.* The starter takes about two seconds before the engine
     answers the throttle. A dead engine will not start.
   - *On the ground it is the same rigid body*, standing on what touches

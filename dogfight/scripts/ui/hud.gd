@@ -39,6 +39,9 @@ const PART_EFFECTS: Array[String] = [
 const STATE_WORDS: Array[String] = ["PATCHED", "HIT", "CRITICAL", "SHOT OFF"]
 ## How long the "land to repair" reminder stays up after the plane is damaged.
 const REPAIR_HINT_TIME: float = 7.0
+## The flight read-out adds the true airspeed once it is this many mph more
+## than the indicated.
+const TRUE_SPEED_SHOWN: float = 8.0
 ## Approach guidance appears inside this distance of home with the wheels down.
 const APPROACH_RANGE: float = 1600.0
 
@@ -169,7 +172,11 @@ func _update_flight_panel() -> void:
 	# SPD is what the airspeed indicator reads: it is what the wings feel, so
 	# the stall and the approach are at the same figure at any height. Up
 	# high the plane is covering the ground faster than that.
-	var readout: String = "SPD %3d km/h   ALT %4d m" % [roundi(shown.speed_kmh()), roundi(maxf(shown.altitude(), 0.0))]
+	var readout: String = "SPD %3d mph   ALT %4d m" % [roundi(shown.speed_mph()), roundi(maxf(shown.altitude(), 0.0))]
+	# Once the two have drifted apart, the true speed as well: that is the
+	# figure the record books quote.
+	if shown.true_speed_mph() - shown.speed_mph() >= TRUE_SPEED_SHOWN:
+		readout = "SPD %3d mph (true %d)   ALT %4d m" % [roundi(shown.speed_mph()), roundi(shown.true_speed_mph()), roundi(maxf(shown.altitude(), 0.0))]
 	# How hard the wings are pulling, once it is more than a gentle turn.
 	if not shown.is_on_ground():
 		readout += "   %+d m/s" % roundi(shown.climb_speed())
@@ -245,7 +252,7 @@ func _update_messages() -> void:
 
 ## One line telling the pilot what to do next, or "" when they need no telling.
 func _flight_guidance() -> String:
-	var takeoff_kmh: int = roundi(player.takeoff_speed() * 3.6)
+	var takeoff_mph: int = roundi(player.takeoff_speed() * PlaneActor.MPH)
 	if player.is_on_ground():
 		if player.is_servicing():
 			return "Repairing and refuelling... %d%%" % roundi(player.service_progress() * 100.0)
@@ -268,8 +275,8 @@ func _flight_guidance() -> String:
 			return "Hold it straight with the stick or pedals - the engine pulls left"
 		if indicated < player.takeoff_speed():
 			if player.pitch > TAIL_DOWN_PITCH:
-				return "Stick forward to lift the tail   (fly it off at %d km/h)" % takeoff_kmh
-			return "Tail up - hold it level and straight until %d km/h" % takeoff_kmh
+				return "Stick forward to lift the tail   (fly it off at %d mph)" % takeoff_mph
+			return "Tail up - hold it level and straight until %d mph" % takeoff_mph
 		return "Ease the stick back and let it fly off"
 	if player.is_going_down():
 		return "You are going down - fly it as far as you can"
@@ -297,7 +304,7 @@ func _flight_guidance() -> String:
 				verdict = "nose too low"
 			elif player.indicated_speed() > player.stats.landing_stall_speed * 1.45:
 				verdict = "fast: it will float and bounce"
-			return "Approach: %d km/h (stalls at %d)   descent %.0f m/s - %s" % [roundi(player.speed_kmh()), roundi(player.stats.landing_stall_speed * 3.6), sink, verdict]
+			return "Approach: %d mph (stalls at %d)   descent %.0f m/s - %s" % [roundi(player.speed_mph()), roundi(player.stats.landing_stall_speed * PlaneActor.MPH), sink, verdict]
 		if player.indicated_speed() > player.stats.top_speed * 0.6:
 			return "Wheels are down - press GEAR to raise them"
 	if _repair_hint_time > 0.0 and player.needs_service():

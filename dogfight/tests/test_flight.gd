@@ -289,7 +289,11 @@ func _judge() -> void:
 	var top: float = stats.top_speed
 
 	# --- The aeroplane's figures come out of the physics --------------------------
-	_check(top * 3.6 > 440.0 and top * 3.6 < 540.0, "a Spitfire's top speed at sea level is a real one (%.0f km/h)" % (top * 3.6))
+	# The real Spitfire V: about 332 mph at sea level on emergency boost, and
+	# 370 mph at 20,000 ft, where its supercharger runs out.
+	_check(top * PlaneActor.MPH > 322.0 and top * PlaneActor.MPH < 342.0, "a Spitfire's top speed at sea level is the real one (%.0f mph)" % (top * PlaneActor.MPH))
+	_check(stats.top_speed_high * PlaneActor.MPH > 362.0 and stats.top_speed_high * PlaneActor.MPH < 380.0 and absf(stats.critical_altitude - 6100.0) < 1.0,
+			"and so is its best: %.0f mph at %.0f m" % [stats.top_speed_high * PlaneActor.MPH, stats.critical_altitude])
 	_check(stall * 3.6 > 115.0 and stall * 3.6 < 160.0, "and so is its stalling speed (%.0f km/h)" % (stall * 3.6))
 	_check(stats.climb_rate > 11.0 and stats.climb_rate < 21.0, "and its rate of climb (%.1f m/s)" % stats.climb_rate)
 	_check(stats.landing_stall_speed < stall, "flaps lower the stalling speed (%.0f against %.0f km/h)" % [stats.landing_stall_speed * 3.6, stall * 3.6])
@@ -316,8 +320,12 @@ func _judge() -> void:
 	_check(absf(FlightDynamics.density_at(0.0) - 1.225) < 0.001 and absf(FlightDynamics.density_at(5000.0) - 0.736) < 0.01, "the air thins with height as the standard atmosphere does (%.3f kg/m3 at 5000 m)" % FlightDynamics.density_at(5000.0))
 	_check(absf(FlightDynamics.sound_speed_at(0.0) - 340.3) < 0.5 and FlightDynamics.sound_speed_at(5000.0) < 322.0, "and sound travels slower in the cold up there (%.0f m/s at 5000 m)" % FlightDynamics.sound_speed_at(5000.0))
 	var above: float = flight.critical_altitude + 2500.0
-	_check(is_equal_approx(flight.power_share_at(flight.critical_altitude - 500.0), 1.0) and flight.power_share_at(above) < 0.82,
-			"the supercharger holds full power up to %.0f m; 2500 m above that the engine gives %.0f%%" % [flight.critical_altitude, flight.power_share_at(above) * 100.0])
+	var at_critical: float = flight.power_share_at(flight.critical_altitude)
+	_check(is_equal_approx(flight.power_share_at(0.0), 1.0) and is_equal_approx(at_critical, flight.altitude_power) and at_critical > 0.7 and at_critical < 1.0,
+			"the supercharger holds the boost up to %.0f m, at a cost: the engine gives %.0f%% of its sea-level power there" % [flight.critical_altitude, at_critical * 100.0])
+	var lost_below: float = (1.0 - at_critical) / flight.critical_altitude
+	var lost_above: float = (at_critical - flight.power_share_at(above)) / 2500.0
+	_check(lost_above > lost_below * 1.5, "above that it has nothing left to hold it with, and power falls away faster (%.0f%% at %.0f m)" % [flight.power_share_at(above) * 100.0, above])
 	_check(flight.top_speed_at(above + 2000.0) < flight.top_speed_at(flight.critical_altitude), "so there is a height where it is fastest, and higher is slower again (%.0f then %.0f m/s)" % [flight.top_speed_at(flight.critical_altitude), flight.top_speed_at(above + 2000.0)])
 	_check(absf(stats.stall_speed - flight.stall_speed()) < 0.01 and flight.true_speed(flight.stall_speed()) > stats.stall_speed * 1.08,
 			"it stalls at the same indicated speed anywhere, which up here is a faster true speed (%.0f against %.0f m/s)" % [flight.true_speed(flight.stall_speed()), stats.stall_speed])
