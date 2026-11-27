@@ -9,7 +9,7 @@ extends CanvasLayer
 ##   bottom-left  virtual flight stick
 ##   bottom-right FIRE, EVADE ROLL and the Tactical Gadget button
 ##   centre       countdown / respawn / out-of-bounds messages, results panel
-##   world layer  target diamonds, threat arrows, lead reticle (HudWorldOverlay)
+##   world layer  target diamonds, threat arrows, gun pipper (HudWorldOverlay)
 ##
 ## The HUD never changes gameplay state. It reads the match manager and the
 ## player's plane every frame and the touch controls press Input actions.

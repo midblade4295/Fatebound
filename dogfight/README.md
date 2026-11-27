@@ -115,7 +115,7 @@ ChaseCamera (Node3D)                      chase_camera.gd
 
 HUD (CanvasLayer)                         hud.gd
 └─ Root (Control)
-   ├─ WorldOverlay                        hud_world_overlay.gd: diamonds, threat arrows, lead reticle
+   ├─ WorldOverlay                        hud_world_overlay.gd: diamonds, threat arrows, gun pipper
    ├─ TopLeft                             level badge, XP bar, speed/altitude, hull bar
    ├─ ScoreBar                            BLUE | 5v5 + clock | RED
    ├─ KillFeed
@@ -152,11 +152,11 @@ HUD (CanvasLayer)                         hud.gd
 - **Impact energy.** Damage scales with the square of the closing speed between
   bullet and target (clamped to 0.45x-1.5x), so head-on passes hit harder than
   tail chases and long-range hits are softer.
-- **One lead solution.** `Ballistics.lead_point` is used by the HUD reticle, the
-  player's aim assist and the bots. It solves the same model the bullets fly
-  (inherited plane velocity, drag, drop), so the reticle sits ahead of and
-  slightly above the target and the gun pipper shows where bullets really are
-  at convergence range.
+- **Unassisted gunnery.** The player gets a fixed gun pipper showing where
+  bullets really are at convergence range (drop included) and nothing else:
+  no lead-prediction reticle, and `PlayerController.aim_assist_enabled` is off
+  by default. `Ballistics.lead_point` solves the same model the bullets fly
+  (inherited plane velocity, drag, drop) and is what the bots aim with.
 - **Match rules** (`MatchManager5v5`): ticket drain, every loss gives the other
   team a point, first to 25 or the higher score after 3 minutes, 5 s respawn
   above the team's base with 2.5 s spawn protection.

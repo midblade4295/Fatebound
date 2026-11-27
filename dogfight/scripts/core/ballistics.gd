@@ -8,10 +8,9 @@ extends RefCounted
 ##  - air drag slows it (it has lost roughly a fifth of its speed after 1 s),
 ##    which also means it hits softer at long range.
 ##
-## BulletSystem integrates exactly this model every physics tick. The HUD lead
-## reticle, the player's aim assist and the bots all use lead_point() below,
-## which solves the same model, so "where the reticle says to shoot" is where
-## a bullet fired now really meets the target.
+## BulletSystem integrates exactly this model every physics tick. The bots (and
+## the optional player aim assist) use lead_point() below, which solves the
+## same model, so a shot aimed at that point really meets the target.
 
 ## Downward acceleration on bullets, m/s^2.
 const GRAVITY: float = 9.8

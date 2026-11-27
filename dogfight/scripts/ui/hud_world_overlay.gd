@@ -4,8 +4,8 @@ extends Control
 ##  - red diamonds on enemies, small blue chevrons on wingmen
 ##  - arrows on the screen edge for nearby enemies that are off-screen,
 ##    pulsing gold when that enemy is hunting you
-##  - the gun pipper (where your bullets are going) and the lead reticle
-##    (where to put the pipper to hit your current target)
+##  - the gun pipper: a fixed gunsight showing where your bullets are going.
+##    There is no lead-prediction reticle; deflection is judged by eye.
 ##  - hit marker and damage flash
 ##
 ## All positions come from the chase camera's unproject_position() of
@@ -19,7 +19,6 @@ const THREAT_RANGE: float = 700.0
 const ENEMY_COLOR: Color = Color(1.0, 0.27, 0.22)
 const ALLY_COLOR: Color = Color(0.35, 0.72, 1.0)
 const LEAD_COLOR: Color = Color(1.0, 0.84, 0.25)
-const LOCK_COLOR: Color = Color(0.5, 1.0, 0.45)
 const HIT_MARKER_TIME: float = 0.14
 const DAMAGE_FLASH_TIME: float = 0.35
 ## Short labels for damaged parts under the current target, indexed by PlaneActor.Part.
@@ -149,7 +148,7 @@ func _draw_edge_arrow(world_position: Vector3, distance: float, hunting: bool) -
 	UiStyle.draw_outlined_text(self, "%dm" % roundi(distance), base - direction * 24.0 + Vector2(-50.0, 8.0), 20, UiStyle.WHITE, 100.0, 5)
 
 
-## Gun pipper plus, when a target is selected, the lead-prediction reticle.
+## The gun pipper: where your bullets will be at convergence range.
 func _draw_gunsight() -> void:
 	var plane_transform: Transform3D = player.get_global_transform_interpolated()
 	var origin: Vector3 = plane_transform.origin
@@ -164,31 +163,13 @@ func _draw_gunsight() -> void:
 		return
 	var pipper: Vector2 = camera.unproject_position(pipper_world)
 
-	var locked: bool = false
-	var enemy: PlaneActor = player.current_target
-	if enemy != null and is_instance_valid(enemy) and enemy.alive and not enemy.is_concealed():
-		var enemy_position: Vector3 = enemy.get_global_transform_interpolated().origin
-		var lead_world: Vector3 = Ballistics.lead_point(origin, player.velocity, enemy_position, enemy.velocity, player.stats.bullet_speed)
-		if not camera.is_position_behind(lead_world) and not camera.is_position_behind(enemy_position):
-			var lead: Vector2 = camera.unproject_position(lead_world)
-			var enemy_screen: Vector2 = camera.unproject_position(enemy_position)
-			var in_range: bool = origin.distance_to(enemy_position) <= player.stats.gun_range
-			var lead_radius: float = 22.0
-			locked = in_range and pipper.distance_to(lead) <= lead_radius * 1.5
-			var lead_color: Color = LOCK_COLOR if locked else (LEAD_COLOR if in_range else Color(1.0, 1.0, 1.0, 0.55))
-			# Dashed-looking tether from the enemy to where you should shoot.
-			if enemy_screen.distance_to(lead) > lead_radius:
-				draw_line(enemy_screen, lead - (lead - enemy_screen).normalized() * lead_radius, Color(lead_color, 0.55), 2.5, true)
-			draw_arc(lead, lead_radius, 0.0, TAU, 28, UiStyle.OUTLINE, 7.0, true)
-			draw_arc(lead, lead_radius, 0.0, TAU, 28, lead_color, 4.0, true)
-			draw_circle(lead, 4.5, lead_color)
-
-	var pipper_color: Color = LOCK_COLOR if locked else UiStyle.WHITE
+	# Plain fixed gunsight. There is deliberately no lead-prediction reticle:
+	# judging how far ahead of (and above) the target to shoot is the pilot's job.
 	for direction: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
 		draw_line(pipper + direction * 9.0, pipper + direction * 26.0, UiStyle.OUTLINE, 7.0)
-		draw_line(pipper + direction * 10.0, pipper + direction * 25.0, pipper_color, 3.5)
+		draw_line(pipper + direction * 10.0, pipper + direction * 25.0, UiStyle.WHITE, 3.5)
 	draw_circle(pipper, 5.0, UiStyle.OUTLINE)
-	draw_circle(pipper, 3.0, pipper_color)
+	draw_circle(pipper, 3.0, UiStyle.WHITE)
 
 	if _hit_marker > 0.0:
 		var marker_alpha: float = _hit_marker / HIT_MARKER_TIME

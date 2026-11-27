@@ -6,9 +6,9 @@ extends Node
 ## presses those same actions, so keyboard, gamepad and touch all arrive here
 ## the same way and this script never references a HUD widget.
 ##
-## It also picks the player's current target (the enemy nearest the nose) and
-## feeds a small aim-assist point to the plane. The HUD reads `plane.current_target`
-## to draw the lead reticle, so what you see is exactly what the assist uses.
+## It also picks the player's current target (the enemy nearest the nose). The
+## HUD reads `plane.current_target` to label that enemy; nothing aims for the
+## player. An optional aim assist exists (see aim_assist_enabled) but is off.
 
 ## Enemies further than this are never auto-targeted (metres).
 const TARGET_RANGE: float = 900.0
@@ -21,7 +21,10 @@ const RETARGET_INTERVAL: float = 0.15
 var plane: PlaneActor
 ## Supplies the list of planes to pick targets from.
 var match_manager: MatchManager5v5
-var aim_assist_enabled: bool = true
+## Off by default: with it on, bullets fired within a few degrees of the
+## correct lead are nudged onto it. The game is tuned for unassisted gunnery
+## (no lead reticle, real drop and drag), so this is only an accessibility hook.
+var aim_assist_enabled: bool = false
 
 var _retarget_timer: float = 0.0
 
