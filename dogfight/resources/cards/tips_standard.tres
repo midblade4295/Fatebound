@@ -4,10 +4,10 @@
 
 [resource]
 script = ExtResource("1_card")
-id = &"arm_brownings"
-display_name = "Browning Belt Feed"
-description = "Faster belts for the wing guns. More lead in the air."
-category = 1
+id = &"tips_standard"
+display_name = "Standard wingtips"
+description = "The full elliptical wing."
+slot = 3
 rarity = 0
-glyph = "ROF"
-fire_rate_bonus = 0.06
+glyph = "STD"
+model_variant = &"tips_standard"

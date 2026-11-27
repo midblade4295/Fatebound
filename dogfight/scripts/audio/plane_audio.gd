@@ -3,8 +3,9 @@ extends Node3D
 ## Everything one plane sounds like: its engine, its guns, fire, and the
 ## noises it makes coming apart.
 ##
-## Each PlaneData names its own engine recording and gun samples, so a
-## Hurricane, a Spitfire and a Mustang do not sound alike.
+## Each PlaneData names its own engine recording, so a Hurricane, a Spitfire
+## and a Mustang do not sound alike, and each gun item names its own samples,
+## so a .303, a .50 and a 20 mm cannon do not either.
 ##
 ##  - Engine: one seamless loop. Its note follows the throttle (revs) and,
 ##    less, the airspeed; its level follows throttle and power. Starting up
@@ -32,7 +33,6 @@ const IDLE_LEVEL: float = 0.3
 ## after the starter is pressed), which is when the recording's engine catches.
 const START_FADE_BEGIN: float = 1.3
 const START_FADE_END: float = 2.4
-const NITRO_PITCH_BONUS: float = 0.1
 ## Other planes: distance (m) at which they are at full level, and beyond
 ## which they are not heard at all.
 const ENGINE_UNIT_SIZE: float = 38.0
@@ -170,8 +170,6 @@ func _process(delta: float) -> void:
 	_engine_level = lerpf(_engine_level, target_level, 1.0 - exp(-2.2 * delta))
 	var speed_ratio: float = clampf(plane.speed / maxf(plane.stats.top_speed, 1.0), 0.0, 1.5)
 	var pitch: float = lerpf(IDLE_PITCH, 1.0, plane.throttle) * lerpf(SLOW_PITCH, FAST_PITCH, clampf((speed_ratio - 0.3) / 0.9, 0.0, 1.0))
-	if plane.is_boosting():
-		pitch += NITRO_PITCH_BONUS
 	# A hurt engine misfires: every so often the note sags for a moment.
 	var engine_damage: float = plane.part_damage_of(PlaneActor.Part.ENGINE)
 	if running and engine_damage >= PlaneActor.PART_DAMAGED_AT:
@@ -229,11 +227,12 @@ func _active_engine_position() -> float:
 
 
 func _on_shot_fired(_plane: PlaneActor) -> void:
-	var samples: Array[AudioStream] = plane.plane_data.gun_sounds
-	if samples.is_empty():
+	var gun: ComponentCard = plane.last_fired_gun
+	if gun == null or gun.gun_sounds.is_empty():
 		return
+	var samples: Array[AudioStream] = gun.gun_sounds
 	var sample: AudioStream = samples[_rng.randi_range(0, samples.size() - 1)]
-	var pitch: float = plane.plane_data.gun_pitch * _rng.randf_range(1.0 - GUN_PITCH_SPREAD, 1.0 + GUN_PITCH_SPREAD)
+	var pitch: float = gun.gun_pitch * _rng.randf_range(1.0 - GUN_PITCH_SPREAD, 1.0 + GUN_PITCH_SPREAD)
 	if cockpit:
 		_guns_cockpit.stream = sample
 		_guns_cockpit.pitch_scale = pitch

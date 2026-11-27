@@ -278,23 +278,34 @@ func _attach_controller(slot: PilotSlot) -> void:
 	slot.controller = bot
 
 
-## Bots fly a level-appropriate loadout: one random card per open slot.
+## Bots fly a believable loadout for their level: two to four guns of one
+## kind, and for each other mount either the standard item or something
+## better, more often as the level rises. Nothing Legendary.
 func _build_bot_stats(data: PlaneData, commander_level: int) -> PlaneStats:
-	var cards: Array[ComponentCard] = []
-	var levels: Array[int] = []
-	for slot_index: int in range(CommanderProgression.MAX_CARD_SLOTS):
-		var options: Array[ComponentCard] = []
-		for option: ComponentCard in GameCatalog.CARDS:
-			if CommanderProgression.slot_accepts(slot_index, option) and not cards.has(option) and option.rarity != ComponentCard.Rarity.LEGENDARY:
-				options.append(option)
-		if options.is_empty():
-			cards.append(null)
-			levels.append(0)
+	var fittings: Array[ComponentCard] = GameCatalog.stock_fittings()
+	var marks: Array[int] = GameCatalog.stock_marks()
+	var mark: int = clampi(1 + floori(float(commander_level) / 3.0), 1, ComponentCard.MAX_MARK)
+	var upgrade_chance: float = clampf(0.15 + 0.06 * float(commander_level), 0.0, 0.8)
+	var guns: Array[ComponentCard] = GameCatalog.cards_in_slot(ComponentCard.Slot.GUN)
+	var gun: ComponentCard = guns[0]
+	if _rng.randf() < upgrade_chance:
+		gun = guns[_rng.randi_range(0, guns.size() - 1)]
+	var gun_count: int = 2 + (_rng.randi_range(0, 2) if _rng.randf() < upgrade_chance else 0)
+	for mount: int in range(CommanderProgression.MOUNT_COUNT):
+		if CommanderProgression.is_gun_station(mount):
+			fittings[mount] = gun if mount < gun_count else null
+			marks[mount] = mark
 			continue
-		var card: ComponentCard = options[_rng.randi_range(0, options.size() - 1)]
-		cards.append(card)
-		levels.append(clampi(maxi(card.start_level(), commander_level), 1, ComponentCard.MAX_LEVEL))
-	return data.build_stats(commander_level, cards, levels)
+		if _rng.randf() >= upgrade_chance:
+			continue
+		var options: Array[ComponentCard] = []
+		for option: ComponentCard in GameCatalog.cards_in_slot(CommanderProgression.MOUNT_SLOTS[mount]):
+			if option.rarity != ComponentCard.Rarity.LEGENDARY:
+				options.append(option)
+		if not options.is_empty():
+			fittings[mount] = options[_rng.randi_range(0, options.size() - 1)]
+			marks[mount] = mark
+	return data.build_stats(commander_level, fittings, marks)
 
 
 ## Puts a seat's plane into the match, factory fresh: parked on its own

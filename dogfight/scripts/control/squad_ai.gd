@@ -218,7 +218,6 @@ func _think() -> void:
 		return
 	_set_target(_choose_target())
 	state = State.ENGAGE if target != null else State.PATROL
-	_consider_gadget()
 
 
 ## Best enemy to attack right now, or null. Higher score wins.
@@ -264,7 +263,7 @@ func _score_target(enemy: PlaneActor) -> float:
 ## for a bot to fly into it.
 func _is_valid_target(other: PlaneActor) -> bool:
 	return other != null and is_instance_valid(other) and other.alive \
-			and plane.is_hostile_to(other) and not other.is_concealed() and not other.is_on_ground()
+			and plane.is_hostile_to(other) and not other.is_on_ground()
 
 
 func _set_target(new_target: PlaneActor) -> void:
@@ -281,23 +280,6 @@ func _set_target(new_target: PlaneActor) -> void:
 		blackboard.claim(target)
 	if plane != null and is_instance_valid(plane):
 		plane.current_target = target
-
-
-func _consider_gadget() -> void:
-	if not plane.is_gadget_ready():
-		return
-	match plane.stats.gadget_type:
-		ComponentCard.GadgetType.NITRO_BOOST:
-			# Close a long gap to a target that is roughly ahead.
-			if target != null and plane.global_position.distance_to(target.global_position) > 550.0 \
-					and Ballistics.angle_off_nose(plane.global_position, plane.forward(), target.global_position) < 0.5:
-				plane.input.press_gadget()
-		ComponentCard.GadgetType.REPAIR_PULSE:
-			if plane.condition() < 0.8:
-				plane.input.press_gadget()
-		ComponentCard.GadgetType.SMOKE_SCREEN:
-			if _threat_age < 1.0 and plane.condition() < 0.85:
-				plane.input.press_gadget()
 
 
 # ---------------------------------------------------------------------------

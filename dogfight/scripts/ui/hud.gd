@@ -8,8 +8,8 @@ extends CanvasLayer
 ##   top-centre   compact score bar:  BLUE score | 5v5 + clock | RED score
 ##   top-right    circular radar
 ##   bottom-left  virtual flight stick
-##   bottom-right FIRE, EVADE ROLL and the Tactical Gadget button, with the
-##                throttle lever beside them and ENGINE / GEAR above
+##   bottom-right FIRE and EVADE ROLL, with the throttle lever beside them
+##                and ENGINE / GEAR above
 ##   centre       countdown / respawn / out-of-bounds messages, results panel
 ##   world layer  target diamonds, threat arrows, gun pipper, and a marker
 ##                on the player's own airfield (HudWorldOverlay)
@@ -64,7 +64,6 @@ var _home: Airfield
 @onready var _joystick: TouchFlightStick = %Joystick
 @onready var _fire_button: ActionButton = %FireButton
 @onready var _roll_button: ActionButton = %RollButton
-@onready var _gadget_button: ActionButton = %GadgetButton
 @onready var _engine_button: ActionButton = %EngineButton
 @onready var _gear_button: ActionButton = %GearButton
 @onready var _throttle_lever: ThrottleLever = %ThrottleLever
@@ -109,7 +108,6 @@ func bind(manager: MatchManager5v5, chase_camera: ChaseCamera, local_plane: Plan
 	_joystick.visible = has_player
 	_fire_button.visible = has_player
 	_roll_button.visible = has_player
-	_gadget_button.visible = has_player
 	_engine_button.visible = has_player
 	_gear_button.visible = has_player
 	_throttle_lever.visible = has_player
@@ -125,7 +123,6 @@ func bind(manager: MatchManager5v5, chase_camera: ChaseCamera, local_plane: Plan
 		player.damaged.connect(_on_player_damaged)
 		player.touched_down.connect(_on_player_touched_down)
 		player.serviced.connect(_on_player_serviced)
-		_gadget_button.caption = player.stats.gadget_name.to_upper() if player.has_gadget() else "NO GADGET"
 	var level: int = Profile.commander_level()
 	_level_label.text = str(level)
 	_title_label.text = "COMMANDER LEVEL"
@@ -182,10 +179,6 @@ func _update_buttons() -> void:
 	_roll_button.disabled = dead
 	_roll_button.cooldown_ratio = 0.0 if dead else player.evade_cooldown_ratio()
 	_roll_button.cooldown_seconds = 0.0
-	_gadget_button.disabled = dead or not player.has_gadget()
-	var gadget_ratio: float = 0.0 if dead else player.gadget_cooldown_ratio()
-	_gadget_button.cooldown_ratio = gadget_ratio
-	_gadget_button.cooldown_seconds = gadget_ratio * player.stats.gadget_cooldown
 	var grounded: bool = player.is_on_ground()
 	_fire_button.disabled = _fire_button.disabled or grounded
 	_roll_button.disabled = _roll_button.disabled or grounded
@@ -400,7 +393,6 @@ func _on_match_ended(winning_team: int) -> void:
 	_joystick.visible = false
 	_fire_button.visible = false
 	_roll_button.visible = false
-	_gadget_button.visible = false
 	_engine_button.visible = false
 	_gear_button.visible = false
 	_throttle_lever.visible = false

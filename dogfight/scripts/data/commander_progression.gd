@@ -15,20 +15,26 @@ const XP_TO_NEXT_BY_LEVEL: Array[int] = [
 const HP_BONUS_PER_LEVEL: float = 0.07
 const SPEED_BONUS_PER_LEVEL: float = 0.01
 
-const MIN_CARD_SLOTS: int = 3
-const MAX_CARD_SLOTS: int = 5
-## Commander Level at which each card slot opens (slots 1-3 are always open).
-const SLOT_UNLOCK_LEVELS: Array[int] = [1, 1, 1, 4, 8]
-## Slot index reserved for "any passive category".
-const WILDCARD_CATEGORY: int = -1
-## Which ComponentCard.Category each slot accepts.
-const SLOT_CATEGORIES: Array[int] = [
-	ComponentCard.Category.ENGINE,
-	ComponentCard.Category.ARMAMENT,
-	ComponentCard.Category.GADGET,
-	ComponentCard.Category.AIRFRAME,
-	WILDCARD_CATEGORY,
+## Number of wing gun stations. They are the first mounts, in this order:
+## left inner, right inner, left outer, right outer.
+const GUN_STATION_COUNT: int = 4
+## Every place on the aeroplane something can be fitted.
+const MOUNT_COUNT: int = 9
+## What kind of item each mount takes.
+const MOUNT_SLOTS: Array[ComponentCard.Slot] = [
+	ComponentCard.Slot.GUN, ComponentCard.Slot.GUN, ComponentCard.Slot.GUN, ComponentCard.Slot.GUN,
+	ComponentCard.Slot.PROPELLER, ComponentCard.Slot.ENGINE, ComponentCard.Slot.WINGTIPS,
+	ComponentCard.Slot.ARMOUR, ComponentCard.Slot.UNDERCARRIAGE,
 ]
+const MOUNT_NAMES: Array[String] = [
+	"Left inner gun", "Right inner gun", "Left outer gun", "Right outer gun",
+	"Propeller", "Engine", "Wingtips", "Armour", "Undercarriage",
+]
+## Short labels for the loadout tiles.
+const MOUNT_LABELS: Array[String] = ["GUN L1", "GUN R1", "GUN L2", "GUN R2", "PROP", "ENGINE", "TIPS", "ARMOUR", "GEAR"]
+## Commander Level at which each mount opens. The inner guns and the parts a
+## plane cannot fly without are always open.
+const MOUNT_UNLOCK_LEVELS: Array[int] = [1, 1, 3, 3, 1, 1, 1, 2, 1]
 
 
 ## Commander Level reached with [param total_xp] lifetime Hangar XP.
@@ -71,39 +77,34 @@ static func level_progress(total_xp: int) -> float:
 	return clampf(float(xp_into_level(total_xp)) / float(needed), 0.0, 1.0)
 
 
-## Number of equipped-card slots open at [param level] (3 to 5).
-static func card_slot_count(level: int) -> int:
-	var count: int = 0
-	for unlock_level: int in SLOT_UNLOCK_LEVELS:
-		if level >= unlock_level:
-			count += 1
-	return clampi(count, MIN_CARD_SLOTS, MAX_CARD_SLOTS)
+static func mount_unlock_level(mount: int) -> int:
+	return MOUNT_UNLOCK_LEVELS[clampi(mount, 0, MOUNT_COUNT - 1)]
 
 
-static func slot_unlock_level(slot_index: int) -> int:
-	return SLOT_UNLOCK_LEVELS[clampi(slot_index, 0, MAX_CARD_SLOTS - 1)]
+static func is_mount_unlocked(mount: int, level: int) -> bool:
+	return mount >= 0 and mount < MOUNT_COUNT and level >= MOUNT_UNLOCK_LEVELS[mount]
 
 
-static func is_slot_unlocked(slot_index: int, level: int) -> bool:
-	return slot_index >= 0 and slot_index < MAX_CARD_SLOTS and level >= SLOT_UNLOCK_LEVELS[slot_index]
+## True when [param card] is the kind of item [param mount] takes.
+static func mount_accepts(mount: int, card: ComponentCard) -> bool:
+	return card != null and mount >= 0 and mount < MOUNT_COUNT and card.slot == MOUNT_SLOTS[mount]
 
 
-## True when [param card] may be equipped in [param slot_index]. The wildcard
-## slot takes any passive card but never a second gadget (one gadget button).
-static func slot_accepts(slot_index: int, card: ComponentCard) -> bool:
-	if card == null or slot_index < 0 or slot_index >= MAX_CARD_SLOTS:
-		return false
-	var wanted: int = SLOT_CATEGORIES[slot_index]
-	if wanted == WILDCARD_CATEGORY:
-		return card.category != ComponentCard.Category.GADGET
-	return int(card.category) == wanted
+static func is_gun_station(mount: int) -> bool:
+	return mount >= 0 and mount < GUN_STATION_COUNT
 
 
-static func slot_label(slot_index: int) -> String:
-	var wanted: int = SLOT_CATEGORIES[clampi(slot_index, 0, MAX_CARD_SLOTS - 1)]
-	if wanted == WILDCARD_CATEGORY:
-		return "Wildcard"
-	return ComponentCard.CATEGORY_NAMES[wanted]
+## The first mount that takes items of [param slot] (the only one, except for guns).
+static func mount_for_slot(slot: ComponentCard.Slot) -> int:
+	return MOUNT_SLOTS.find(slot)
+
+
+static func mount_name(mount: int) -> String:
+	return MOUNT_NAMES[clampi(mount, 0, MOUNT_COUNT - 1)]
+
+
+static func mount_label(mount: int) -> String:
+	return MOUNT_LABELS[clampi(mount, 0, MOUNT_COUNT - 1)]
 
 
 static func hp_multiplier(level: int) -> float:

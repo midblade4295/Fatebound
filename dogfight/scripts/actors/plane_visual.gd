@@ -9,6 +9,11 @@ extends Node3D
 ##  - swings the hinged control surfaces to follow the stick,
 ##  - spins the propeller (and stops it when the engine dies),
 ##  - folds the undercarriage legs up into the wings and back down,
+##  - shows exactly what is fitted: the model carries every alternative (each
+##    kind of gun at each station, both propellers, the bigger engines' intake
+##    and bulges, armour plates, three kinds of wingtip, two undercarriages)
+##    and build() strips out everything the loadout does not include. A plane
+##    with one gun fitted has one gun on its wing,
 ##  - trails smoke from damaged parts and fire from burning ones,
 ##  - and, when a part is destroyed, unbolts that piece from the model and
 ##    lets it fall away as debris, together with everything attached to it.
@@ -39,6 +44,8 @@ const EXTRA_HIT_NODES: Dictionary[StringName, int] = {
 	&"CanopyMesh": PlaneActor.Part.FUSELAGE,
 	&"StabiliserL": PlaneActor.Part.TAIL,
 	&"StabiliserR": PlaneActor.Part.TAIL,
+	&"WingTipExtL": PlaneActor.Part.LEFT_WINGTIP,
+	&"WingTipExtR": PlaneActor.Part.RIGHT_WINGTIP,
 }
 ## Parts that trail smoke when damaged (and keep smoking from the stump once gone).
 const SMOKING_PARTS: Array[PlaneActor.Part] = [
@@ -60,7 +67,31 @@ const SLICED_PIECES: Dictionary[StringName, Array] = {
 	&"WingL": [0, 2], &"WingR": [0, 2], &"WingTipL": [0, 3], &"WingTipR": [0, 3],
 	&"StabiliserL": [0, 2], &"StabiliserR": [0, 2], &"Fin": [1, 3], &"Rudder": [1, 2],
 }
-const MUZZLE_NODES: Array[StringName] = [&"MuzzleL", &"MuzzleR"]
+## Gun stations in PlaneStats order, as they are named on the model, and the
+## kinds of gun modelled at each (ComponentCard.model_variant of a gun).
+const GUN_STATION_TAGS: Array[String] = ["L1", "R1", "L2", "R2"]
+const GUN_KINDS: Array[String] = ["303", "50", "20"]
+## Model pieces each fitting adds, by ComponentCard.model_variant. Pieces in
+## OPTIONAL_PIECES that nothing fitted asks for are taken off the model.
+const VARIANT_PIECES: Dictionary[StringName, Array] = {
+	&"engine_two_stage": [&"EngineIntake"],
+	&"engine_griffon": [&"EngineIntake", &"EngineBulges"],
+	&"armour_seat": [&"ArmourSeat"],
+	&"armour_full": [&"ArmourSeat", &"ArmourScreen"],
+	&"tips_extended": [&"WingTipExtL", &"WingTipExtR"],
+}
+const OPTIONAL_PIECES: Array[StringName] = [
+	&"EngineIntake", &"EngineBulges", &"ArmourSeat", &"ArmourScreen", &"WingTipExtL", &"WingTipExtR",
+]
+## Fittings that replace a piece's shape: variant -> [[piece, piece holding the
+## replacement mesh], ...]. The holders are always removed afterwards.
+const VARIANT_MESH_SWAPS: Dictionary[StringName, Array] = {
+	&"tips_clipped": [[&"WingTipL", &"WingTipL_clipped"], [&"WingTipR", &"WingTipR_clipped"]],
+	&"gear_heavy": [[&"GearL", &"GearL_heavy"], [&"GearR", &"GearR_heavy"]],
+}
+const MESH_HOLDERS: Array[StringName] = [&"WingTipL_clipped", &"WingTipR_clipped", &"GearL_heavy", &"GearR_heavy"]
+const PROPELLER_NODES: Array[StringName] = [&"PropellerMesh", &"PropellerMesh4"]
+const FOUR_BLADE_VARIANT: StringName = &"prop4"
 ## Main undercarriage legs (left, right) and the tail wheel.
 const GEAR_NODES: Array[StringName] = [&"GearL", &"GearR"]
 const TAIL_WHEEL_NODE: StringName = &"TailWheel"
@@ -100,13 +131,14 @@ var _propeller: Node3D
 var _prop_disc: MeshInstance3D
 var _muzzle_flashes: Array[MeshInstance3D] = []
 var _muzzle_timers: Array[float] = []
-var _gun_offsets: Array[Vector3] = []
-var _nitro_flames: Array[MeshInstance3D] = []
+## What is fitted, in mount order (see CommanderProgression); may be empty.
+var _fittings: Array[ComponentCard] = []
+## The gun piece at each station, or null where no gun is fitted.
+var _gun_nodes: Array[MeshInstance3D] = []
 ## Smoke emitter per Part (null where a part does not smoke).
 var _part_smoke: Array[CPUParticles3D] = []
 var _engine_fire: CPUParticles3D
 var _fuel_fire: CPUParticles3D
-var _screen_smoke: CPUParticles3D
 var _control_target: Vector3 = Vector3.ZERO
 var _control_shown: Vector3 = Vector3.ZERO
 var _prop_speed: float = 40.0
@@ -130,15 +162,17 @@ func _process(delta: float) -> void:
 	for index: int in range(_muzzle_flashes.size()):
 		if _muzzle_timers[index] > 0.0:
 			_muzzle_timers[index] -= delta
-			if _muzzle_timers[index] <= 0.0 and is_instance_valid(_muzzle_flashes[index]):
+			if _muzzle_timers[index] <= 0.0 and _muzzle_flashes[index] != null and is_instance_valid(_muzzle_flashes[index]):
 				_muzzle_flashes[index].visible = false
 	_animate_controls(delta)
 
 
-## (Re)builds the model for [param data] in [param team] colours.
-func build(data: PlaneData, team: Teams.Id) -> void:
+## (Re)builds the model for [param data] in [param team] colours, showing
+## [param fittings] (in mount order; null or missing entries are empty mounts).
+func build(data: PlaneData, team: Teams.Id, fittings: Array[ComponentCard] = []) -> void:
 	_data = data
 	_team = team
+	_fittings = fittings
 	for child: Node in get_children():
 		remove_child(child)
 		child.queue_free()
@@ -146,8 +180,7 @@ func build(data: PlaneData, team: Teams.Id) -> void:
 	_rest_bases.clear()
 	_muzzle_flashes.clear()
 	_muzzle_timers.clear()
-	_gun_offsets.clear()
-	_nitro_flames.clear()
+	_gun_nodes.clear()
 	_part_smoke.clear()
 	_any_detached = false
 	_control_shown = Vector3.ZERO
@@ -159,6 +192,7 @@ func build(data: PlaneData, team: Teams.Id) -> void:
 	_model.name = "Model"
 	_model.scale = Vector3.ONE * model_scale()
 	add_child(_model)
+	_apply_fittings()
 	_paint(_model)
 
 	for node_name: StringName in PART_NODES:
@@ -179,7 +213,7 @@ func build(data: PlaneData, team: Teams.Id) -> void:
 	var shown_deploy: float = _gear_deploy
 	_gear_deploy = -1.0
 	_apply_gear(maxf(shown_deploy, 0.0))
-	_propeller = _model.find_child("PropellerMesh", true, false) as Node3D
+	_propeller = _find_propeller()
 	if _propeller != null and _prop_broken:
 		_propeller.scale = BROKEN_PROP_SCALE
 	if _propeller != null:
@@ -194,34 +228,22 @@ func build(data: PlaneData, team: Teams.Id) -> void:
 		_prop_disc.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5).scaled(Vector3(diameter, diameter, 0.04)), _propeller.position)
 		_propeller.get_parent().add_child(_prop_disc)
 
-	for node_name: StringName in MUZZLE_NODES:
-		var marker: Node3D = _model.find_child(node_name, true, false) as Node3D
-		if marker == null:
-			continue
-		_gun_offsets.append(_transform_to_self(marker).origin)
-		var flash: MeshInstance3D = MeshInstance3D.new()
-		flash.name = "MuzzleFlash"
-		flash.mesh = _unit_sphere
-		flash.material_override = ToonMaterials.unlit(Color(1.0, 0.86, 0.3), true)
-		flash.transform = Transform3D(Basis.from_scale(Vector3(0.45, 0.45, 1.2)), Vector3(0.0, 0.0, -0.45))
-		flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		flash.visible = false
-		marker.add_child(flash)
+	# A muzzle flash on the end of every fitted gun.
+	for station: int in range(_gun_nodes.size()):
+		var gun: MeshInstance3D = _gun_nodes[station]
+		var flash: MeshInstance3D = null
+		if gun != null:
+			flash = MeshInstance3D.new()
+			flash.name = "MuzzleFlash"
+			flash.mesh = _unit_sphere
+			flash.material_override = ToonMaterials.unlit(Color(1.0, 0.86, 0.3), true)
+			var muzzle_z: float = gun.mesh.get_aabb().position.z
+			flash.transform = Transform3D(Basis.from_scale(Vector3(0.45, 0.45, 1.2)), Vector3(0.0, 0.0, muzzle_z - 0.45))
+			flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			flash.visible = false
+			gun.add_child(flash)
 		_muzzle_flashes.append(flash)
 		_muzzle_timers.append(0.0)
-
-	var engine: Node3D = _pieces[PlaneActor.Part.ENGINE]
-	if engine != null:
-		for side: float in [-1.0, 1.0]:
-			var flame: MeshInstance3D = MeshInstance3D.new()
-			flame.name = "NitroFlame"
-			flame.mesh = _unit_sphere
-			flame.material_override = ToonMaterials.unlit(Color(0.35, 0.85, 1.0), true)
-			flame.transform = Transform3D(Basis.from_scale(Vector3(0.28, 0.28, 2.0)), Vector3(side * 0.95, 0.3, 0.9))
-			flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			flame.visible = false
-			engine.add_child(flame)
-			_nitro_flames.append(flame)
 
 	_build_particles()
 
@@ -234,13 +256,38 @@ func model_scale() -> float:
 ## Puts back anything that has been shot off (used on respawn).
 func restore() -> void:
 	if _any_detached and _data != null:
-		build(_data, _team)
+		build(_data, _team, _fittings)
 	stop_effects()
 
 
-## Muzzle positions in PlaneActor space.
-func gun_offsets() -> Array[Vector3]:
-	return _gun_offsets
+## Where each gun station's muzzle is, in PlaneActor space, in station order.
+## Vector3.ZERO for a station with no gun.
+func gun_muzzles() -> Array[Vector3]:
+	var muzzles: Array[Vector3] = []
+	for gun: MeshInstance3D in _gun_nodes:
+		if gun == null:
+			muzzles.append(Vector3.ZERO)
+			continue
+		var box: AABB = gun.mesh.get_aabb()
+		muzzles.append(_transform_to_self(gun) * Vector3(box.get_center().x, box.get_center().y, box.position.z))
+	return muzzles
+
+
+## Whether a gun is shown at [param station] (0 = left inner, 1 = right inner,
+## 2 = left outer, 3 = right outer).
+func has_gun_at(station: int) -> bool:
+	return station >= 0 and station < _gun_nodes.size() and _gun_nodes[station] != null \
+			and is_instance_valid(_gun_nodes[station]) and _model.is_ancestor_of(_gun_nodes[station])
+
+
+## Whether a named piece of the model is present (after fittings were applied).
+func has_model_piece(piece_name: StringName) -> bool:
+	return _model != null and _model.find_child(piece_name, true, false) != null
+
+
+## The piece that spins: PropellerMesh or PropellerMesh4, whichever is fitted.
+func propeller_piece_name() -> StringName:
+	return StringName(_propeller.name) if _propeller != null else &""
 
 
 ## Bounding boxes of the pieces in PlaneActor space, with the Part each one
@@ -267,7 +314,7 @@ func collect_hit_boxes(out_parts: PackedInt32Array, out_boxes: Array[AABB]) -> v
 
 
 func flash_muzzle(index: int) -> void:
-	if index < 0 or index >= _muzzle_flashes.size() or not is_instance_valid(_muzzle_flashes[index]):
+	if index < 0 or index >= _muzzle_flashes.size() or _muzzle_flashes[index] == null or not is_instance_valid(_muzzle_flashes[index]):
 		return
 	_muzzle_flashes[index].visible = true
 	_muzzle_timers[index] = MUZZLE_FLASH_TIME
@@ -305,7 +352,7 @@ func set_gear(deploy: float, broken_mask: int = 0, plane_velocity: Vector3 = Vec
 			if _last_damage.size() >= PlaneActor.PART_COUNT:
 				_rebuild_with(_last_damage)
 			else:
-				build(_data, _team)
+				build(_data, _team, _fittings)
 		for index: int in range(_gear.size()):
 			if newly_broken & (1 << index) != 0 and has_gear_leg(index):
 				_throw_clear(_gear[index], plane_velocity * 0.85 + Vector3.UP * 3.0)
@@ -394,17 +441,6 @@ func set_controls(state: Vector3) -> void:
 	_control_target = state
 
 
-func set_boosting(active: bool) -> void:
-	for flame: MeshInstance3D in _nitro_flames:
-		if is_instance_valid(flame):
-			flame.visible = active
-
-
-func set_smoke_screen(active: bool) -> void:
-	if _screen_smoke != null:
-		_screen_smoke.emitting = active
-
-
 func stop_effects() -> void:
 	for smoke: CPUParticles3D in _part_smoke:
 		if smoke != null:
@@ -413,10 +449,8 @@ func stop_effects() -> void:
 		_engine_fire.emitting = false
 	if _fuel_fire != null:
 		_fuel_fire.emitting = false
-	set_boosting(false)
-	set_smoke_screen(false)
 	for flash: MeshInstance3D in _muzzle_flashes:
-		if is_instance_valid(flash):
+		if flash != null and is_instance_valid(flash):
 			flash.visible = false
 
 
@@ -428,6 +462,65 @@ func has_piece(part: PlaneActor.Part) -> bool:
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
+
+## Strips the model down to what is fitted. Runs on the fresh model, before
+## anything else looks at it, so hit boxes, wheel heights and gun muzzles are
+## all measured from the aeroplane as it is actually equipped.
+func _apply_fittings() -> void:
+	var wanted: Array[StringName] = []
+	var swaps: Array = []
+	var four_blade: bool = false
+	for card: ComponentCard in _fittings:
+		if card == null or card.is_gun():
+			continue
+		if card.model_variant == FOUR_BLADE_VARIANT:
+			four_blade = true
+		if VARIANT_PIECES.has(card.model_variant):
+			var added: Array = VARIANT_PIECES[card.model_variant]
+			for piece_name: StringName in added:
+				wanted.append(piece_name)
+		if VARIANT_MESH_SWAPS.has(card.model_variant):
+			swaps.append_array(VARIANT_MESH_SWAPS[card.model_variant])
+	# Guns: at each station keep the one kind that is fitted there, if any.
+	for station: int in range(GUN_STATION_TAGS.size()):
+		var fitted: ComponentCard = _fittings[station] if station < _fittings.size() else null
+		var kept: MeshInstance3D = null
+		for kind: String in GUN_KINDS:
+			var gun_name: String = "Gun%s_%s" % [GUN_STATION_TAGS[station], kind]
+			if fitted != null and fitted.is_gun() and String(fitted.model_variant) == kind:
+				kept = _model.find_child(gun_name, true, false) as MeshInstance3D
+			else:
+				_remove_piece(StringName(gun_name))
+		_gun_nodes.append(kept)
+	_remove_piece(PROPELLER_NODES[0] if four_blade else PROPELLER_NODES[1])
+	for piece_name: StringName in OPTIONAL_PIECES:
+		if not wanted.has(piece_name):
+			_remove_piece(piece_name)
+	for swap: Array in swaps:
+		var piece_name: StringName = swap[0]
+		var holder_name: StringName = swap[1]
+		var piece: MeshInstance3D = _model.find_child(piece_name, true, false) as MeshInstance3D
+		var holder: MeshInstance3D = _model.find_child(holder_name, true, false) as MeshInstance3D
+		if piece != null and holder != null:
+			piece.mesh = holder.mesh
+	for holder_name: StringName in MESH_HOLDERS:
+		_remove_piece(holder_name)
+
+
+func _remove_piece(piece_name: StringName) -> void:
+	var piece: Node = _model.find_child(piece_name, true, false)
+	if piece != null:
+		piece.get_parent().remove_child(piece)
+		piece.queue_free()
+
+
+func _find_propeller() -> Node3D:
+	for node_name: StringName in PROPELLER_NODES:
+		var found: Node3D = _model.find_child(node_name, true, false) as Node3D
+		if found != null:
+			return found
+	return null
+
 
 ## The lowest vertex of a piece's mesh, in PlaneActor space (y = INF if the
 ## piece is not there).
@@ -467,7 +560,7 @@ func _is_missing(part: int, damage: PackedFloat32Array) -> bool:
 
 
 func _rebuild_with(damage: PackedFloat32Array) -> void:
-	build(_data, _team)
+	build(_data, _team, _fittings)
 	for index: int in range(PlaneActor.PART_COUNT):
 		if _pieces[index] == null or not is_instance_valid(_pieces[index]):
 			_pieces[index] = null
@@ -674,10 +767,6 @@ func _build_particles() -> void:
 	if engine != null:
 		_engine_fire.position = _transform_to_self(engine).origin
 	_fuel_fire = _make_trail("FuelFire", Color(1.0, 0.62, 0.15, 0.95), 16, 0.4, 1.0, 2.6)
-	_screen_smoke = _make_trail("SmokeScreen", Color(0.93, 0.95, 1.0, 0.85), 48, 2.6, 3.0, 12.0)
-	var tail: Node3D = _pieces[PlaneActor.Part.TAIL]
-	if tail != null:
-		_screen_smoke.position = _transform_to_self(tail).origin
 
 
 func _make_trail(trail_name: String, color: Color, amount: int, lifetime: float, start_scale: float, end_scale: float) -> CPUParticles3D:

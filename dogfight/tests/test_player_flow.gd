@@ -4,12 +4,13 @@ extends Node
 ##
 ##   godot --headless --fixed-fps 60 --path . res://tests/TestPlayerFlow.tscn
 ##
-## Script: fly level and fire -> evade roll -> nitro gadget -> dive into the sea.
-## Checks bullets spawn, the roll and gadget go on cooldown, the crash gives RED
-## a ticket and the player is back in the air 5 seconds later.
+## Script: fly level and fire -> evade roll -> take a gun off and fire again ->
+## dive into the sea. Checks both fitted guns fire, the roll goes on cooldown,
+## a plane with one gun fires one gun, the crash gives RED a ticket and the
+## player is back in the air 5 seconds later.
 ## Prints PLAYER_FLOW_OK on success.
 
-enum Step { WAIT_START, FIRE, ROLL, GADGET, DIVE, WAIT_RESPAWN, DONE }
+enum Step { WAIT_START, FIRE, ROLL, ONE_GUN, DIVE, WAIT_RESPAWN, DONE }
 
 var _manager: MatchManager5v5
 var _player: PlaneActor
@@ -22,10 +23,9 @@ var _shots: int = 0
 var _death_time: float = -1.0
 var _clock: float = 0.0
 var _red_before_crash: int = 0
-var _speed_before_nitro: float = 0.0
+var _shots_before_one_gun: int = 0
 var _max_fov: float = 0.0
 var _evades: int = 0
-var _gadgets: int = 0
 
 
 func _ready() -> void:
@@ -58,7 +58,6 @@ func _ready() -> void:
 	_check(_hud.player == _player, "HUD is bound to the player")
 	_player.shot_fired.connect(func(_plane: PlaneActor) -> void: _shots += 1)
 	_player.evade_started.connect(func(_plane: PlaneActor) -> void: _evades += 1)
-	_player.gadget_used.connect(func(_plane: PlaneActor, _type: int) -> void: _gadgets += 1)
 	_player.died.connect(func(_victim: PlaneActor, _killer: PlaneActor) -> void: _death_time = _clock)
 
 
@@ -81,8 +80,9 @@ func _physics_process(delta: float) -> void:
 			if _step_time >= 1.0:
 				Input.action_release(GameSession.ACTION_FIRE)
 				Input.action_release(GameSession.ACTION_STEER_RIGHT)
-				# ~10.6 rounds/s for one second.
-				_check(_shots >= 8 and _shots <= 13, "about ten shots in one second of fire (got %d)" % _shots)
+				# Two .303s at 6 rounds a second each.
+				_check(_player.stats.gun_count() == 2, "the player's plane has its two stock guns")
+				_check(_shots >= 10 and _shots <= 14, "about twelve shots in one second from two guns (got %d)" % _shots)
 				_check(_player.yaw < -0.2, "steering right turned the plane right (yaw %.2f)" % _player.yaw)
 				_check(_player.bank < -0.2, "the plane banks into the turn (bank %.2f)" % _player.bank)
 				Input.action_press(GameSession.ACTION_EVADE)
@@ -93,15 +93,18 @@ func _physics_process(delta: float) -> void:
 				_check(_evades == 1, "evade roll started")
 				_check(_player.is_evading(), "plane reports it is evading")
 				_check(_player.evade_cooldown_ratio() > 0.5, "evade roll is on cooldown")
-				_speed_before_nitro = _player.speed
-				Input.action_press(GameSession.ACTION_GADGET)
-				_next(Step.GADGET)
-		Step.GADGET:
-			if _step_time >= 1.5:
-				Input.action_release(GameSession.ACTION_GADGET)
-				_check(_gadgets == 1, "gadget activated once")
-				_check(_player.speed > _speed_before_nitro * 1.1, "nitro raised speed (%.0f -> %.0f)" % [_speed_before_nitro, _player.speed])
-				_check(_player.gadget_cooldown_ratio() > 0.5, "gadget is on cooldown")
+				_next(Step.ONE_GUN)
+		Step.ONE_GUN:
+			# Once the roll is over, take the right-hand gun off and fire again.
+			if _step_time >= 1.2 and _shots_before_one_gun == 0:
+				_player.stats.fittings[1] = null
+				_shots_before_one_gun = _shots
+				Input.action_press(GameSession.ACTION_FIRE)
+			if _step_time >= 2.2:
+				Input.action_release(GameSession.ACTION_FIRE)
+				var fired: int = _shots - _shots_before_one_gun
+				_check(fired >= 5 and fired <= 7, "with one gun fitted, one gun fires: about six shots in a second (got %d)" % fired)
+				_check(_player.last_fired_gun != null and _player.last_fired_gun.id == &"gun_browning_303", "and it is the .303 that is firing")
 				_red_before_crash = _manager.team_score(Teams.Id.TEAM_RED)
 				_next(Step.DIVE)
 		Step.DIVE:
@@ -110,7 +113,7 @@ func _physics_process(delta: float) -> void:
 				Input.action_release(GameSession.ACTION_PITCH_DOWN)
 				_check(_manager.team_score(Teams.Id.TEAM_RED) >= _red_before_crash + 1, "crashing gives RED a ticket")
 				_check(_manager.local_slot().deaths == 1, "the crash counts as a loss for the player")
-				_check(_max_fov > _camera.base_fov + 6.0, "camera FOV widened with nitro/dive (max %.1f)" % _max_fov)
+				_check(_max_fov > _camera.base_fov + 6.0, "camera FOV widened in the dive (max %.1f)" % _max_fov)
 				_next(Step.WAIT_RESPAWN)
 			elif _step_time > 20.0:
 				_check(false, "plane never hit the sea")
@@ -139,7 +142,7 @@ func _next(step: Step) -> void:
 
 func _finish() -> void:
 	_step = Step.DONE
-	for action: StringName in [GameSession.ACTION_FIRE, GameSession.ACTION_EVADE, GameSession.ACTION_GADGET,
+	for action: StringName in [GameSession.ACTION_FIRE, GameSession.ACTION_EVADE,
 			GameSession.ACTION_PITCH_DOWN, GameSession.ACTION_STEER_RIGHT]:
 		Input.action_release(action)
 	if _failures.is_empty():

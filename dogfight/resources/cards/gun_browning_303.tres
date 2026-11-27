@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_browning_1.wav" id="2_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_browning_2.wav" id="3_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_browning_3.wav" id="4_gun"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"gun_browning_303"
+display_name = "Browning .303"
+description = "Rifle-calibre machine gun. Light, quick-firing and easy to hit with; it takes a lot of hits to bring anything down."
+slot = 0
+rarity = 0
+glyph = ".303"
+model_variant = &"303"
+weight = 0.01
+fire_rate = 6.0
+damage = 125.0
+muzzle_speed = 400.0
+gun_range = 430.0
+spread_deg = 0.7
+gun_sounds = Array[AudioStream]([ExtResource("2_gun"), ExtResource("3_gun"), ExtResource("4_gun")])

@@ -16,8 +16,10 @@ Pieces and hierarchy (every name below is a mesh node in the .glb)
   ├─ Engine                 nose and cowling, exhaust stubs
   │  └─ PropellerMesh       spinner + blades, origin on the hub: spin around Z
   ├─ CanopyMesh             bubble canopy (transparent)
-  ├─ WingL / WingR          inner wing panel with its cannon
-  │  ├─ MuzzleL / MuzzleR   empty marking the gun muzzle (no mesh)
+  ├─ WingL / WingR          inner wing panel
+  │  ├─ GunL1_303 ...       one gun per station (L1 R1 inner, L2 R2 outer) and
+  │  │                      per type (303, 50, 20): the game shows only the
+  │  │                      ones that are fitted. Origin on the leading edge.
   │  ├─ FlapL / FlapR       hinged: rotate around local X
   │  ├─ GearL / GearR       undercarriage leg, wheel and door, origin on the
   │  │                      pivot: rotate around local Y to retract outward
@@ -29,6 +31,14 @@ Pieces and hierarchy (every name below is a mesh node in the .glb)
      ├─ TailWheel                 fixed tail wheel and strut
      └─ Fin
         └─ Rudder                 hinged: rotate around local Y
+
+Alternative fittings (the game shows or swaps these to match the loadout):
+  PropellerMesh4            four-blade propeller, in place of PropellerMesh
+  EngineIntake, EngineBulges   chin intake and cowl blisters of bigger engines
+  ArmourSeat, ArmourScreen  armour plate behind the seat / armoured windscreen
+  WingTipL_clipped / R      squared-off outer panel: its mesh replaces WingTip's
+  WingTipExtL / R           pointed extension added beyond the standard tip
+  GearL_heavy / R           reinforced leg and wheel: its mesh replaces Gear's
 
 Because children follow their parent, detaching `WingL` in the engine takes
 its flap, tip and aileron with it; detaching `Tail` takes the whole empennage.
@@ -131,9 +141,18 @@ PROP_HUB = Vector((0.0, -2.72, 0.0))   # Propeller pivot (hub centre).
 CANOPY_CENTRE = Vector((0.0, -0.10, 0.98))
 CANOPY_RADII = Vector((0.56, 1.02, 0.58))
 
-CANNON_SPAN_FRACTION = 0.40   # One chunky cannon on each inner wing panel.
-CANNON_RADIUS = 0.17
-CANNON_LENGTH = 1.05
+# Gun stations on each inner wing panel: (name suffix, fraction of half span).
+GUN_STATIONS = (("1", 0.30), ("2", 0.47))
+# Gun types: lathe profile as (distance ahead of the leading edge, radius).
+# Negative = sticking out forward. All start buried inside the wing.
+GUN_PROFILES = {
+    "303": [(0.30, 0.070), (-0.30, 0.070), (-0.30, 0.048), (-0.50, 0.048), (-0.47, 0.025)],
+    "50": [(0.30, 0.105), (-0.42, 0.105), (-0.42, 0.066), (-0.86, 0.066), (-0.83, 0.032)],
+    "20": [(0.45, 0.153), (-0.65, 0.153), (-0.65, 0.246), (-1.05, 0.246), (-0.91, 0.119)],
+}
+WING_CLIP_FRACTION = 0.91     # Clipped wings end here (fraction of half span).
+WING_EXTENSION = (0.955, 1.06, 1.15)   # Root, middle and point of an extended tip.
+HEAVY_GEAR_SCALE = 1.22       # Reinforced undercarriage: this much bigger.
 
 # --- Undercarriage (build space; a tail-dragger, like the real thing) --------
 GEAR_TRACK_X = 1.22           # Leg pivot, metres from the centre line.
@@ -550,32 +569,83 @@ def make_fin(materials) -> bpy.types.Mesh:
     return finish_part("Fin", bm, materials, bevel_width=0.03)
 
 
-def cannon_mount(side: float) -> Vector:
-    """Where a cannon meets the wing's leading edge (build space)."""
+def gun_mount(side: float, fraction: float) -> Vector:
+    """Where a gun meets the wing's leading edge (build space)."""
     half_span = WING_SPAN * 0.5
-    chord = planform_chord(WING_ROOT_CHORD, CANNON_SPAN_FRACTION)
+    chord = planform_chord(WING_ROOT_CHORD, fraction)
     return WING_CENTRE + Vector((
-        side * CANNON_SPAN_FRACTION * half_span,
-        planform_centre_y(WING_ROOT_CHORD, CANNON_SPAN_FRACTION) - chord * 0.5 + chord * 0.12,
-        CANNON_SPAN_FRACTION * half_span * math.tan(math.radians(WING_DIHEDRAL_DEG)),
+        side * fraction * half_span,
+        planform_centre_y(WING_ROOT_CHORD, fraction) - chord * 0.5 + chord * 0.12,
+        fraction * half_span * math.tan(math.radians(WING_DIHEDRAL_DEG)),
     ))
 
 
-def make_cannon(materials, side: float) -> bpy.types.Mesh:
-    """Fat barrel with a flared muzzle brake, sunk into the leading edge."""
-    radius = CANNON_RADIUS
-    profile = [
-        (0.45, radius * 0.90),                     # Buried inside the wing.
-        (-CANNON_LENGTH * 0.62, radius * 0.90),    # Barrel.
-        (-CANNON_LENGTH * 0.62, radius * 1.45),    # Step up to the muzzle brake.
-        (-CANNON_LENGTH, radius * 1.45),
-        (-CANNON_LENGTH + 0.14, radius * 0.70),    # Dished muzzle with a bore.
-    ]
+def make_gun(materials, side: float, fraction: float, kind: str) -> bpy.types.Mesh:
+    """One wing gun sunk into the leading edge: a slim .303, a jacketed .50,
+    or a fat 20 mm cannon with a muzzle brake."""
     bm = bmesh.new()
-    lathe_y(bm, profile, 8)
-    bmesh.ops.translate(bm, verts=bm.verts[:], vec=cannon_mount(side))
+    lathe_y(bm, GUN_PROFILES[kind], 8)
+    bmesh.ops.translate(bm, verts=bm.verts[:], vec=gun_mount(side, fraction))
     paint(bm, lambda _centre: METAL)
-    return finish_part("Cannon", bm, materials, bevel_width=0.025)
+    return finish_part("Gun", bm, materials, bevel_width=0.025 if kind == "20" else 0.012, subdiv_levels=0)
+
+
+def make_intake(materials) -> bpy.types.Mesh:
+    """Chin intake of a two-stage supercharger, under the nose."""
+    stations = [(-2.22, 0.20, 0.13), (-2.05, 0.31, 0.24), (-1.30, 0.30, 0.25), (-0.95, 0.12, 0.08)]
+    rings = [ellipse_ring(Vector((0.0, y, -1.0 + 0.10 * index / 3.0)), Vector((1, 0, 0)), Vector((0, 0, 1)), half_width, half_height, 8)
+             for index, (y, half_width, half_height) in enumerate(stations)]
+    bm = bmesh.new()
+    loft_rings(bm, rings)
+    paint(bm, lambda centre: METAL if centre.y < -2.2 else BODY)
+    return finish_part("Intake", bm, materials, bevel_width=0.03)
+
+
+def make_cowl_bulges(materials) -> bpy.types.Mesh:
+    """Blisters over the cylinder banks of a bigger engine."""
+    parts = []
+    for side in (-1.0, 1.0):
+        centre = Vector((side * 0.44, -1.72, 0.80))
+        stations = [(-0.72, 0.04, 0.03), (-0.45, 0.17, 0.13), (0.10, 0.20, 0.16), (0.50, 0.15, 0.11), (0.70, 0.04, 0.03)]
+        rings = [ellipse_ring(centre + Vector((0.0, y, 0.0)), Vector((1, 0, 0)), Vector((0, 0, 1)), half_width, half_height, 8)
+                 for y, half_width, half_height in stations]
+        bm = bmesh.new()
+        loft_rings(bm, rings)
+        paint(bm, lambda _centre: BODY)
+        parts.append(finish_part("Bulge", bm, materials, bevel_width=0.02))
+    return merge_meshes("EngineBulges", parts, materials)
+
+
+def make_slab(name: str, materials, centre: Vector, size: Vector, tilt_deg: float = 0.0) -> bpy.types.Mesh:
+    """A flat steel plate: a box, optionally leaning back about the X axis."""
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, verts=bm.verts[:], vec=size)
+    if tilt_deg != 0.0:
+        bmesh.ops.rotate(bm, verts=bm.verts[:], cent=Vector((0, 0, 0)), matrix=Matrix.Rotation(math.radians(tilt_deg), 3, 'X'))
+    bmesh.ops.translate(bm, verts=bm.verts[:], vec=centre)
+    paint(bm, lambda _centre: METAL)
+    return finish_part(name, bm, materials, bevel_width=0.015, subdiv_levels=0)
+
+
+def make_tip_extension(materials, side: float) -> bpy.types.Mesh:
+    """Pointed high-altitude wingtip that carries on where the standard tip ends."""
+    half_span = WING_SPAN * 0.5
+    rise = math.tan(math.radians(WING_DIHEDRAL_DEG))
+    root_chord = planform_chord(WING_ROOT_CHORD, WING_EXTENSION[0])
+    root_depth = WING_THICKNESS * (root_chord / WING_ROOT_CHORD) ** 0.6
+    rings = []
+    for fraction, shrink in zip(WING_EXTENSION, (1.0, 0.62, 0.12)):
+        centre = WING_CENTRE + Vector((side * fraction * half_span,
+                                       planform_centre_y(WING_ROOT_CHORD, WING_EXTENSION[0]) - root_chord * 0.12 * (1.0 - shrink),
+                                       fraction * half_span * rise))
+        rings.append(ellipse_ring(centre, Vector((0, 1, 0)), Vector((0, 0, 1)), root_chord * 0.5 * shrink, root_depth * 0.5 * shrink, 8))
+    if side < 0.0:
+        rings.reverse()
+    bm = bmesh.new()
+    loft_rings(bm, rings)
+    paint(bm, lambda _centre: ACCENT)
+    return finish_part("TipExtension", bm, materials, bevel_width=0.02)
 
 
 def strut(bm: bmesh.types.BMesh, start: Vector, end: Vector, radius: float, segments: int = 8) -> None:
@@ -605,29 +675,33 @@ def gear_pivot(side: float) -> Vector:
     return Vector((side * GEAR_TRACK_X, GEAR_PIVOT_Y, WING_CENTRE.z + GEAR_TRACK_X * rise - WING_THICKNESS * 0.08))
 
 
-def make_gear(materials, side: float) -> bpy.types.Mesh:
+def make_gear(materials, side: float, scale: float = 1.0) -> bpy.types.Mesh:
     """One main undercarriage unit: raked leg, wheel on its inboard side and a
-    door on its outboard side. Modelled down and locked."""
+    door on its outboard side. Modelled down and locked. [scale] fattens the
+    leg and wheel for the reinforced version."""
     pivot = gear_pivot(side)
+    wheel_radius = GEAR_WHEEL_RADIUS * scale
+    wheel_width = GEAR_WHEEL_WIDTH * scale
+    leg_radius = GEAR_LEG_RADIUS * scale * scale
     leg_foot = Vector((pivot.x + side * 0.10, GEAR_AXLE.y, GEAR_AXLE.z))
-    wheel_centre = Vector((leg_foot.x - side * (GEAR_WHEEL_WIDTH * 0.5 + 0.10), GEAR_AXLE.y, GEAR_AXLE.z))
+    wheel_centre = Vector((leg_foot.x - side * (wheel_width * 0.5 + 0.10), GEAR_AXLE.y, GEAR_AXLE.z))
     parts = []
 
     bm = bmesh.new()
-    strut(bm, pivot, leg_foot, GEAR_LEG_RADIUS)
-    strut(bm, leg_foot, wheel_centre, GEAR_LEG_RADIUS * 0.8, 6)
+    strut(bm, pivot, leg_foot, leg_radius)
+    strut(bm, leg_foot, wheel_centre, leg_radius * 0.8, 6)
     paint(bm, lambda _centre: METAL)
     parts.append(finish_part("GearLeg", bm, materials, bevel_width=0.02, subdiv_levels=0))
 
     bm = bmesh.new()
-    wheel(bm, wheel_centre, GEAR_WHEEL_RADIUS, GEAR_WHEEL_WIDTH)
+    wheel(bm, wheel_centre, wheel_radius, wheel_width)
     # Hub caps in the team colour, tyre in dark rubber.
-    paint(bm, lambda centre: ACCENT if abs(centre.x - wheel_centre.x) > GEAR_WHEEL_WIDTH * 0.49 else METAL)
+    paint(bm, lambda centre: ACCENT if abs(centre.x - wheel_centre.x) > wheel_width * 0.49 else METAL)
     parts.append(finish_part("GearWheel", bm, materials, bevel_width=0.05, bevel_segments=2, subdiv_levels=0))
 
     # Door: a slab on the outside of the leg that closes the wheel well.
     bm = bmesh.new()
-    door_x = leg_foot.x + side * (GEAR_LEG_RADIUS + 0.05)
+    door_x = leg_foot.x + side * (leg_radius + 0.05)
     top = Vector((door_x - side * 0.06, pivot.y, pivot.z - 0.10))
     bottom = Vector((door_x, (pivot.y + GEAR_AXLE.y) * 0.5, GEAR_AXLE.z + 0.62))
     rings = []
@@ -902,6 +976,9 @@ def build_plane() -> list[bpy.types.Object]:
         outer = sorted((side * break_x, side * 20.0))
         wing_panels["Wing" + tag] = keep_inside(wing, slab_x(inner[0], inner[1], materials), "Wing" + tag)
         wing_panels["WingTip" + tag] = keep_inside(wing, slab_x(outer[0], outer[1], materials), "WingTip" + tag)
+        # Clipped wings: the same outer panel, cut short and squared off.
+        clipped = sorted((side * break_x, side * WING_CLIP_FRACTION * half_span))
+        wing_panels["WingTip" + tag + "_clipped"] = keep_inside(wing, slab_x(clipped[0], clipped[1], materials), "WingTip" + tag + "_clipped")
     wing_root = keep_inside(wing, slab_x(-WING_ROOT_X, WING_ROOT_X, materials), "WingRoot")
     bpy.data.meshes.remove(wing)
 
@@ -930,11 +1007,10 @@ def build_plane() -> list[bpy.types.Object]:
                                                            for side in (-1.0, 1.0) for index in range(3)], materials)
     centre_mesh = merge_meshes("Fuselage", [centre_mesh, wing_root, make_headrest(materials)] + make_pilot(materials), materials)
     tail_mesh = merge_meshes("Tail", [tail_mesh, tailplane_root], materials)
-    # Cannons are modelled per build-space side; build -X is the right wing.
-    wing_panels["WingR"] = merge_meshes("WingR", [wing_panels["WingR"], make_cannon(materials, -1.0)], materials)
-    wing_panels["WingL"] = merge_meshes("WingL", [wing_panels["WingL"], make_cannon(materials, 1.0)], materials)
     propeller_mesh = merge_meshes("PropellerMesh", [make_spinner(materials)] + [
         make_blade(materials, math.tau * blade / PROP_BLADES) for blade in range(PROP_BLADES)], materials)
+    propeller4_mesh = merge_meshes("PropellerMesh4", [make_spinner(materials)] + [
+        make_blade(materials, math.tau * blade / 4.0) for blade in range(4)], materials)
     canopy_mesh = make_canopy(materials)
 
     # --- Objects: pivots and hierarchy ---------------------------------------
@@ -949,6 +1025,13 @@ def build_plane() -> list[bpy.types.Object]:
     body = piece("Fuselage", centre_mesh, Matrix.Identity(4), None)
     engine = piece("Engine", engine_mesh, at(Vector((0.0, firewall, 0.0))), body)
     piece("PropellerMesh", propeller_mesh, at(final_point(PROP_HUB)), engine)
+    piece("PropellerMesh4", propeller4_mesh, at(final_point(PROP_HUB)), engine)
+    piece("EngineIntake", make_intake(materials), at(Vector((0.0, firewall, 0.0))), engine)
+    piece("EngineBulges", make_cowl_bulges(materials), at(Vector((0.0, firewall, 0.0))), engine)
+    piece("ArmourSeat", make_slab("ArmourSeat", materials, Vector((0.0, 0.50, 1.02)), Vector((0.74, 0.07, 0.66)), -8.0),
+          at(final_point(Vector((0.0, 0.50, 1.02)))), body)
+    piece("ArmourScreen", make_slab("ArmourScreen", materials, Vector((0.0, -0.98, 1.16)), Vector((0.66, 0.09, 0.52)), 32.0),
+          at(final_point(Vector((0.0, -0.98, 1.16)))), body)
     piece("CanopyMesh", canopy_mesh, at(final_point(CANOPY_CENTRE)), body)
     tail = piece("Tail", tail_mesh, at(Vector((0.0, tail_joint, 0.08))), body)
     fin_object = piece("Fin", fin, at(final_point(FIN_BASE)), tail)
@@ -967,18 +1050,21 @@ def build_plane() -> list[bpy.types.Object]:
         panel = piece("Wing" + tag, wing_panels["Wing" + tag], at(root_pivot), body)
         surface, frame = wing_surfaces["Flap" + tag]
         piece("Flap" + tag, surface, frame, panel)
-        # Gun muzzle marker: an empty the game reads to know where bullets leave.
-        # It belongs to the wing panel, so a lost wing takes its gun with it.
-        muzzle = bpy.data.objects.new("Muzzle" + tag, None)
-        bpy.context.scene.collection.objects.link(muzzle)
-        muzzle.matrix_world = at(final_point(cannon_mount(-side) + Vector((0.0, -CANNON_LENGTH, 0.0))))
-        muzzle.parent = panel
-        muzzle.matrix_parent_inverse = panel.matrix_world.inverted()
-        markers.append(muzzle)
+        # Guns: every type at every station, each its own piece with its
+        # origin where it meets the leading edge. They belong to the wing
+        # panel, so a lost wing takes its guns with it. Build -X is the right wing.
+        for station, fraction in GUN_STATIONS:
+            for kind in GUN_PROFILES:
+                piece("Gun%s%s_%s" % (tag, station, kind), make_gun(materials, -side, fraction, kind),
+                      at(final_point(gun_mount(-side, fraction))), panel)
         # Undercarriage: bolted to the inner panel, so it goes with the wing.
         # Its origin is the pivot; turning it about local Y folds it outward.
         piece("Gear" + tag, make_gear(materials, -side), at(final_point(gear_pivot(-side))), panel)
+        piece("Gear" + tag + "_heavy", make_gear(materials, -side, HEAVY_GEAR_SCALE), at(final_point(gear_pivot(-side))), panel)
         tip = piece("WingTip" + tag, wing_panels["WingTip" + tag], at(break_pivot), panel)
+        piece("WingTip" + tag + "_clipped", wing_panels["WingTip" + tag + "_clipped"], at(break_pivot), panel)
+        extension_root = final_point(WING_CENTRE + Vector((-side * WING_EXTENSION[0] * half_span, 0.0, WING_EXTENSION[0] * half_span * rise)))
+        piece("WingTipExt" + tag, make_tip_extension(materials, -side), at(extension_root), tip)
         surface, frame = wing_surfaces["Aileron" + tag]
         piece("Aileron" + tag, surface, frame, tip)
 

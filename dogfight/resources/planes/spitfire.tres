@@ -1,16 +1,11 @@
-[gd_resource type="Resource" script_class="PlaneData" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="PlaneData" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/data/plane_data.gd" id="1_plane"]
 [ext_resource type="AudioStream" path="res://assets/audio/engine_spitfire.wav" id="2_engine"]
-[ext_resource type="AudioStream" path="res://assets/audio/gun_hispano_1.wav" id="3_gun"]
-[ext_resource type="AudioStream" path="res://assets/audio/gun_hispano_2.wav" id="4_gun"]
-[ext_resource type="AudioStream" path="res://assets/audio/gun_hispano_3.wav" id="5_gun"]
 
 [resource]
 script = ExtResource("1_plane")
 engine_sound = ExtResource("2_engine")
-gun_sounds = Array[AudioStream]([ExtResource("3_gun"), ExtResource("4_gun"), ExtResource("5_gun")])
-gun_pitch = 1.0
 id = &"spitfire"
 display_name = "Spitfire"
 description = "Light on the stick and deadly in a turning fight."
@@ -22,8 +17,6 @@ base_climb_rate = 1.1
 base_turn_rate_deg = 66.0
 base_pitch_rate_deg = 58.0
 base_roll_rate = 1.15
-base_fire_rate = 11.0
-base_bullet_damage = 140.0
 body_color = Color(0.3725, 0.6039, 0.3882, 1)
 camo_color = Color(0.4902, 0.5608, 0.5882, 1)
 belly_color = Color(0.8118, 0.9176, 0.9608, 1)

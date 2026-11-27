@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"tips_clipped"
+display_name = "Clipped wingtips"
+description = "Tips removed and squared off. Rolls much faster and is a touch quicker low down, but needs more speed to take off and stalls sooner."
+slot = 3
+rarity = 1
+glyph = "CLP"
+model_variant = &"tips_clipped"
+roll_rate_bonus = 0.18
+top_speed_bonus = 0.02
+lift_bonus = -0.08
+turn_rate_bonus = -0.03

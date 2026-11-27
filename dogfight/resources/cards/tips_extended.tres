@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"tips_extended"
+display_name = "Extended wingtips"
+description = "Pointed high-altitude tips. More wing means an easier take-off and a better climb; it rolls more slowly."
+slot = 3
+rarity = 1
+glyph = "EXT"
+model_variant = &"tips_extended"
+lift_bonus = 0.08
+climb_rate_bonus = 0.06
+roll_rate_bonus = -0.1
+top_speed_bonus = -0.01

@@ -48,8 +48,6 @@ func _physics_process(delta: float) -> void:
 	plane.input.firing = Input.is_action_pressed(GameSession.ACTION_FIRE)
 	if Input.is_action_just_pressed(GameSession.ACTION_EVADE):
 		plane.input.press_evade()
-	if Input.is_action_just_pressed(GameSession.ACTION_GADGET):
-		plane.input.press_gadget()
 	if Input.is_action_just_pressed(GameSession.ACTION_ENGINE):
 		plane.input.press_engine()
 	if Input.is_action_just_pressed(GameSession.ACTION_GEAR):
@@ -75,7 +73,7 @@ func _pick_target() -> PlaneActor:
 	var best: PlaneActor = null
 	var best_angle: float = TARGET_CONE
 	for other: PlaneActor in match_manager.get_planes():
-		if not other.alive or not plane.is_hostile_to(other) or other.is_concealed():
+		if not other.alive or not plane.is_hostile_to(other):
 			continue
 		var distance: float = origin.distance_to(other.global_position)
 		if distance > TARGET_RANGE:
@@ -91,7 +89,7 @@ func _pick_target() -> PlaneActor:
 
 func _update_aim_assist() -> void:
 	var enemy: PlaneActor = plane.current_target
-	var usable: bool = aim_assist_enabled and enemy != null and is_instance_valid(enemy) and enemy.alive and not enemy.is_concealed()
+	var usable: bool = aim_assist_enabled and enemy != null and is_instance_valid(enemy) and enemy.alive
 	if not usable:
 		plane.input.assist_active = false
 		return

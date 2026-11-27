@@ -74,8 +74,6 @@ func _draw() -> void:
 		if plane == player or not plane.alive:
 			continue
 		var hostile: bool = Teams.are_hostile(plane.team, view_team)
-		if hostile and plane.is_concealed():
-			continue
 		var world_position: Vector3 = plane.get_global_transform_interpolated().origin
 		var distance: float = eye.distance_to(world_position)
 		var in_front: bool = not camera.is_position_behind(world_position)

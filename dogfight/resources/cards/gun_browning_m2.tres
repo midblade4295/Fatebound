@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_fifty_1.wav" id="2_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_fifty_2.wav" id="3_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_fifty_3.wav" id="4_gun"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"gun_browning_m2"
+display_name = "Browning M2 .50"
+description = "Heavy machine gun. Flat-shooting, long-ranged, and each round does real harm. Twice the weight of a .303."
+slot = 0
+rarity = 1
+glyph = ".50"
+model_variant = &"50"
+weight = 0.022
+fire_rate = 5.0
+damage = 195.0
+muzzle_speed = 440.0
+gun_range = 520.0
+spread_deg = 0.55
+gun_sounds = Array[AudioStream]([ExtResource("2_gun"), ExtResource("3_gun"), ExtResource("4_gun")])

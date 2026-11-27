@@ -49,8 +49,6 @@ func _draw() -> void:
 			if plane == player or not plane.alive:
 				continue
 			var hostile: bool = Teams.are_hostile(plane.team, view_team)
-			if hostile and plane.is_concealed():
-				continue  # Smoke screens hide a plane from radar too.
 			var offset: Vector3 = plane.global_position - origin
 			var flat: Vector2 = Vector2(offset.x, offset.z)
 			var blip: Vector2 = Vector2(flat.dot(right), -flat.dot(forward)) / radar_range

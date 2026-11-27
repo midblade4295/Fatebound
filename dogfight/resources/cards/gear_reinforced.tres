@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"gear_reinforced"
+display_name = "Reinforced undercarriage"
+description = "Heavier legs and fat low-pressure tyres. Stands a much harder landing before it collapses."
+slot = 5
+rarity = 1
+glyph = "UC+"
+model_variant = &"gear_heavy"
+weight = 0.012
+gear_strength_bonus = 0.35

@@ -4,13 +4,17 @@ extends Resource
 ## handful of proportions PlaneVisual needs to build its chunky primitive model.
 ##
 ## Final in-match numbers come from build_stats():
-##   base stats  x  Commander Level bonus  x  every equipped ComponentCard.
+##   base stats  x  Commander Level bonus  x  everything fitted to the mounts.
 
 @export var id: StringName = &""
 @export var display_name: String = ""
 @export_multiline var description: String = ""
 ## Commander Level that unlocks this plane (Hurricane 1, Spitfire 3, Mustang 6).
 @export_range(1, 14) var unlock_commander_level: int = 1
+
+## The clean wing stops carrying the bare aeroplane below this share of its
+## top speed.
+const STALL_SPEED_RATIO: float = 0.6
 
 @export_group("Base Stats")
 @export var base_max_hp: float = 1000.0
@@ -22,21 +26,9 @@ extends Resource
 @export var base_pitch_rate_deg: float = 52.0
 @export var base_roll_rate: float = 1.0
 
-@export_group("Guns")
-@export var base_fire_rate: float = 10.0
-@export var base_bullet_damage: float = 150.0
-@export var bullet_speed: float = 420.0
-@export var gun_range: float = 480.0
-@export var gun_spread_deg: float = 0.6
-
 @export_group("Sound")
 ## Seamless loop of this aircraft's engine at cruise power.
 @export var engine_sound: AudioStream
-## One-shot samples for a single round from this aircraft's guns. One is
-## picked at random for every round fired.
-@export var gun_sounds: Array[AudioStream] = []
-## Pitch the gun samples are played at (1.0 = as recorded).
-@export_range(0.5, 2.0, 0.01) var gun_pitch: float = 1.0
 
 @export_group("Visuals")
 @export var body_color: Color = Color("6f8f5a")
@@ -57,7 +49,8 @@ func is_unlocked(commander_level: int) -> bool:
 	return commander_level >= unlock_commander_level
 
 
-## Base stats with only the Commander Level bonus applied (no cards).
+## The bare aeroplane with only the Commander Level bonus: nothing fitted, so
+## no guns. See build_stats() and build_stock_stats().
 func build_base_stats(commander_level: int) -> PlaneStats:
 	var stats: PlaneStats = PlaneStats.new()
 	stats.max_hp = base_max_hp * CommanderProgression.hp_multiplier(commander_level)
@@ -67,25 +60,52 @@ func build_base_stats(commander_level: int) -> PlaneStats:
 	stats.turn_rate = deg_to_rad(base_turn_rate_deg)
 	stats.pitch_rate = deg_to_rad(base_pitch_rate_deg)
 	stats.roll_rate = base_roll_rate
-	stats.fire_rate = base_fire_rate
-	stats.bullet_damage = base_bullet_damage
-	stats.bullet_speed = bullet_speed
-	stats.gun_range = gun_range
-	stats.gun_spread_deg = gun_spread_deg
+	stats.stall_speed = stats.top_speed * STALL_SPEED_RATIO
+	stats.fittings.resize(CommanderProgression.MOUNT_COUNT)
+	stats.fitting_marks.resize(CommanderProgression.MOUNT_COUNT)
+	stats.fitting_marks.fill(1)
 	return stats
 
 
-## Full stat block for a match. [param cards] and [param card_levels] are
-## parallel arrays; null entries (empty slots) are skipped. Only the first
-## CommanderProgression.card_slot_count() entries count, so a stale loadout can
-## never smuggle in a card from a slot the player has not unlocked.
-func build_stats(commander_level: int, cards: Array[ComponentCard], card_levels: Array[int]) -> PlaneStats:
+## The plane as it leaves the factory: stock fittings, all Mk I.
+func build_stock_stats(commander_level: int) -> PlaneStats:
+	return build_stats(commander_level, GameCatalog.stock_fittings(), GameCatalog.stock_marks())
+
+
+## Full stat block for a match. [param fittings] and [param marks] are parallel
+## arrays in mount order (CommanderProgression.MOUNT_*); null entries are empty
+## mounts. An item in the wrong kind of mount, or in a mount this Commander
+## Level has not opened, is left off, so a stale loadout can never smuggle
+## anything on.
+func build_stats(commander_level: int, fittings: Array[ComponentCard], marks: Array[int]) -> PlaneStats:
 	var stats: PlaneStats = build_base_stats(commander_level)
-	var open_slots: int = CommanderProgression.card_slot_count(commander_level)
-	var count: int = mini(mini(cards.size(), card_levels.size()), open_slots)
-	for index: int in range(count):
-		var card: ComponentCard = cards[index]
-		if card == null:
+	var count: int = mini(mini(fittings.size(), marks.size()), CommanderProgression.MOUNT_COUNT)
+	var shots_per_second: float = 0.0
+	var damage_per_second: float = 0.0
+	var speed_weighted: float = 0.0
+	for mount: int in range(count):
+		var card: ComponentCard = fittings[mount]
+		if card == null or not CommanderProgression.mount_accepts(mount, card):
 			continue
-		card.apply_to(stats, card_levels[index])
+		if not CommanderProgression.is_mount_unlocked(mount, commander_level):
+			continue
+		var mark: int = clampi(marks[mount], 1, ComponentCard.MAX_MARK)
+		stats.fittings[mount] = card
+		stats.fitting_marks[mount] = mark
+		card.apply_to(stats, mark)
+		if card.is_gun():
+			shots_per_second += card.fire_rate
+			damage_per_second += card.fire_rate * card.damage_at(mark)
+			speed_weighted += card.fire_rate * card.muzzle_speed
+			stats.gun_range = maxf(stats.gun_range, card.gun_range)
+	if shots_per_second > 0.0:
+		stats.fire_rate = shots_per_second
+		stats.bullet_damage = damage_per_second / shots_per_second
+		stats.bullet_speed = speed_weighted / shots_per_second
+	# Weight: everything fitted has to be dragged into the air and round the turns.
+	stats.acceleration /= stats.weight
+	stats.climb_rate /= stats.weight
+	stats.turn_rate /= sqrt(stats.weight)
+	stats.pitch_rate /= sqrt(stats.weight)
+	stats.stall_speed *= sqrt(stats.weight / maxf(stats.lift, 0.1))
 	return stats

@@ -1,19 +1,29 @@
 class_name CardView
 extends Control
 ## One beveled card tile, drawn entirely in code: rarity frame (Common blue,
-## Rare orange, Epic purple, Legendary animated rainbow), category strip, glyph,
-## level pill and a copies bar that turns green when an upgrade is affordable.
-## Also used for loadout slots, where it can show "empty" or "locked".
+## Rare orange, Epic purple, Legendary animated rainbow), what kind of fitting
+## it is, glyph, Mark pill, how many the player has, and a spares bar that
+## turns green when the next Mark is affordable.
+## With `compact` set it is a smaller tile for one mount on the aeroplane,
+## which can also show "empty" or "locked".
 
 signal pressed(view: CardView)
 
 const CARD_SIZE: Vector2 = Vector2(214.0, 268.0)
+const COMPACT_SIZE: Vector2 = Vector2(138.0, 170.0)
 const CORNER: float = 20.0
 const TAP_SLOP: float = 18.0
 
 var card: ComponentCard
+## The item's Mark (1 = Mk I).
 var level: int = 0
+## Spares in hand toward the next Mark.
 var copies: int = 0
+## Units the player has to fit, and how many of them are fitted now.
+var units: int = 0
+var fitted: int = 0
+## Smaller tile for a mount in the loadout. Set before adding to the tree.
+var compact: bool = false
 var owned: bool = false
 var equipped: bool = false
 var upgrade_ready: bool = false
@@ -22,7 +32,7 @@ var selected: bool = false: set = _set_selected
 var empty_title: String = ""
 ## > 0 draws a padlock message: "Commander Lv N".
 var locked_until_level: int = 0
-## Loadout slot this tile represents, or -1 for a collection card.
+## Mount this tile represents, or -1 for a collection card.
 var slot_index: int = -1
 
 var _press_position: Vector2 = Vector2.ZERO
@@ -31,7 +41,7 @@ var _time: float = 0.0
 
 
 func _ready() -> void:
-	custom_minimum_size = CARD_SIZE
+	custom_minimum_size = COMPACT_SIZE if compact else CARD_SIZE
 	# PASS lets a drag that starts on a card still scroll the collection.
 	mouse_filter = Control.MOUSE_FILTER_PASS
 
@@ -43,10 +53,13 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
-func show_card(new_card: ComponentCard, card_level: int, card_copies: int, is_owned: bool, is_equipped: bool, can_upgrade: bool) -> void:
+func show_card(new_card: ComponentCard, card_mark: int, card_spares: int, is_owned: bool, is_equipped: bool, can_upgrade: bool,
+		card_units: int = 1, card_fitted: int = 0) -> void:
 	card = new_card
-	level = card_level
-	copies = card_copies
+	level = card_mark
+	copies = card_spares
+	units = card_units
+	fitted = card_fitted
 	owned = is_owned
 	equipped = is_equipped
 	upgrade_ready = can_upgrade
@@ -77,6 +90,9 @@ func _gui_input(event: InputEvent) -> void:
 
 func _draw() -> void:
 	var rect: Rect2 = Rect2(Vector2(4.0, 4.0), size - Vector2(8.0, 12.0))
+	if compact:
+		_draw_compact(rect)
+		return
 	if card == null:
 		_draw_empty(rect)
 		return
@@ -99,8 +115,8 @@ func _draw() -> void:
 	else:
 		draw_polyline(outline, frame_color if owned else frame_color.darkened(0.5), 7.0, true)
 
-	# Category strip.
-	UiStyle.draw_outlined_text(self, card.category_name().to_upper(), rect.position + Vector2(0.0, 62.0), 18, frame_color.lightened(0.35), rect.size.x, 5)
+	# What kind of fitting it is.
+	UiStyle.draw_outlined_text(self, card.slot_name().to_upper(), rect.position + Vector2(0.0, 62.0), 18, frame_color.lightened(0.35), rect.size.x, 5)
 
 	# Glyph medallion.
 	var medallion: Vector2 = rect.position + Vector2(rect.size.x * 0.5, 116.0)
@@ -120,10 +136,17 @@ func _draw() -> void:
 		_draw_copies_bar(rect)
 	else:
 		UiStyle.draw_outlined_text(self, "NOT FOUND", rect.position + Vector2(0.0, rect.size.y - 14.0), 20, Color(0.7, 0.74, 0.82), rect.size.x, 5)
-	if equipped:
+	if owned and card.max_units() > 1:
+		# Guns: how many the player has, and how many of those are on the plane.
+		var count_text: String = "x%d" % units if fitted <= 0 else "%d / %d FITTED" % [fitted, units]
+		var tag_width: float = 52.0 if fitted <= 0 else 118.0
+		var count_tag: Rect2 = Rect2(rect.position + Vector2(rect.size.x - tag_width - 8.0, 8.0), Vector2(tag_width, 26.0))
+		draw_rect(count_tag, UiStyle.GREEN.darkened(0.2) if fitted > 0 else UiStyle.OUTLINE)
+		UiStyle.draw_outlined_text(self, count_text, count_tag.position + Vector2(0.0, 20.0), 15, UiStyle.WHITE, count_tag.size.x, 4)
+	elif equipped:
 		var tag: Rect2 = Rect2(rect.position + Vector2(rect.size.x - 78.0, 8.0), Vector2(70.0, 26.0))
 		draw_rect(tag, UiStyle.GREEN.darkened(0.2))
-		UiStyle.draw_outlined_text(self, "IN USE", tag.position + Vector2(0.0, 20.0), 15, UiStyle.WHITE, tag.size.x, 4)
+		UiStyle.draw_outlined_text(self, "FITTED", tag.position + Vector2(0.0, 20.0), 15, UiStyle.WHITE, tag.size.x, 4)
 	if selected:
 		draw_polyline(_rounded_outline(rect.grow(2.0), CORNER + 2.0), UiStyle.GOLD, 6.0, true)
 
@@ -133,22 +156,22 @@ func _draw_level_pill(rect: Rect2) -> void:
 	pill.bg_color = UiStyle.OUTLINE
 	pill.set_corner_radius_all(12)
 	draw_style_box(pill, Rect2(rect.position + Vector2(10.0, 8.0), Vector2(72.0, 28.0)))
-	var maxed: bool = card.is_max_level(level)
-	UiStyle.draw_outlined_text(self, "MAX" if maxed else "LV %d" % level, rect.position + Vector2(10.0, 29.0), 19,
+	var maxed: bool = card.is_max_mark(level)
+	UiStyle.draw_outlined_text(self, ComponentCard.mark_name(level), rect.position + Vector2(10.0, 29.0), 19,
 			UiStyle.GOLD if maxed else UiStyle.WHITE, 72.0, 4)
 
 
 func _draw_copies_bar(rect: Rect2) -> void:
-	var needed: int = card.copies_required(level)
+	var needed: int = card.spares_required(level)
 	var bar: Rect2 = Rect2(rect.position + Vector2(16.0, rect.size.y - 36.0), Vector2(rect.size.x - 32.0, 22.0))
 	draw_rect(bar.grow(3.0), UiStyle.OUTLINE)
 	if needed <= 0:
 		draw_rect(bar, UiStyle.GOLD_DARK)
-		UiStyle.draw_outlined_text(self, "MAX LEVEL", bar.position + Vector2(0.0, 18.0), 17, UiStyle.WHITE, bar.size.x, 4)
+		UiStyle.draw_outlined_text(self, "TOP MARK", bar.position + Vector2(0.0, 18.0), 17, UiStyle.WHITE, bar.size.x, 4)
 		return
 	var fill: float = clampf(float(copies) / float(needed), 0.0, 1.0)
 	draw_rect(Rect2(bar.position, Vector2(bar.size.x * fill, bar.size.y)), UiStyle.GREEN if upgrade_ready else UiStyle.XP_CYAN)
-	UiStyle.draw_outlined_text(self, "%d / %d" % [copies, needed], bar.position + Vector2(0.0, 18.0), 17, UiStyle.WHITE, bar.size.x, 4)
+	UiStyle.draw_outlined_text(self, "SPARES %d / %d" % [copies, needed], bar.position + Vector2(0.0, 18.0), 17, UiStyle.WHITE, bar.size.x, 4)
 
 
 func _draw_empty(rect: Rect2) -> void:
@@ -167,6 +190,38 @@ func _draw_empty(rect: Rect2) -> void:
 		UiStyle.draw_outlined_text(self, "EMPTY", rect.position + Vector2(0.0, rect.size.y - 24.0), 20, Color(0.7, 0.78, 0.9), rect.size.x, 5)
 	if selected:
 		draw_polyline(_rounded_outline(rect.grow(2.0), CORNER + 2.0), UiStyle.GOLD, 6.0, true)
+
+
+## A mount on the aeroplane: its label, and what is in it (or that it is
+## empty, or locked). Big enough to read on a phone; the details are in the
+## panel beside the collection.
+func _draw_compact(rect: Rect2) -> void:
+	var locked: bool = locked_until_level > 0
+	var frame_color: Color = card.rarity_color() if card != null else Color(0.45, 0.55, 0.7)
+	var face: StyleBoxFlat = StyleBoxFlat.new()
+	face.bg_color = UiStyle.NAVY_LIGHT if card != null else Color(0.08, 0.12, 0.22, 0.75)
+	face.set_corner_radius_all(16)
+	face.border_color = UiStyle.OUTLINE if card != null else Color(0.45, 0.55, 0.7, 0.8)
+	face.set_border_width_all(4)
+	draw_style_box(face, rect)
+	if card != null:
+		draw_polyline(_rounded_outline(rect.grow(-6.0), 12.0), frame_color, 5.0, true)
+	UiStyle.draw_outlined_text(self, empty_title.to_upper(), rect.position + Vector2(0.0, 30.0), 19, Color(0.78, 0.87, 1.0), rect.size.x, 5)
+	var middle: Vector2 = rect.position + Vector2(rect.size.x * 0.5, rect.size.y * 0.52)
+	if locked:
+		UiStyle.draw_outlined_text(self, "LOCKED", rect.position + Vector2(0.0, middle.y), 20, Color(0.8, 0.82, 0.88), rect.size.x, 5)
+		UiStyle.draw_outlined_text(self, "Lv %d" % locked_until_level, rect.position + Vector2(0.0, middle.y + 30.0), 20, UiStyle.GOLD, rect.size.x, 5)
+	elif card == null:
+		UiStyle.draw_outlined_text(self, "+", rect.position + Vector2(0.0, middle.y + 18.0), 54, Color(0.6, 0.72, 0.9), rect.size.x, 5)
+		UiStyle.draw_outlined_text(self, "EMPTY", rect.position + Vector2(0.0, rect.size.y - 12.0), 18, Color(0.7, 0.78, 0.9), rect.size.x, 5)
+	else:
+		draw_circle(middle, 36.0, UiStyle.OUTLINE)
+		draw_circle(middle, 32.0, frame_color.darkened(0.25))
+		UiStyle.draw_outlined_text(self, card.glyph, middle + Vector2(-60.0, 9.0), 24, UiStyle.WHITE, 120.0, 6)
+		UiStyle.draw_outlined_text(self, ComponentCard.mark_name(level), rect.position + Vector2(0.0, rect.size.y - 12.0), 19,
+				UiStyle.GOLD if card.is_max_mark(level) else UiStyle.WHITE, rect.size.x, 5)
+	if selected:
+		draw_polyline(_rounded_outline(rect.grow(2.0), 18.0), UiStyle.GOLD, 6.0, true)
 
 
 ## Closed polyline tracing a rounded rectangle (for frames with per-point colour).

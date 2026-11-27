@@ -14,7 +14,7 @@ extends Node3D
 ##  - Position lag: only the *sideways/vertical* error is smoothed. The camera
 ##    is carried along at the plane's velocity first, so cruising produces no
 ##    lag at all and the plane does not shrink into the distance at speed.
-##  - Speed FOV: field of view and arm length open up with speed and nitro.
+##  - Speed FOV: field of view and arm length open up with speed.
 ##  - Trauma shake: add_trauma() from gunfire/hits; shake = trauma squared.
 ##
 ## Runs in _process and reads the plane's *interpolated* transform, so it is
@@ -44,8 +44,6 @@ extends Node3D
 @export_range(40.0, 100.0) var base_fov: float = 66.0
 ## Degrees added as speed goes from cruise to maximum dive speed.
 @export var speed_fov_boost: float = 12.0
-## Extra degrees while a Nitro Boost is burning.
-@export var nitro_fov_boost: float = 10.0
 @export var fov_stiffness: float = 3.5
 
 @export_group("Shake")
@@ -127,7 +125,7 @@ func _process(delta: float) -> void:
 	if not target.alive:
 		# Death cam: hold position and drift slowly around the wreck.
 		_smoothed_basis = Basis(Vector3.UP, 0.3 * delta) * _smoothed_basis
-		_update_fov(delta, 0.0, false)
+		_update_fov(delta, 0.0)
 		_apply_rig()
 		return
 
@@ -150,7 +148,7 @@ func _process(delta: float) -> void:
 	var speed_factor: float = clampf((target.speed - top_speed * 0.85) / (top_speed * 0.6), 0.0, 1.0)
 	var arm_target: float = follow_distance * (1.0 + speed_pullback * speed_factor)
 	_arm.spring_length = lerpf(_arm.spring_length, arm_target, 1.0 - exp(-fov_stiffness * delta))
-	_update_fov(delta, speed_factor, target.is_boosting())
+	_update_fov(delta, speed_factor)
 	_apply_rig()
 
 
@@ -163,10 +161,8 @@ func _desired_basis(target_basis: Basis) -> Basis:
 	return level_basis.slerp(plane_basis, roll_follow)
 
 
-func _update_fov(delta: float, speed_factor: float, boosting: bool) -> void:
+func _update_fov(delta: float, speed_factor: float) -> void:
 	var fov_target: float = base_fov + speed_fov_boost * speed_factor
-	if boosting:
-		fov_target += nitro_fov_boost
 	camera.fov = lerpf(camera.fov, fov_target, 1.0 - exp(-fov_stiffness * delta))
 
 

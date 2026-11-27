@@ -67,6 +67,8 @@ var _bots_checked: bool = false
 var _wreck: PlaneActor
 var _wreck_serviced: bool = false
 var _wreck_deadline: float = 0.0
+## Undercarriage strength the next _drop() gives its plane (1 = standard).
+var _drop_gear_strength: float = 1.0
 
 
 ## One plane making one scripted approach.
@@ -523,6 +525,8 @@ func _check_cases() -> void:
 func _drop(plane: PlaneActor, sink: float, pitch_deg: float, bank_deg: float, wheels: bool) -> void:
 	var direction: Vector3 = _field.takeoff_direction()
 	plane.respawn(_field.parking_transform(0), true)
+	# Whatever undercarriage this bot happened to be given, test the standard one.
+	plane.stats.gear_strength = _drop_gear_strength
 	plane.set_engine_running(true)
 	plane.set_gear_down(wheels)
 	plane.speed = plane.stats.top_speed * 0.62
@@ -552,6 +556,12 @@ func _check_touchdown_grades() -> void:
 
 	_drop(plane, 14.0, 0.0, 0.0, true)
 	_check(plane.alive and plane.broken_gear_mask() == both and plane.is_propeller_broken(), "14 m/s: both legs collapse, still not destroyed")
+
+	# The reinforced undercarriage stands a landing that folds the standard one.
+	_drop_gear_strength = GameCatalog.find_card(&"gear_reinforced").gear_strength_bonus + 1.0
+	_drop(plane, 11.0, 0.0, 0.0, true)
+	_check(plane.alive and plane.broken_gear_mask() == 0 and plane.gear_usable() and not plane.is_propeller_broken(), "11 m/s on reinforced undercarriage: it holds")
+	_drop_gear_strength = 1.0
 
 	_drop(plane, 20.0, 0.0, 0.0, true)
 	_check(plane.alive and plane.is_on_ground(), "20 m/s: a wreck, but one the pilot walks away from")

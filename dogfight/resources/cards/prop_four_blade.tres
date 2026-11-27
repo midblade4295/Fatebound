@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"prop_four_blade"
+display_name = "Rotol 4-blade"
+description = "Four broad blades take a bigger bite of the air: quicker off the runway and stronger in the climb, a little slower flat out."
+slot = 1
+rarity = 1
+glyph = "4B"
+model_variant = &"prop4"
+weight = 0.008
+acceleration_bonus = 0.08
+climb_rate_bonus = 0.08
+top_speed_bonus = -0.02

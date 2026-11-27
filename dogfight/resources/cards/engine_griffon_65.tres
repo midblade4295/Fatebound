@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"engine_griffon_65"
+display_name = "Griffon 65"
+description = "A far bigger engine under a bulged cowling. Great speed and pull; its weight and torque make the plane heavier to roll."
+slot = 2
+rarity = 2
+glyph = "G65"
+model_variant = &"engine_griffon"
+weight = 0.045
+top_speed_bonus = 0.09
+acceleration_bonus = 0.1
+roll_rate_bonus = -0.04

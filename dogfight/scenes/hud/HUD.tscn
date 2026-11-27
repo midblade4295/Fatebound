@@ -285,27 +285,6 @@ caption = "ROLL"
 color = Color(0.18, 0.55, 1, 1)
 icon_kind = 1
 
-[node name="GadgetButton" type="Control" parent="Root"]
-unique_name_in_owner = true
-script = ExtResource("5_button")
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 1
-anchor_top = 1
-anchor_right = 1
-anchor_bottom = 1
-offset_left = -244.0
-offset_top = -236.0
-offset_right = -40.0
-offset_bottom = -36.0
-grow_horizontal = 0
-grow_vertical = 0
-mouse_filter = 2
-action = &"gadget"
-caption = "GADGET"
-color = Color(0.6, 0.3, 0.95, 1)
-icon_kind = 2
-
 [node name="ThrottleLever" type="Control" parent="Root"]
 unique_name_in_owner = true
 script = ExtResource("7_throttle")

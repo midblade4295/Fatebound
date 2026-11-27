@@ -36,26 +36,30 @@ func _ready() -> void:
 	_manager.bullet_system.bullet_whizzed.connect(func(at: Vector3) -> void: _whizzes.append(at.distance_to(_player.global_position)))
 
 
-## Every plane type has its own engine recording and its own guns.
+## Every plane type has its own engine recording, and every kind of gun its
+## own samples.
 func _test_catalogue() -> void:
 	var engines: Array[AudioStream] = []
-	var first_guns: Array[AudioStream] = []
 	for data: PlaneData in GameCatalog.PLANES:
 		_check(data.engine_sound != null, "%s has an engine sound" % data.display_name)
-		_check(data.gun_sounds.size() >= 3, "%s has several gun samples to vary between (%d)" % [data.display_name, data.gun_sounds.size()])
-		if data.engine_sound == null or data.gun_sounds.is_empty():
+		if data.engine_sound == null:
 			continue
 		_check(not engines.has(data.engine_sound), "%s's engine is not another plane's engine" % data.display_name)
-		_check(not first_guns.has(data.gun_sounds[0]), "%s's guns are not another plane's guns" % data.display_name)
 		engines.append(data.engine_sound)
-		first_guns.append(data.gun_sounds[0])
 		var loop: AudioStreamWAV = SoundTools.looped(data.engine_sound) as AudioStreamWAV
 		_check(loop != null and loop.loop_mode == AudioStreamWAV.LOOP_FORWARD, "%s's engine plays as a loop" % data.display_name)
 		if loop != null:
 			_check(loop.get_length() > 4.0 and loop.loop_end == roundi(loop.get_length() * float(loop.mix_rate)),
 					"the loop runs the whole %.1f s of the file" % loop.get_length())
-		for gun: AudioStream in data.gun_sounds:
-			_check(gun.get_length() > 0.15 and gun.get_length() < 0.7, "%s gun sample is one short shot (%.2f s)" % [data.display_name, gun.get_length()])
+	var first_samples: Array[AudioStream] = []
+	for gun: ComponentCard in GameCatalog.cards_in_slot(ComponentCard.Slot.GUN):
+		_check(gun.gun_sounds.size() >= 3, "%s has several samples to vary between (%d)" % [gun.display_name, gun.gun_sounds.size()])
+		if gun.gun_sounds.is_empty():
+			continue
+		_check(not first_samples.has(gun.gun_sounds[0]), "the %s does not sound like another gun" % gun.display_name)
+		first_samples.append(gun.gun_sounds[0])
+		for sample: AudioStream in gun.gun_sounds:
+			_check(sample.get_length() > 0.15 and sample.get_length() < 0.7, "%s sample is one short shot (%.2f s)" % [gun.display_name, sample.get_length()])
 
 
 func _physics_process(delta: float) -> void:
@@ -84,7 +88,7 @@ func _physics_process(delta: float) -> void:
 		1:
 			if _clock >= 0.4:
 				_check(guns_here.playing, "firing plays the gun sample")
-				_check(_player.plane_data.gun_sounds.has(guns_here.stream), "and it is one of this plane's own samples")
+				_check(_player.stats.gun_at(0).gun_sounds.has(guns_here.stream), "and it is one of the fitted gun's own samples")
 				Input.action_release(GameSession.ACTION_FIRE)
 				_check(_whizzes.is_empty(), "the player's own bullets do not whiz past them")
 				_fire_past_player(6.0)

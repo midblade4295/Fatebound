@@ -4,11 +4,12 @@
 
 [resource]
 script = ExtResource("1_card")
-id = &"engine_merlin"
-display_name = "Merlin Supercharger"
-description = "A dependable supercharger. A little more of everything the engine does."
-category = 0
+id = &"armour_seat"
+display_name = "Seat armour"
+description = "A steel plate behind the pilot's seat and head."
+slot = 4
 rarity = 0
-glyph = "SPD"
-top_speed_bonus = 0.03
-climb_rate_bonus = 0.04
+glyph = "ARM"
+model_variant = &"armour_seat"
+weight = 0.02
+toughness_bonus = 0.1

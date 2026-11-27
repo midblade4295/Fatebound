@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"armour_full"
+display_name = "Armoured cockpit and tanks"
+description = "Seat plate, armoured windscreen and self-sealing fuel tanks. Takes much more punishment and leaks fuel slowly, at a real cost in weight."
+slot = 4
+rarity = 2
+glyph = "ARM+"
+model_variant = &"armour_full"
+weight = 0.045
+toughness_bonus = 0.22
+leak_reduction = 0.5

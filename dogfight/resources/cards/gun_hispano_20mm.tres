@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_hispano_1.wav" id="2_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_hispano_2.wav" id="3_gun"]
+[ext_resource type="AudioStream" path="res://assets/audio/gun_hispano_3.wav" id="4_gun"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"gun_hispano_20mm"
+display_name = "Hispano 20 mm"
+description = "Cannon. Slow to fire and heavy to carry, but a few shells will take a wing off."
+slot = 0
+rarity = 2
+glyph = "20mm"
+model_variant = &"20"
+weight = 0.036
+fire_rate = 3.4
+damage = 340.0
+muzzle_speed = 430.0
+gun_range = 500.0
+spread_deg = 0.5
+gun_sounds = Array[AudioStream]([ExtResource("2_gun"), ExtResource("3_gun"), ExtResource("4_gun")])

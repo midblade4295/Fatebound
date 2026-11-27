@@ -1,6 +1,6 @@
 class_name PlaneActor
 extends CharacterBody3D
-## One aircraft: arcade flight model, guns, evade roll, tactical gadget, and a
+## One aircraft: arcade flight model, the guns that are fitted, evade roll, and a
 ## damage model with no health bar.
 ##
 ## The plane has no idea who flies it. It reads its PlaneInput child every
@@ -41,7 +41,6 @@ signal damaged(victim: PlaneActor, amount: float, attacker: PlaneActor)
 signal respawned(plane: PlaneActor)
 signal shot_fired(plane: PlaneActor)
 signal evade_started(plane: PlaneActor)
-signal gadget_used(plane: PlaneActor, gadget_type: int)
 ## A part crossed into a new PartState (damaged, critical, destroyed, or repaired).
 signal part_state_changed(plane: PlaneActor, part: Part, state: PartState)
 ## The wheels (or the belly, if [param on_wheels] is false) met the ground and
@@ -90,8 +89,9 @@ const SPENT_BULLET_ENERGY: float = 0.1
 ## Part damage (0 = pristine, 1 = gone) at which each PartState begins.
 const PART_DAMAGED_AT: float = 0.4
 const PART_CRITICAL_AT: float = 0.75
-## Which wing panel each gun is mounted in (same order as the Muzzles nodes).
-const GUN_PARTS: Array[Part] = [Part.LEFT_WING, Part.RIGHT_WING]
+## Which wing panel each gun station is in (left inner, right inner, left
+## outer, right outer). A wing that comes off takes its guns with it.
+const GUN_STATION_PARTS: Array[Part] = [Part.LEFT_WING, Part.RIGHT_WING, Part.LEFT_WING, Part.RIGHT_WING]
 
 const COLLISION_LAYER_WORLD: int = 1
 const COLLISION_LAYER_PLANES: int = 2
@@ -114,8 +114,6 @@ const INNER_WING_LIFT: float = 0.6
 const WINGTIP_LIFT: float = 0.4
 ## A panel shot full of holes (but still attached) keeps this much of its lift.
 const HOLED_WING_LIFT: float = 0.5
-## Below this fraction of top speed the wings stop carrying the plane.
-const STALL_SPEED_RATIO: float = 0.6
 ## Dropped flaps add this much lift, which is what makes them useful when slow.
 const FLAP_LIFT_BONUS: float = 0.12
 ## With no lift at all the plane falls this fast (m/s) and its nose drops this
@@ -321,14 +319,11 @@ const GROUND_SHIELD_TIME: float = 25.0
 const CRASH_CREDIT_WINDOW: float = 45.0
 const GUN_CONVERGENCE: float = 320.0
 const AIM_ASSIST_CONE: float = deg_to_rad(3.5)
-const REPAIR_RADIUS: float = 260.0
 const BOUNDS_BLEND_DISTANCE: float = 220.0
 ## How quickly a shove from a mid-air collision fades (1/s).
 const KNOCK_DAMPING: float = 2.5
 
 # status_flags bits (replicated so remote peers can drive cosmetics).
-const FLAG_BOOSTING: int = 1
-const FLAG_CONCEALED: int = 2
 const FLAG_EVADING: int = 4
 const FLAG_BURNING: int = 8
 const FLAG_SHIELDED: int = 16
@@ -366,6 +361,10 @@ const FLAG_PROP_BROKEN: int = 8192
 ## peer: x = aileron/rudder (-1 left .. +1 right), y = elevator (-1 down ..
 ## +1 up), z = how far the flaps are dropped (0..1).
 @export var control_state: Vector3 = Vector3.ZERO
+## What is fitted to each mount, as item ids and Marks, so every peer can
+## build the same stats and show the same aeroplane.
+@export var fitting_ids: PackedStringArray = PackedStringArray()
+@export var fitting_marks: PackedInt32Array = PackedInt32Array()
 ## Where the engine's throttle actually is, 0..1 (it follows the lever).
 @export var throttle: float = 1.0
 ## How far the undercarriage is down: 0 = up and locked, 1 = down and locked.
@@ -398,14 +397,14 @@ var bank: float = 0.0
 
 var _yaw_rate: float = 0.0
 var _pitch_rate: float = 0.0
-var _fire_cooldown: float = 0.0
-var _next_muzzle: int = 0
+## Seconds until each gun station can fire again, and where each one's muzzle
+## is (in this node's space; from the model).
+var _gun_cooldowns: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
+var _gun_muzzles: Array[Vector3] = []
+var _was_firing: bool = false
 var _evade_time: float = 0.0
 var _evade_cooldown: float = 0.0
 var _evade_direction: float = 1.0
-var _gadget_cooldown: float = 0.0
-var _nitro_time: float = 0.0
-var _smoke_time: float = 0.0
 var _spawn_shield: float = 0.0
 var _burn_time: float = 0.0
 var _burn_dps: float = 0.0
@@ -457,13 +456,14 @@ var _rest_height: float = DEFAULT_WHEEL_HEIGHT
 var _rest_pitch: float = deg_to_rad(12.0)
 var _belly_height: float = DEFAULT_BELLY_HEIGHT
 
+## The gun that fired most recently (PlaneAudio reads it for the right sound).
+var last_fired_gun: ComponentCard
 ## This plane's engine, guns and break-up sounds.
 var audio: PlaneAudio
 
 @onready var input: PlaneInput = $PlaneInput
 @onready var visual: PlaneVisual = $VisualRoot
 @onready var _collision_shape: CollisionShape3D = $CollisionShape3D
-@onready var _muzzles: Array[Marker3D] = [$Muzzles/MuzzleL as Marker3D, $Muzzles/MuzzleR as Marker3D]
 
 
 ## Call right after instancing and *before* add_child(), so the values are part
@@ -472,6 +472,8 @@ func setup(data: PlaneData, plane_stats: PlaneStats, plane_team: Teams.Id, displ
 	plane_data = data
 	plane_id = data.id
 	stats = plane_stats
+	fitting_ids = stats.fitting_ids()
+	fitting_marks = PackedInt32Array(stats.fitting_marks)
 	team = plane_team
 	pilot_name = display_name
 	owner_peer_id = peer_id
@@ -497,14 +499,12 @@ func _ready() -> void:
 		if plane_data == null:
 			plane_data = GameCatalog.find_plane(GameCatalog.STARTER_PLANE_ID)
 	if stats == null:
-		stats = plane_data.build_base_stats(1)
+		stats = _stats_from_fitting_ids()
 		speed = stats.top_speed * 0.85
-	visual.build(plane_data, team)
+	visual.build(plane_data, team, stats.fittings)
 	hitboxes = PlaneHitboxes.from_visual(visual)
 	_measure_undercarriage()
-	var offsets: Array[Vector3] = visual.gun_offsets()
-	for index: int in range(mini(offsets.size(), _muzzles.size())):
-		_muzzles[index].position = offsets[index]
+	_gun_muzzles = visual.gun_muzzles()
 	input.set_multiplayer_authority(owner_peer_id)
 	_read_angles_from_transform()
 	audio = PlaneAudio.new()
@@ -537,8 +537,6 @@ func _process(_delta: float) -> void:
 	visual.set_roll_angle(visual_roll)
 	visual.set_part_damage(part_damage, velocity, has_flag(FLAG_BURNING))
 	visual.set_controls(control_state)
-	visual.set_boosting(has_flag(FLAG_BOOSTING))
-	visual.set_smoke_screen(has_flag(FLAG_CONCEALED))
 
 
 # ---------------------------------------------------------------------------
@@ -551,15 +549,6 @@ func forward() -> Vector3:
 
 func has_flag(flag: int) -> bool:
 	return status_flags & flag != 0
-
-
-func is_boosting() -> bool:
-	return has_flag(FLAG_BOOSTING)
-
-
-## Smoke screen active: enemies cannot target this plane or lead it.
-func is_concealed() -> bool:
-	return has_flag(FLAG_CONCEALED)
 
 
 func is_evading() -> bool:
@@ -617,7 +606,7 @@ func service_progress() -> float:
 ## Speed (m/s) at which this plane, undamaged and with its wheels and flaps
 ## down, has enough lift to leave the ground.
 func takeoff_speed() -> float:
-	return stats.top_speed * STALL_SPEED_RATIO / sqrt(1.0 + FLAP_LIFT_BONUS)
+	return stats.stall_speed / sqrt(1.0 + FLAP_LIFT_BONUS)
 
 
 ## Both wheels are down, locked, unbroken and still attached to their wings.
@@ -752,30 +741,26 @@ func evade_cooldown_ratio() -> float:
 	return clampf(_evade_cooldown / maxf(EVADE_COOLDOWN / maxf(stats.roll_rate, 0.1), 0.01), 0.0, 1.0)
 
 
-func gadget_cooldown_ratio() -> float:
-	if stats.gadget_type == ComponentCard.GadgetType.NONE or stats.gadget_cooldown <= 0.0:
-		return 0.0
-	return clampf(_gadget_cooldown / stats.gadget_cooldown, 0.0, 1.0)
-
-
-func has_gadget() -> bool:
-	return stats.gadget_type != ComponentCard.GadgetType.NONE
-
-
-func is_gadget_ready() -> bool:
-	return has_gadget() and _gadget_cooldown <= 0.0 and alive
-
-
 func is_evade_ready() -> bool:
 	return _evade_cooldown <= 0.0 and _evade_time <= 0.0 and alive and _aileron_health() >= EVADE_MIN_AILERONS
 
 
-## True when at least one gun is still attached to the plane.
+## True when at least one fitted gun is still attached to the plane.
 func has_guns() -> bool:
-	for gun_part: Part in GUN_PARTS:
-		if not is_part_gone(gun_part):
+	for station: int in range(CommanderProgression.GUN_STATION_COUNT):
+		if stats.gun_at(station) != null and not is_part_gone(GUN_STATION_PARTS[station]):
 			return true
 	return false
+
+
+## Rate of descent (m/s, at the surface) up to which this plane's
+## undercarriage makes a clean landing, and above which a leg collapses.
+func firm_landing_sink() -> float:
+	return FIRM_LANDING_SINK * stats.gear_strength
+
+
+func gear_collapse_sink() -> float:
+	return GEAR_COLLAPSE_SINK * stats.gear_strength
 
 
 # ---------------------------------------------------------------------------
@@ -924,15 +909,14 @@ func respawn(spawn_transform: Transform3D, parked: bool = false) -> void:
 	_knock_velocity = Vector3.ZERO
 	_evade_time = 0.0
 	_evade_cooldown = 0.0
-	_nitro_time = 0.0
-	_smoke_time = 0.0
 	_burn_time = 0.0
 	_burn_dps = 0.0
 	_burn_source = null
 	_last_attacker = null
 	_last_attacker_age = INF
 	_doomed_by = null
-	_fire_cooldown = 0.0
+	_gun_cooldowns.fill(0.0)
+	_was_firing = false
 	_spawn_shield = GROUND_SHIELD_TIME if _on_ground else SPAWN_SHIELD_TIME
 	visual_roll = 0.0
 	current_target = null
@@ -1075,9 +1059,8 @@ func _integrate_flight(delta: float) -> void:
 	_liftoff_grace = maxf(_liftoff_grace - delta, 0.0)
 	_airborne_time += delta
 	if _on_ground:
-		# No rolls and no gadgets with the wheels on the ground.
+		# No rolls with the wheels on the ground.
 		input.consume_evade()
-		input.consume_gadget()
 		if _integrate_ground(steer, delta):
 			return
 		# Left the ground this tick (took off, or ran off the edge): fly on.
@@ -1085,8 +1068,6 @@ func _integrate_flight(delta: float) -> void:
 
 	if input.consume_evade():
 		_try_start_evade(steer.x)
-	if input.consume_gadget():
-		_try_activate_gadget()
 
 	# --- What is left of the aeroplane -------------------------------------
 	var left_lift: float = _side_lift(Part.LEFT_WING, Part.LEFT_WINGTIP)
@@ -1108,6 +1089,7 @@ func _integrate_flight(delta: float) -> void:
 	var fuselage_damage: float = part_damage[Part.FUSELAGE]
 	if fuel > 0.0 and fuselage_damage > 0.0:
 		var leak: float = FUEL_DUMP_RATE if fuselage_damage >= 1.0 else FUEL_LEAK_RATE * fuselage_damage * fuselage_damage
+		leak *= stats.fuel_leak  # Self-sealing tanks.
 		fuel = maxf(fuel - leak * delta, 0.0)
 
 	# Combat flaps: pulling hard drops them for a tighter turn at the cost of
@@ -1135,7 +1117,7 @@ func _integrate_flight(delta: float) -> void:
 	var control_feel: float = (1.0 - FUSELAGE_FEEL_LOSS * fuselage_damage) * (1.0 - TAIL_FEEL_LOSS * tail_damage)
 
 	# --- Lift: is there enough of it to stay up? -----------------------------
-	var speed_fraction: float = speed / maxf(stats.top_speed * STALL_SPEED_RATIO, 1.0)
+	var speed_fraction: float = speed / maxf(stats.stall_speed, 1.0)
 	var speed_lift: float = clampf(speed_fraction * speed_fraction, 0.0, 1.0)
 	var closeness: float = _ground_closeness()
 	_lift_ratio = clampf(wing_lift * speed_lift * (1.0 + FLAP_LIFT_BONUS * flap_effect) * (1.0 + GROUND_EFFECT_LIFT * closeness), 0.0, 1.0)
@@ -1178,10 +1160,9 @@ func _integrate_flight(delta: float) -> void:
 	# --- Speed: the throttle sets what the engine is asked for; climbing ------
 	# bleeds speed and diving builds it.
 	var drive: float = _drive()
-	var nitro_multiplier: float = 1.0 + stats.gadget_power if _nitro_time > 0.0 and drive > 0.0 else 1.0
 	var drag: float = (1.0 - WING_DRAG * (2.0 - left_lift - right_lift)) * (1.0 - FLAP_DRAG * _flap_deploy) * (1.0 - GEAR_DRAG * gear_deploy)
-	var powered_speed: float = stats.top_speed * (1.0 - ENGINE_SPEED_LOSS * (1.0 - power)) * drag * nitro_multiplier
-	var powered_response: float = stats.acceleration * (1.0 - ENGINE_ACCEL_LOSS * (1.0 - power)) * (3.0 if nitro_multiplier > 1.0 else 1.0)
+	var powered_speed: float = stats.top_speed * (1.0 - ENGINE_SPEED_LOSS * (1.0 - power)) * drag
+	var powered_response: float = stats.acceleration * (1.0 - ENGINE_ACCEL_LOSS * (1.0 - power))
 	# With no drive at all the plane settles to a glide: quickly behind a dead
 	# engine's windmilling propeller, gently behind one that is merely idling.
 	var glide_response: float = IDLE_RESPONSE if power > 0.0 else DEAD_ENGINE_RESPONSE
@@ -1199,7 +1180,7 @@ func _integrate_flight(delta: float) -> void:
 		# then works up to its full effect.
 		engine_pull = minf(engine_pull, _ground_thrust(drive, power) * lerpf(1.0, LIFTOFF_THRUST_GAIN, _airborne_time / LIFTOFF_THRUST_TIME))
 	speed += (engine_pull + gravity_pull) * delta
-	speed = clampf(speed, 0.0, stats.top_speed * DIVE_SPEED_RATIO * nitro_multiplier)
+	speed = clampf(speed, 0.0, stats.top_speed * DIVE_SPEED_RATIO)
 
 	control_state = Vector3(steer.x, steer.y, _flap_deploy)
 	_knock_velocity = _knock_velocity.lerp(Vector3.ZERO, 1.0 - exp(-KNOCK_DAMPING * delta))
@@ -1362,7 +1343,7 @@ func _integrate_ground(steer: Vector2, delta: float) -> bool:
 	var left_lift: float = _side_lift(Part.LEFT_WING, Part.LEFT_WINGTIP)
 	var right_lift: float = _side_lift(Part.RIGHT_WING, Part.RIGHT_WINGTIP)
 	var flap_effect: float = _flap_deploy * 0.5 * (part_health(Part.LEFT_FLAP) + part_health(Part.RIGHT_FLAP))
-	var speed_fraction: float = speed / maxf(stats.top_speed * STALL_SPEED_RATIO, 1.0)
+	var speed_fraction: float = speed / maxf(stats.stall_speed, 1.0)
 	var raw_lift: float = 0.5 * (left_lift + right_lift) * speed_fraction * speed_fraction * (1.0 + FLAP_LIFT_BONUS * flap_effect)
 	_lift_ratio = clampf(raw_lift, 0.0, 1.0)
 	var elevators: float = 0.5 * (part_health(Part.LEFT_ELEVATOR) + part_health(Part.RIGHT_ELEVATOR))
@@ -1474,7 +1455,7 @@ func _meet_the_ground(delta: float) -> bool:
 	var sink: float = -velocity.y
 	if below > LIP_DEPTH:
 		# Too low over the edge: the lip of the island takes the wheels off.
-		sink = maxf(sink, GEAR_COLLAPSE_SINK + below)
+		sink = maxf(sink, gear_collapse_sink() + below)
 	elif sink <= 0.0 or (_liftoff_grace > 0.0 and sink < 2.0):
 		return false  # Skimming the surface on the way up.
 	_touch_down(field, sink)
@@ -1503,16 +1484,19 @@ func _touch_down(field: Airfield, sink: float) -> void:
 	var low_leg: int = GEAR_LEFT if low_side > 0.0 else GEAR_RIGHT
 	var low_wingtip: Part = Part.LEFT_WINGTIP if low_side > 0.0 else Part.RIGHT_WINGTIP
 
+	# Stronger legs move every threshold the undercarriage is responsible for.
+	var firm_sink: float = firm_landing_sink()
+	var collapse_sink: float = gear_collapse_sink()
 	if gear_usable():
-		if sink > FIRM_LANDING_SINK:
+		if sink > firm_sink:
 			# A heavy arrival strains whatever the legs are bolted to.
-			var strain: float = clampf((sink - FIRM_LANDING_SINK) / (GEAR_COLLAPSE_SINK - FIRM_LANDING_SINK), 0.0, 1.0)
+			var strain: float = clampf((sink - firm_sink) / (collapse_sink - firm_sink), 0.0, 1.0)
 			_impact_damage(Part.LEFT_WING, FIRM_LANDING_WING_DAMAGE * strain)
 			_impact_damage(Part.RIGHT_WING, FIRM_LANDING_WING_DAMAGE * strain)
 			_impact_damage(Part.FUSELAGE, FIRM_LANDING_FUSELAGE_DAMAGE * strain)
-		if sink > BOTH_LEGS_SINK or nose_down > NOSE_COLLAPSE_PITCH:
+		if sink > BOTH_LEGS_SINK * stats.gear_strength or nose_down > NOSE_COLLAPSE_PITCH:
 			_break_gear(GEAR_LEFT | GEAR_RIGHT)
-		elif sink > GEAR_COLLAPSE_SINK or absf(bank) > WINGTIP_TORN_BANK:
+		elif sink > collapse_sink or absf(bank) > WINGTIP_TORN_BANK:
 			_break_gear(low_leg)
 		if nose_down > PROP_STRIKE_PITCH:
 			_break_propeller()
@@ -1694,51 +1678,46 @@ func _evade_velocity() -> Vector3:
 	return right * _evade_direction * EVADE_SIDE_SPEED * sin(progress * PI)
 
 
-func _try_activate_gadget() -> void:
-	if not is_gadget_ready():
-		return
-	if stats.gadget_type == ComponentCard.GadgetType.NITRO_BOOST and engine_power() <= 0.0:
-		return  # Nothing left to boost.
-	_gadget_cooldown = stats.gadget_cooldown
-	match stats.gadget_type:
-		ComponentCard.GadgetType.NITRO_BOOST:
-			_nitro_time = stats.gadget_duration
-		ComponentCard.GadgetType.SMOKE_SCREEN:
-			_smoke_time = stats.gadget_duration
-		ComponentCard.GadgetType.REPAIR_PULSE:
-			for node: Node in get_tree().get_nodes_in_group(&"planes"):
-				var ally: PlaneActor = node as PlaneActor
-				if ally == null or not ally.alive or ally.team != team:
-					continue
-				if ally.global_position.distance_to(global_position) <= REPAIR_RADIUS:
-					ally.repair_parts(stats.gadget_power * 2.0)
-	gadget_used.emit(self, stats.gadget_type)
-
-
 # ---------------------------------------------------------------------------
 # Weapons
 # ---------------------------------------------------------------------------
 
+## Every fitted gun fires on its own clock, at its own rate. A plane with one
+## gun fitted fires one gun.
 func _tick_weapons(delta: float) -> void:
-	_fire_cooldown = maxf(_fire_cooldown - delta, 0.0)
-	if not input.firing or weapons_locked or bullet_system == null or _evade_time > 0.0 or _on_ground:
+	for station: int in range(_gun_cooldowns.size()):
+		_gun_cooldowns[station] = maxf(_gun_cooldowns[station] - delta, 0.0)
+	var firing: bool = input.firing and not weapons_locked and bullet_system != null and _evade_time <= 0.0 and not _on_ground
+	if firing and not _was_firing:
+		_stagger_guns()
+	_was_firing = firing
+	if not firing:
 		return
-	if _fire_cooldown > 0.0 or not has_guns():
-		return
-	_fire_cooldown = 1.0 / maxf(stats.fire_rate, 0.1)
-	_fire()
+	for station: int in range(CommanderProgression.GUN_STATION_COUNT):
+		var gun: ComponentCard = stats.gun_at(station)
+		if gun == null or _gun_cooldowns[station] > 0.0 or is_part_gone(GUN_STATION_PARTS[station]):
+			continue
+		_gun_cooldowns[station] = 1.0 / maxf(gun.fire_rate, 0.1)
+		_fire_gun(station, gun)
 
 
-func _fire() -> void:
-	# Alternate between the wing guns, skipping one whose wing has gone. With
-	# one gun left the rate of fire halves, because every other shot is missing.
-	var muzzle_index: int = _next_muzzle
-	_next_muzzle = (_next_muzzle + 1) % _muzzles.size()
-	if is_part_gone(GUN_PARTS[muzzle_index]):
-		return
-	var muzzle: Marker3D = _muzzles[muzzle_index]
-	visual.flash_muzzle(muzzle_index)
-	var origin: Vector3 = muzzle.global_position
+## As the trigger is pressed the guns are set a fraction of a beat apart, so
+## they rattle one after another instead of all firing on the same instant.
+func _stagger_guns() -> void:
+	var count: int = maxi(stats.gun_count(), 1)
+	var order: int = 0
+	for station: int in range(CommanderProgression.GUN_STATION_COUNT):
+		var gun: ComponentCard = stats.gun_at(station)
+		if gun == null:
+			continue
+		_gun_cooldowns[station] = maxf(_gun_cooldowns[station], float(order) / (float(count) * maxf(gun.fire_rate, 0.1)))
+		order += 1
+
+
+func _fire_gun(station: int, gun: ComponentCard) -> void:
+	visual.flash_muzzle(station)
+	var muzzle: Vector3 = _gun_muzzles[station] if station < _gun_muzzles.size() else Vector3.ZERO
+	var origin: Vector3 = global_transform * muzzle
 	var nose: Vector3 = forward()
 	# Wing guns converge on the centre line a few hundred metres out.
 	var direction: Vector3 = (global_position + nose * GUN_CONVERGENCE - origin).normalized()
@@ -1747,15 +1726,28 @@ func _fire() -> void:
 		var to_assist: Vector3 = (input.assist_point - origin).normalized()
 		if nose.angle_to(to_assist) <= AIM_ASSIST_CONE:
 			direction = to_assist
-	var spread: float = tan(deg_to_rad(stats.gun_spread_deg))
+	var spread: float = tan(deg_to_rad(gun.spread_deg))
 	var plane_basis: Basis = global_transform.basis
 	direction = (direction + plane_basis.x * _rng.randfn(0.0, spread) + plane_basis.y * _rng.randfn(0.0, spread)).normalized()
 	# Bullets inherit the plane's velocity; Ballistics.lead_point assumes this.
 	# They live a little longer than range / speed because drag slows them.
-	bullet_system.spawn(origin, direction * stats.bullet_speed + velocity, self,
-			stats.gun_range / stats.bullet_speed * 1.15, stats.bullet_damage, stats.bullet_speed,
-			stats.burn_dps, stats.burn_duration)
+	bullet_system.spawn(origin, direction * gun.muzzle_speed + velocity, self,
+			gun.gun_range / gun.muzzle_speed * 1.15, gun.damage_at(stats.gun_mark(station)), gun.muzzle_speed)
+	last_fired_gun = gun
 	shot_fired.emit(self)
+
+
+## Stats for a plane that arrived with only its replicated fitting ids (a
+## remote peer), or with nothing at all (then: as it left the factory).
+func _stats_from_fitting_ids() -> PlaneStats:
+	if fitting_ids.size() != CommanderProgression.MOUNT_COUNT:
+		return plane_data.build_stock_stats(1)
+	var fittings: Array[ComponentCard] = []
+	var marks: Array[int] = []
+	for mount: int in range(CommanderProgression.MOUNT_COUNT):
+		fittings.append(GameCatalog.find_card(StringName(fitting_ids[mount])))
+		marks.append(fitting_marks[mount] if mount < fitting_marks.size() else 1)
+	return plane_data.build_stats(1, fittings, marks)
 
 
 ## An incendiary hit keeps eating the part it set alight.
@@ -1778,9 +1770,6 @@ func _tick_burn(delta: float) -> void:
 
 func _tick_timers(delta: float) -> void:
 	_evade_cooldown = maxf(_evade_cooldown - delta, 0.0)
-	_gadget_cooldown = maxf(_gadget_cooldown - delta, 0.0)
-	_nitro_time = maxf(_nitro_time - delta, 0.0)
-	_smoke_time = maxf(_smoke_time - delta, 0.0)
 	_spawn_shield = maxf(_spawn_shield - delta, 0.0)
 	_last_attacker_age += delta
 	if _evade_time > 0.0:
@@ -1794,10 +1783,6 @@ func _tick_timers(delta: float) -> void:
 
 func _refresh_status_flags() -> void:
 	var flags: int = 0
-	if _nitro_time > 0.0:
-		flags |= FLAG_BOOSTING
-	if _smoke_time > 0.0:
-		flags |= FLAG_CONCEALED
 	if _evade_time > 0.0:
 		flags |= FLAG_EVADING
 	# On fire: an incendiary hit, a destroyed engine, or fuel pouring from a

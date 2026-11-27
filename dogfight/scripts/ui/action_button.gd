@@ -1,9 +1,9 @@
 class_name ActionButton
 extends Control
-## Chunky right-thumb button (FIRE, EVADE ROLL, Tactical Gadget).
+## Chunky right-thumb button (FIRE, EVADE ROLL, ENGINE, GEAR).
 ##
 ## Presses and releases an Input action, so it works for both "hold" actions
-## (fire) and "tap" actions (roll, gadget). Tracks its own touch index, which
+## (fire) and "tap" actions (roll, engine, gear). Tracks its own touch index, which
 ## lets the player hold FIRE with one finger and tap ROLL with another while
 ## the left thumb is on the stick.
 ##
@@ -21,7 +21,7 @@ enum IconKind { CROSSHAIR, ROLL_ARROW, BOLT, PROPELLER, WHEEL }
 var cooldown_ratio: float = 0.0: set = _set_cooldown_ratio
 ## Seconds shown in the middle while cooling down (0 hides the number).
 var cooldown_seconds: float = 0.0
-## Greyed out and ignoring touches (dead, or no gadget equipped).
+## Greyed out and ignoring touches (dead, or nothing to do).
 var disabled: bool = false: set = _set_disabled
 ## Shows a lamp in the corner, for buttons that switch something on and off
 ## (engine running, wheels down).

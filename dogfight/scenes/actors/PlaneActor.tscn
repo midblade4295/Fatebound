@@ -67,6 +67,12 @@ properties/14/replication_mode = 1
 properties/15/path = NodePath(".:gear_deploy")
 properties/15/spawn = true
 properties/15/replication_mode = 1
+properties/16/path = NodePath(".:fitting_ids")
+properties/16/spawn = true
+properties/16/replication_mode = 0
+properties/17/path = NodePath(".:fitting_marks")
+properties/17/spawn = true
+properties/17/replication_mode = 0
 
 [node name="PlaneActor" type="CharacterBody3D"]
 collision_layer = 2
@@ -78,14 +84,6 @@ shape = SubResource("SphereShape3D_hit")
 
 [node name="VisualRoot" type="Node3D" parent="."]
 script = ExtResource("2_visual")
-
-[node name="Muzzles" type="Node3D" parent="."]
-
-[node name="MuzzleL" type="Marker3D" parent="Muzzles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.8, -0.5, -3)
-
-[node name="MuzzleR" type="Marker3D" parent="Muzzles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.8, -0.5, -3)
 
 [node name="PlaneInput" type="Node" parent="."]
 script = ExtResource("3_input")

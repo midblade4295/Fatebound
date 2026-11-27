@@ -1,26 +1,27 @@
 extends Node
 ## Autoload "Profile": everything the player owns and has chosen.
 ##
-## Coins, lifetime Hangar XP, per-card level/copies, the selected plane and the
-## equipped loadout. All progression rules live in ComponentCard and
-## CommanderProgression; this node only holds state, applies those rules and
-## saves the result. Purely local and cosmetic: no real money, no server.
+## Coins, lifetime Hangar XP, the items collected (how many units of each, how
+## many spares, which Mark), the selected plane and what is fitted to each of
+## its mounts. All the rules live in ComponentCard and CommanderProgression;
+## this node only holds state, applies those rules and saves the result.
+## Purely local: no real money, no server.
 
 signal changed
 signal commander_leveled_up(new_level: int)
-signal card_upgraded(card: ComponentCard, new_level: int)
+signal card_upgraded(card: ComponentCard, new_mark: int)
 
 const DEFAULT_SAVE_PATH: String = "user://squadron_profile.json"
-const SAVE_VERSION: int = 1
+## 2: items are fittings with units, spares and Marks (1 was levelled cards).
+const SAVE_VERSION: int = 2
 const STARTING_COINS: int = 300
-const STARTER_SPARE_COPIES: int = 2
 
 var pilot_name: String = "You"
 var coins: int = STARTING_COINS
 ## Lifetime Hangar XP. The Commander Level is always derived from this.
 var commander_xp: int = 0
 var selected_plane_id: StringName = GameCatalog.STARTER_PLANE_ID
-## One entry per card slot (always MAX_CARD_SLOTS long); &"" means empty.
+## What is fitted to each mount (always MOUNT_COUNT long); &"" means empty.
 var loadout: Array[StringName] = []
 ## Stick up = nose up by default; true flips it to flight-sim style.
 var invert_pitch: bool = false
@@ -28,8 +29,11 @@ var invert_pitch: bool = false
 var persistence_enabled: bool = true
 var save_path: String = DEFAULT_SAVE_PATH
 
-var _card_levels: Dictionary[StringName, int] = {}
-var _card_copies: Dictionary[StringName, int] = {}
+## Units of each item that can be fitted (never more than the item's max_units).
+var _units: Dictionary[StringName, int] = {}
+## Units beyond that: what Mark upgrades are paid in.
+var _spares: Dictionary[StringName, int] = {}
+var _marks: Dictionary[StringName, int] = {}
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
@@ -47,27 +51,35 @@ func commander_level() -> int:
 	return CommanderProgression.level_for_total_xp(commander_xp)
 
 
-func card_slot_count() -> int:
-	return CommanderProgression.card_slot_count(commander_level())
-
-
 func owns_card(card_id: StringName) -> bool:
-	return _card_levels.has(card_id)
+	return card_units(card_id) > 0
 
 
-func card_level(card_id: StringName) -> int:
-	return _card_levels.get(card_id, 0)
+## How many of an item the player has to fit (a gun station takes one each).
+func card_units(card_id: StringName) -> int:
+	return _units.get(card_id, 0)
 
 
-func card_copies(card_id: StringName) -> int:
-	return _card_copies.get(card_id, 0)
+## Extra units, good only for raising the item's Mark.
+func card_spares(card_id: StringName) -> int:
+	return _spares.get(card_id, 0)
+
+
+## The item's Mark, 1 (Mk I) to ComponentCard.MAX_MARK. 0 if not owned.
+func card_mark(card_id: StringName) -> int:
+	return _marks.get(card_id, 1) if owns_card(card_id) else 0
+
+
+## How many mounts currently hold this item.
+func fitted_count(card_id: StringName) -> int:
+	return loadout.count(card_id) if card_id != &"" else 0
 
 
 func can_upgrade_card(card_id: StringName) -> bool:
 	var card: ComponentCard = GameCatalog.find_card(card_id)
 	if card == null or not owns_card(card_id):
 		return false
-	return card.can_upgrade(card_level(card_id), card_copies(card_id), coins)
+	return card.can_upgrade(card_mark(card_id), card_spares(card_id), coins)
 
 
 func selected_plane() -> PlaneData:
@@ -77,49 +89,50 @@ func selected_plane() -> PlaneData:
 	return plane
 
 
-## Equipped cards in slot order; null for empty or still-locked slots.
+## What is fitted, in mount order; null for empty or still-locked mounts.
 func equipped_cards() -> Array[ComponentCard]:
 	var cards: Array[ComponentCard] = []
 	var level: int = commander_level()
-	for slot: int in range(CommanderProgression.MAX_CARD_SLOTS):
+	for mount: int in range(CommanderProgression.MOUNT_COUNT):
 		var card: ComponentCard = null
-		if CommanderProgression.is_slot_unlocked(slot, level) and loadout[slot] != &"":
-			card = GameCatalog.find_card(loadout[slot])
+		if CommanderProgression.is_mount_unlocked(mount, level) and loadout[mount] != &"":
+			card = GameCatalog.find_card(loadout[mount])
 		cards.append(card)
 	return cards
 
 
-func equipped_card_levels() -> Array[int]:
-	var levels: Array[int] = []
-	for slot: int in range(CommanderProgression.MAX_CARD_SLOTS):
-		levels.append(card_level(loadout[slot]))
-	return levels
+## The Mark of whatever is in each mount (1 for an empty one).
+func equipped_card_marks() -> Array[int]:
+	var marks: Array[int] = []
+	for mount: int in range(CommanderProgression.MOUNT_COUNT):
+		marks.append(maxi(card_mark(loadout[mount]), 1))
+	return marks
 
 
 ## The stat block the player's plane flies with right now.
 func build_player_stats() -> PlaneStats:
-	return selected_plane().build_stats(commander_level(), equipped_cards(), equipped_card_levels())
+	return selected_plane().build_stats(commander_level(), equipped_cards(), equipped_card_marks())
 
 
 # ---------------------------------------------------------------------------
 # Mutations
 # ---------------------------------------------------------------------------
 
-## Spends coins + copies to raise a card one level and awards Hangar XP.
+## Spends coins and spares to raise an item one Mark and awards Hangar XP.
 ## Returns false (and changes nothing) when the upgrade is not affordable.
 func try_upgrade_card(card_id: StringName) -> bool:
 	var card: ComponentCard = GameCatalog.find_card(card_id)
 	if card == null or not owns_card(card_id):
 		return false
-	var level: int = card_level(card_id)
-	if not card.can_upgrade(level, card_copies(card_id), coins):
+	var mark: int = card_mark(card_id)
+	if not card.can_upgrade(mark, card_spares(card_id), coins):
 		return false
 	var level_before: int = commander_level()
-	coins -= card.coin_cost(level)
-	_card_copies[card_id] = card_copies(card_id) - card.copies_required(level)
-	commander_xp += card.xp_reward(level)
-	_card_levels[card_id] = level + 1
-	card_upgraded.emit(card, level + 1)
+	coins -= card.coin_cost(mark)
+	_spares[card_id] = card_spares(card_id) - card.spares_required(mark)
+	commander_xp += card.xp_reward(mark)
+	_marks[card_id] = mark + 1
+	card_upgraded.emit(card, mark + 1)
 	var level_after: int = commander_level()
 	if level_after > level_before:
 		commander_leveled_up.emit(level_after)
@@ -127,17 +140,18 @@ func try_upgrade_card(card_id: StringName) -> bool:
 	return true
 
 
-## Adds copies of a card, unlocking it at its rarity's start level if new.
-func add_card_copies(card_id: StringName, amount: int) -> void:
+## Adds units of an item. Up to the most that could be fitted they are units
+## to fit; any more become spares.
+func add_card_units(card_id: StringName, amount: int) -> void:
 	var card: ComponentCard = GameCatalog.find_card(card_id)
 	if card == null or amount <= 0:
 		return
-	var remaining: int = amount
-	if not owns_card(card_id):
-		_card_levels[card_id] = card.start_level()
-		_card_copies[card_id] = 0
-		remaining -= 1  # The first copy is the card itself.
-	_card_copies[card_id] = card_copies(card_id) + remaining
+	if not _marks.has(card_id):
+		_marks[card_id] = 1
+	var room: int = maxi(card.max_units() - card_units(card_id), 0)
+	var fitted: int = mini(amount, room)
+	_units[card_id] = card_units(card_id) + fitted
+	_spares[card_id] = card_spares(card_id) + amount - fitted
 	_commit()
 
 
@@ -146,45 +160,52 @@ func add_coins(amount: int) -> void:
 	_commit()
 
 
-## Equips an owned card. Returns false if the slot is locked, the category does
-## not fit the slot, or the card is already equipped elsewhere.
-func equip_card(slot: int, card_id: StringName) -> bool:
+## Fits an owned item to a mount. Returns false if the mount is locked, the
+## item does not go there, or every unit of it is already fitted elsewhere.
+func equip_card(mount: int, card_id: StringName) -> bool:
 	var card: ComponentCard = GameCatalog.find_card(card_id)
 	if card == null or not owns_card(card_id):
 		return false
-	if not CommanderProgression.is_slot_unlocked(slot, commander_level()):
+	if not CommanderProgression.is_mount_unlocked(mount, commander_level()):
 		return false
-	if not CommanderProgression.slot_accepts(slot, card):
+	if not CommanderProgression.mount_accepts(mount, card):
 		return false
-	var existing_slot: int = loadout.find(card_id)
-	if existing_slot != -1 and existing_slot != slot:
+	var fitted_elsewhere: int = fitted_count(card_id) - (1 if loadout[mount] == card_id else 0)
+	if fitted_elsewhere >= card_units(card_id):
 		return false
-	loadout[slot] = card_id
+	loadout[mount] = card_id
 	_commit()
 	return true
 
 
-func unequip_slot(slot: int) -> void:
-	if slot < 0 or slot >= loadout.size():
-		return
-	loadout[slot] = &""
+## Takes whatever is in a mount off. Returns false for a mount the plane cannot
+## fly with empty (propeller, engine, wingtips, undercarriage): swap those.
+func unequip_mount(mount: int) -> bool:
+	if mount < 0 or mount >= loadout.size() or loadout[mount] == &"":
+		return false
+	var card: ComponentCard = GameCatalog.find_card(loadout[mount])
+	if card != null and not card.is_optional():
+		return false
+	loadout[mount] = &""
 	_commit()
+	return true
 
 
-## First open slot that would accept [param card], or -1.
-func find_slot_for(card: ComponentCard) -> int:
+## Where [param card] would go if fitted now: an empty open mount of its kind,
+## else one holding something different, else -1 (nowhere, or no unit spare).
+func find_mount_for(card: ComponentCard) -> int:
+	if card == null or fitted_count(card.id) >= card_units(card.id):
+		return -1
 	var level: int = commander_level()
-	var fallback: int = -1
-	for slot: int in range(CommanderProgression.MAX_CARD_SLOTS):
-		if not CommanderProgression.is_slot_unlocked(slot, level):
+	var replace: int = -1
+	for mount: int in range(CommanderProgression.MOUNT_COUNT):
+		if not CommanderProgression.is_mount_unlocked(mount, level) or not CommanderProgression.mount_accepts(mount, card):
 			continue
-		if not CommanderProgression.slot_accepts(slot, card):
-			continue
-		if loadout[slot] == &"":
-			return slot
-		if fallback == -1:
-			fallback = slot
-	return fallback
+		if loadout[mount] == &"":
+			return mount
+		if replace == -1 and loadout[mount] != card.id:
+			replace = mount
+	return replace
 
 
 func select_plane(plane_id: StringName) -> bool:
@@ -196,7 +217,7 @@ func select_plane(plane_id: StringName) -> bool:
 	return true
 
 
-## End-of-match payout: coins plus a small "crate" of card copies.
+## End-of-match payout: coins plus a small crate of items.
 func grant_match_rewards(won: bool, kills: int) -> MatchRewards:
 	var rewards: MatchRewards = MatchRewards.new()
 	rewards.coins = 30 + 6 * maxi(kills, 0) + (50 if won else 0)
@@ -204,10 +225,10 @@ func grant_match_rewards(won: bool, kills: int) -> MatchRewards:
 	var drops: int = 3 if won else 2
 	for _drop: int in range(drops):
 		var card: ComponentCard = _roll_card_drop()
-		var copies: int = _copies_for_drop(card)
+		var units: int = _units_for_drop(card)
 		rewards.card_ids.append(card.id)
-		rewards.card_counts.append(copies)
-		add_card_copies(card.id, copies)
+		rewards.card_counts.append(units)
+		add_card_units(card.id, units)
 	_commit()
 	return rewards
 
@@ -221,18 +242,10 @@ func reset_to_new_profile(save_now: bool = true) -> void:
 	commander_xp = 0
 	selected_plane_id = GameCatalog.STARTER_PLANE_ID
 	invert_pitch = false
-	_card_levels.clear()
-	_card_copies.clear()
-	loadout.clear()
-	loadout.resize(CommanderProgression.MAX_CARD_SLOTS)
-	loadout.fill(&"")
-	for card_id: StringName in GameCatalog.STARTER_CARD_IDS:
-		var card: ComponentCard = GameCatalog.find_card(card_id)
-		_card_levels[card_id] = card.start_level()
-		_card_copies[card_id] = STARTER_SPARE_COPIES
-		var slot: int = find_slot_for(card)
-		if slot != -1:
-			loadout[slot] = card_id
+	_units.clear()
+	_spares.clear()
+	_marks.clear()
+	_fit_stock()
 	if save_now:
 		_commit()
 	else:
@@ -242,12 +255,12 @@ func reset_to_new_profile(save_now: bool = true) -> void:
 func save_profile() -> void:
 	if not persistence_enabled:
 		return
-	var cards: Dictionary = {}
-	for card_id: StringName in _card_levels:
-		cards[String(card_id)] = {"level": _card_levels[card_id], "copies": card_copies(card_id)}
-	var slots: Array[String] = []
+	var items: Dictionary = {}
+	for card_id: StringName in _units:
+		items[String(card_id)] = {"units": card_units(card_id), "spares": card_spares(card_id), "mark": card_mark(card_id)}
+	var mounts: Array[String] = []
 	for card_id: StringName in loadout:
-		slots.append(String(card_id))
+		mounts.append(String(card_id))
 	var data: Dictionary = {
 		"version": SAVE_VERSION,
 		"pilot_name": pilot_name,
@@ -255,8 +268,8 @@ func save_profile() -> void:
 		"commander_xp": commander_xp,
 		"selected_plane_id": String(selected_plane_id),
 		"invert_pitch": invert_pitch,
-		"loadout": slots,
-		"cards": cards,
+		"loadout": mounts,
+		"items": items,
 	}
 	var file: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null:
@@ -278,26 +291,64 @@ func load_profile() -> void:
 	commander_xp = maxi(_read_int(data, "commander_xp", commander_xp), 0)
 	selected_plane_id = StringName(_read_string(data, "selected_plane_id", String(selected_plane_id)))
 	invert_pitch = _read_bool(data, "invert_pitch", invert_pitch)
-	var saved_cards: Variant = data.get("cards", {})
-	if saved_cards is Dictionary:
-		var card_dict: Dictionary = saved_cards
-		for key: Variant in card_dict:
-			var card: ComponentCard = GameCatalog.find_card(StringName(str(key)))
-			var entry: Variant = card_dict[key]
-			if card == null or not entry is Dictionary:
-				continue  # Card removed from the game since this save was written.
-			var entry_dict: Dictionary = entry
-			_card_levels[card.id] = clampi(_read_int(entry_dict, "level", card.start_level()), card.start_level(), ComponentCard.MAX_LEVEL)
-			_card_copies[card.id] = maxi(_read_int(entry_dict, "copies", 0), 0)
-	var saved_loadout: Variant = data.get("loadout", [])
-	if saved_loadout is Array:
-		var slots: Array = saved_loadout
-		for slot: int in range(mini(slots.size(), loadout.size())):
-			var card_id: StringName = StringName(str(slots[slot]))
-			var card: ComponentCard = GameCatalog.find_card(card_id)
-			var valid: bool = card != null and owns_card(card_id) and CommanderProgression.slot_accepts(slot, card)
-			loadout[slot] = card_id if valid else &""
+	# A version 1 save holds the old levelled cards, which no longer exist.
+	# Coins, XP and the chosen plane carry over; the fittings start from stock.
+	if _read_int(data, "version", 1) >= 2:
+		var saved_items: Variant = data.get("items", {})
+		if saved_items is Dictionary:
+			var item_dict: Dictionary = saved_items
+			for key: Variant in item_dict:
+				var card: ComponentCard = GameCatalog.find_card(StringName(str(key)))
+				var entry: Variant = item_dict[key]
+				if card == null or not entry is Dictionary:
+					continue  # Item removed from the game since this save was written.
+				var entry_dict: Dictionary = entry
+				var units: int = clampi(_read_int(entry_dict, "units", 0), 0, card.max_units())
+				if units <= 0:
+					continue
+				_units[card.id] = maxi(units, card_units(card.id))
+				_spares[card.id] = maxi(_read_int(entry_dict, "spares", 0), 0)
+				_marks[card.id] = clampi(_read_int(entry_dict, "mark", 1), 1, ComponentCard.MAX_MARK)
+		var saved_loadout: Variant = data.get("loadout", [])
+		if saved_loadout is Array:
+			var mounts: Array = saved_loadout
+			loadout.fill(&"")
+			for mount: int in range(mini(mounts.size(), loadout.size())):
+				var card_id: StringName = StringName(str(mounts[mount]))
+				var card: ComponentCard = GameCatalog.find_card(card_id)
+				if card != null and CommanderProgression.mount_accepts(mount, card) and fitted_count(card_id) < card_units(card_id):
+					loadout[mount] = card_id
+	_repair_loadout()
 	changed.emit()
+
+
+## Gives the player the stock items and fits them: what every pilot starts with.
+func _fit_stock() -> void:
+	loadout.clear()
+	loadout.resize(CommanderProgression.MOUNT_COUNT)
+	loadout.fill(&"")
+	for mount: int in range(CommanderProgression.MOUNT_COUNT):
+		var card_id: StringName = GameCatalog.STOCK_FITTING_IDS[mount]
+		if card_id == &"":
+			continue
+		_units[card_id] = card_units(card_id) + 1
+		_marks[card_id] = 1
+		loadout[mount] = card_id
+
+
+## Makes sure nothing is missing that a plane cannot fly without: any such
+## mount found empty gets the standard item back (which every pilot owns).
+func _repair_loadout() -> void:
+	for mount: int in range(CommanderProgression.MOUNT_COUNT):
+		if loadout[mount] != &"":
+			continue
+		var stock: ComponentCard = GameCatalog.stock_card_for(CommanderProgression.MOUNT_SLOTS[mount])
+		if stock == null:
+			continue
+		if not owns_card(stock.id):
+			_units[stock.id] = 1
+			_marks[stock.id] = 1
+		loadout[mount] = stock.id
 
 
 # JSON hands everything back as Variant (and every number as float), so each
@@ -335,7 +386,8 @@ func _commit() -> void:
 
 
 func _roll_card_drop() -> ComponentCard:
-	# Rarity odds: Common 70%, Rare 22%, Epic 7%, Legendary 1%.
+	# Rarity odds: Common 70%, Rare 22%, Epic 7%, Legendary 1% (falls back to
+	# any item while there are no Legendary ones).
 	var roll: float = _rng.randf()
 	var rarity: ComponentCard.Rarity = ComponentCard.Rarity.COMMON
 	if roll > 0.99:
@@ -353,11 +405,9 @@ func _roll_card_drop() -> ComponentCard:
 	return pool[_rng.randi_range(0, pool.size() - 1)]
 
 
-func _copies_for_drop(card: ComponentCard) -> int:
-	match card.rarity:
-		ComponentCard.Rarity.COMMON:
-			return _rng.randi_range(3, 8)
-		ComponentCard.Rarity.RARE:
-			return _rng.randi_range(1, 3)
-		_:
-			return 1
+## A drop is one of the thing: one gun, one propeller. Common items sometimes
+## come in pairs.
+func _units_for_drop(card: ComponentCard) -> int:
+	if card.rarity == ComponentCard.Rarity.COMMON:
+		return _rng.randi_range(1, 2)
+	return 1

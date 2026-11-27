@@ -4,10 +4,10 @@
 
 [resource]
 script = ExtResource("1_card")
-id = &"air_armor"
-display_name = "Armor Plating"
-description = "Steel behind the seat and around the tanks. Takes a beating."
-category = 2
-rarity = 1
-glyph = "ARM"
-max_hp_bonus = 0.07
+id = &"gear_standard"
+display_name = "Standard undercarriage"
+description = "The standard legs and tyres."
+slot = 5
+rarity = 0
+glyph = "UC"
+model_variant = &"gear_standard"

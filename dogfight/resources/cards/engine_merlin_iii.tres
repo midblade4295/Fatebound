@@ -4,11 +4,10 @@
 
 [resource]
 script = ExtResource("1_card")
-id = &"arm_hispano"
-display_name = "Hispano Cannons"
-description = "Slow, heavy 20mm shells that hit like a hammer."
-category = 1
-rarity = 1
-glyph = "DMG"
-fire_rate_bonus = -0.02
-damage_bonus = 0.09
+id = &"engine_merlin_iii"
+display_name = "Merlin III"
+description = "The standard single-stage engine."
+slot = 2
+rarity = 0
+glyph = "M3"
+model_variant = &"engine_standard"

@@ -44,6 +44,8 @@ func _ready() -> void:
 			_fire = argument.trim_prefix("fire=") == "1"
 		elif argument.begins_with("seed="):
 			GameSession.match_seed = int(argument.trim_prefix("seed="))
+		elif argument.begins_with("fit="):
+			_fit(argument.trim_prefix("fit=").split("+"))
 		elif argument.begins_with("crates="):
 			for _crate: int in range(int(argument.trim_prefix("crates="))):
 				Profile.grant_match_rewards(true, 5)
@@ -74,6 +76,21 @@ func _apply_demo_damage() -> void:
 	for part: PlaneActor.Part in [PlaneActor.Part.RIGHT_WINGTIP, PlaneActor.Part.RUDDER]:
 		plane.apply_damage(100000.0, null, part)
 	plane.apply_damage(plane.stats.max_hp * PlaneActor.PART_STRENGTH[PlaneActor.Part.ENGINE] * 0.5, null, PlaneActor.Part.ENGINE)
+
+
+## fit=<item id>+<item id>+... gives the player every item (at Commander
+## Level 8, so every mount is open) and fits the listed ones, in order, each
+## to the next free mount of its kind. A gun id listed twice fits two guns.
+func _fit(item_ids: PackedStringArray) -> void:
+	Profile.commander_xp = CommanderProgression.total_xp_for_level(8)
+	for card: ComponentCard in GameCatalog.CARDS:
+		Profile.add_card_units(card.id, card.max_units())
+	for station: int in range(CommanderProgression.GUN_STATION_COUNT):
+		Profile.unequip_mount(station)
+	for item_id: String in item_ids:
+		var card: ComponentCard = GameCatalog.find_card(StringName(item_id))
+		if card != null:
+			Profile.equip_card(Profile.find_mount_for(card), card.id)
 
 
 func _drop_player() -> void:

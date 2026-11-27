@@ -9,7 +9,7 @@ extends Node
 ## Networking: in an online match this node's multiplayer authority is the
 ## owning peer and the InputSync child replicates `steer`/`firing` to the
 ## server, which stays authoritative over the plane itself. One-shot buttons go
-## through RPCs so a dropped packet can never swallow an evade or a gadget.
+## through RPCs so a dropped packet can never swallow an evade, an engine start or a gear selection.
 
 ## x: -1 turn left .. +1 turn right.  y: -1 nose down .. +1 nose up.
 @export var steer: Vector2 = Vector2.ZERO
@@ -24,7 +24,6 @@ var assist_point: Vector3 = Vector3.ZERO
 var assist_active: bool = false
 
 var _evade_pending: bool = false
-var _gadget_pending: bool = false
 var _engine_pending: bool = false
 var _gear_pending: bool = false
 
@@ -35,14 +34,6 @@ func press_evade() -> void:
 		_evade_pending = true
 	else:
 		_rpc_press_evade.rpc_id(1)
-
-
-## Request the tactical gadget.
-func press_gadget() -> void:
-	if multiplayer.is_server():
-		_gadget_pending = true
-	else:
-		_rpc_press_gadget.rpc_id(1)
 
 
 ## Press the engine starter (or the cut-off, if it is running).
@@ -68,12 +59,6 @@ func consume_evade() -> bool:
 	return pending
 
 
-func consume_gadget() -> bool:
-	var pending: bool = _gadget_pending
-	_gadget_pending = false
-	return pending
-
-
 func consume_engine() -> bool:
 	var pending: bool = _engine_pending
 	_engine_pending = false
@@ -93,7 +78,6 @@ func clear() -> void:
 	firing = false
 	assist_active = false
 	_evade_pending = false
-	_gadget_pending = false
 	_engine_pending = false
 	_gear_pending = false
 
@@ -101,11 +85,6 @@ func clear() -> void:
 @rpc("authority", "call_remote", "reliable")
 func _rpc_press_evade() -> void:
 	_evade_pending = true
-
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_press_gadget() -> void:
-	_gadget_pending = true
 
 
 @rpc("authority", "call_remote", "reliable")

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ComponentCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/component_card.gd" id="1_card"]
+
+[resource]
+script = ExtResource("1_card")
+id = &"engine_merlin_61"
+display_name = "Merlin 61"
+description = "Two-stage supercharger with a chin intake. Faster and a better climber, for some extra weight in the nose."
+slot = 2
+rarity = 1
+glyph = "M61"
+model_variant = &"engine_two_stage"
+weight = 0.02
+top_speed_bonus = 0.05
+climb_rate_bonus = 0.05
