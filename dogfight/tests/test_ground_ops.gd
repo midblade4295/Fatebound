@@ -64,6 +64,8 @@ var _swing: float = 0.0
 var _most_right_stick: float = 0.0
 var _widest_on_run: float = 0.0
 var _gear_moves: Array[bool] = []
+## How far down the flaps still were just after the wheels came up.
+var _flaps_after_gear: float = -1.0
 var _speed_gear_down: float = 0.0
 var _speed_half_throttle: float = 0.0
 var _speed_idle: float = 0.0
@@ -310,10 +312,18 @@ func _fly_player() -> void:
 			if _stage_clock >= 8.0:
 				_speed_gear_down = _player.speed
 				_check(_speed_gear_down < top * 0.85, "wheels down is draggy (%.0f of %.0f m/s)" % [_speed_gear_down, top])
+				_check(_player.flap_deploy() > 0.99, "the landing flaps are down while the wheels are (%.2f)" % _player.flap_deploy())
+				_flaps_after_gear = -1.0
 				input.press_gear()
 				_next_stage()
 		7:
 			input.steer = Vector2(_level_wings(_player), _hold_climb(_player, 5.0))
+			# The flaps are on the same lever: by the time the wheels are up,
+			# so are they, whatever the speed.
+			if _flaps_after_gear < 0.0 and _stage_clock >= 2.5:
+				_flaps_after_gear = _player.flap_deploy()
+				_check(is_zero_approx(_player.gear_deploy) and _flaps_after_gear < 0.01,
+						"the landing flaps go up with the wheels, at once and at any speed (flaps %.2f, %.0f m/s, clean stall %.0f)" % [_flaps_after_gear, _player.indicated_speed(), _player.stats.stall_speed])
 			if _stage_clock >= 9.0:
 				_check(_gear_moves == [false], "the GEAR lever raised the wheels (%s)" % str(_gear_moves))
 				_check(is_zero_approx(_player.gear_deploy) and not _player.is_gear_down(), "they are up and locked (%.2f)" % _player.gear_deploy)

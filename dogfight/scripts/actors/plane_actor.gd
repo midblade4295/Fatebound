@@ -194,10 +194,6 @@ const AIRBORNE_AFTER: float = 0.3
 ## this long (s) after the last wheel leaves it.
 const GROUND_AILERON_SHARE: float = 0.5
 const STICK_STEERS_FADE: float = 0.7
-## The landing flaps stay down after the wheels come up until the plane is
-## going this much faster than its clean stalling speed, so cleaning up does
-## not drop it.
-const CLEAN_UP_STALL_MARGIN: float = 1.25
 ## Running into a hangar faster than this destroys the plane (m/s).
 const GROUND_CRASH_SPEED: float = 10.0
 
@@ -414,8 +410,6 @@ var _underside_scraped: bool = false
 var _sink_before: float = 0.0
 ## Whether the plane was over an airfield last tick (to notice the edge).
 var _over_field: bool = false
-## Landing flaps held down after take-off until there is speed to spare.
-var _takeoff_flaps: bool = false
 ## How far the bottom of the fuselage is below the plane's centre (from the model).
 var _belly_height: float = DEFAULT_BELLY_HEIGHT
 
@@ -892,7 +886,6 @@ func respawn(spawn_transform: Transform3D, parked: bool = false) -> void:
 	_arrival_sink = 0.0
 	_crash_taken = 0.0
 	_underside_scraped = false
-	_takeoff_flaps = _on_ground
 	part_damage.fill(0.0)
 	_gone_mask = 0
 	fuel = 1.0
@@ -1146,13 +1139,10 @@ func _fly(steer: Vector2, delta: float) -> void:
 	var indicated: float = flight.indicated_airspeed
 	var flap_demand: float = clampf((steer.y - FLAP_DEPLOY_STICK) / (1.0 - FLAP_DEPLOY_STICK), 0.0, 1.0)
 	flap_demand *= 1.0 - smoothstep(0.9, 1.1, indicated / maxf(stats.top_speed * FLAP_LIMIT_SPEED_RATIO, 1.0))
-	# The landing flaps come down with the wheels, and after a take-off they
-	# stay down until the plane has speed in hand.
-	if gear_deploy > 0.5:
-		_takeoff_flaps = true
-	elif indicated >= stats.stall_speed * CLEAN_UP_STALL_MARGIN:
-		_takeoff_flaps = false
-	flap_demand = maxf(flap_demand, maxf(gear_deploy, 1.0 if _takeoff_flaps else 0.0))
+	# The landing flaps are on the same lever as the wheels: they come down
+	# with them and go up with them, over the same two seconds. Raising them
+	# takes lift away, so cleaning up too slow lets the plane sink.
+	flap_demand = maxf(flap_demand, gear_deploy)
 	if _on_ground:
 		flap_demand = gear_deploy
 	_flap_deploy = move_toward(_flap_deploy, flap_demand, FLAP_SPEED * delta)

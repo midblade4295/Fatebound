@@ -13,6 +13,10 @@ var _hold_straight: bool = true
 var _run_time: float = 60.0
 var _landing: bool = false
 var _approach_pitch: float = 0.0
+## The climb-out after take-off: nose angle held (degrees) and the most the
+## stick is pulled to hold it.
+var _climb_pitch: float = 8.0
+var _climb_pull: float = 0.6
 var _approach_throttle: float = 0.3
 var _approach_speed: float = 1.3
 ## Height (m, under the wheels) at which the landing pilot starts to flare; 0 = never.
@@ -24,7 +28,11 @@ var _tail_up: bool = true
 
 func _ready() -> void:
 	for argument: String in OS.get_cmdline_user_args():
-		if argument.begins_with("pull="):
+		if argument.begins_with("climb="):
+			_climb_pitch = argument.trim_prefix("climb=").to_float()
+		elif argument.begins_with("climbpull="):
+			_climb_pull = argument.trim_prefix("climbpull=").to_float()
+		elif argument.begins_with("pull="):
 			_pull = argument.trim_prefix("pull=").to_float()
 		elif argument.begins_with("rudder="):
 			_hold_straight = argument.trim_prefix("rudder=") != "0"
@@ -100,17 +108,17 @@ func _physics_process(delta: float) -> void:
 		else:
 			if _player.is_gear_down() and _player.height_above_ground() > 12.0:
 				input.press_gear()
-			var target_pitch: float = deg_to_rad(8.0)
-			var stick_y: float = clampf((target_pitch - _player.pitch) * 2.5 - _player.flight.angular_velocity.x * 0.8, -0.6, 0.6)
+			var target_pitch: float = deg_to_rad(_climb_pitch)
+			var stick_y: float = clampf((target_pitch - _player.pitch) * 2.5 - _player.flight.angular_velocity.x * 0.8, -0.6, _climb_pull)
 			var stick_x: float = clampf(_player.bank * 2.0 + _player.flight.angular_velocity.z * 0.4, -1.0, 1.0)
 			input.steer = Vector2(stick_x, stick_y)
 	if _clock >= _next_print:
 		_next_print += 0.5 if _clock < 30.0 else 2.0
 		var place: Vector2 = _field.runway_coordinates(_player.global_position)
-		print("t=%5.1f %s v=%5.1f h=%6.1f vy=%5.1f pitch=%5.1f bank=%5.1f along=%5.0f off=%5.1f a=%5.1f g=%4.2f stall=%.2f thr=%.2f steer=%.2v trim=%.2v yaw=%.1f beta=%.1f rud=%.2f w=%.3v" % [
+		print("t=%5.1f %s v=%5.1f h=%6.1f vy=%5.1f pitch=%5.1f bank=%5.1f along=%5.0f off=%5.1f a=%5.1f g=%4.2f stall=%.2f thr=%.2f steer=%.2v trim=%.2v yaw=%.1f beta=%.1f rud=%.2f w=%.3v gear=%.2f flaps=%.2f" % [
 			_clock, ("GND" if _player.is_on_ground() else "AIR") if _player.alive else "DEAD", _player.indicated_speed(), _player.height_above_ground(), _player.velocity.y,
 			rad_to_deg(_player.pitch), rad_to_deg(_player.bank), place.y, place.x, rad_to_deg(_player.flight.alpha), _player.load_factor(),
-			_player.flight.stall, _player.throttle, input.steer, _player.flight.trim, rad_to_deg(_player.yaw), rad_to_deg(_player.flight.beta), _player.flight.rudder, _player.flight.angular_velocity])
+			_player.flight.stall, _player.throttle, input.steer, _player.flight.trim, rad_to_deg(_player.yaw), rad_to_deg(_player.flight.beta), _player.flight.rudder, _player.flight.angular_velocity, _player.gear_deploy, _player.flap_deploy()])
 	if _clock >= _run_time:
 		for slot: PilotSlot in _manager.get_roster():
 			var plane: PlaneActor = slot.plane

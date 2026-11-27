@@ -360,11 +360,11 @@ HUD (CanvasLayer)                         hud.gd
     propeller into the runway. Running out of island ends in the sea.
   - *There is no moment of "lift-off"* in the code: the wheels just carry
     less and less. `TestGroundOps` measures the largest tick-to-tick change
-    in pitch, climb rate, acceleration and height through a take-off. The
-    landing flaps stay down after the wheels come up until the plane is 25%
-    above its clean stalling speed.
-  - *Undercarriage.* Wheels down is drag, and brings the landing flaps down
-    with it (more lift, more drag, a lower stalling speed). It takes two
+    in pitch, climb rate, acceleration and height through a take-off.
+  - *Undercarriage.* Wheels down is drag, and the landing flaps are on the
+    same lever: down with the wheels (more lift, more drag, a lower stalling
+    speed) and up with them, whatever the speed. Raising them takes that
+    lift away, so the plane sags a little as it cleans up. It takes two
     seconds to travel, and goes with the wing it is bolted to.
   - *Throttle.* It sets the power, and so the thrust. Closed, the plane is a
     glider. An approach is flown on the throttle: about 1.3 times the
