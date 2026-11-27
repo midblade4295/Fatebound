@@ -43,6 +43,8 @@ var _height_start: Dictionary[int, float] = {}
 var _died_at: Dictionary[int, float] = {}
 var _died_height: Dictionary[int, float] = {}
 var _rudder_wander: float = 0.0
+var _one_wing_spin: float = 0.0
+var _one_wing_bank: float = 0.0
 ## Planes that touched another aircraft at any point (none should).
 var _collided: Array[PlaneActor] = []
 var _live_stage: int = 0
@@ -117,6 +119,9 @@ func _physics_process(delta: float) -> void:
 				_check_right_turn()
 				_mark()
 				_set_stick(Vector2(0.0, 1.0))
+				# The one-winged plane's pilot also holds the stick over
+				# against the missing wing.
+				_wing_lost.input.steer = Vector2(1.0, 1.0)
 				_stage = 3
 		3:
 			# 1 s of full back stick.
@@ -136,7 +141,8 @@ func _physics_process(delta: float) -> void:
 				_check_flap_turn()
 				_stage = 6
 		6:
-			if _clock >= 30.0:
+			# Long enough for the two with dead engines to glide all the way down.
+			if _clock >= 80.0 or _all_lost():
 				_final_checks()
 				_finish()
 
@@ -343,11 +349,13 @@ func _destroy(plane: PlaneActor, part: PlaneActor.Part, attacker: PlaneActor) ->
 func _check_hands_off() -> void:
 	_check(_yaw_drift(_tip_lost) < -0.06, "a missing right wingtip drags the nose right (yaw drift %.3f rad)" % _yaw_drift(_tip_lost))
 	_check(_tip_lost.bank < -0.12, "and hangs that side low (bank %.2f rad)" % _tip_lost.bank)
-	_check(_tip_lost.lift_ratio() < 0.9 and _height_lost(_tip_lost) > _height_lost(_reference) + 3.0,
-			"with less wing it sinks (lift %.2f, %.1f m lost)" % [_tip_lost.lift_ratio(), _height_lost(_tip_lost)])
+	_check(not _tip_lost.is_stalling() and _height_lost(_tip_lost) < 12.0,
+			"at speed, less wing is still enough wing: it does not sink (%.1f m lost)" % _height_lost(_tip_lost))
 	_check(absf(_yaw_drift(_reference)) < 0.02 and absf(_height_lost(_reference)) < 2.0, "the undamaged plane flies straight and level")
 	_check(_wing_lost.alive and _wing_lost.is_going_down(), "a plane with one wing is going down, but is still flying")
 	_check(_yaw_drift(_wing_lost) > 0.25 and _wing_lost.bank > 0.5, "and rolls hard toward the missing wing (yaw %.2f, bank %.2f rad)" % [_yaw_drift(_wing_lost), _wing_lost.bank])
+	_one_wing_spin = _yaw_drift(_wing_lost)
+	_one_wing_bank = _wing_lost.bank
 	_check(_rudder_wander > 0.012 and absf(_attacker.bank) < 0.05, "with no rudder the nose wanders but the wings stay level (%.3f rad)" % _rudder_wander)
 	_check(_engine_lost.has_flag(PlaneActor.FLAG_BURNING) and _engine_lost.is_going_down(), "a destroyed engine burns and the plane is going down")
 	_check(_fuel_hit.fuel < 0.7 and _fuel_hit.fuel > 0.3, "a wrecked fuselage is pouring fuel (%.0f%% left)" % (_fuel_hit.fuel * 100.0))
@@ -365,14 +373,15 @@ func _check_hands_off() -> void:
 
 func _check_right_turn() -> void:
 	var clean_turn: float = absf(_yaw_drift(_reference))
-	_check(clean_turn > 1.0, "reference plane turns normally (%.2f rad in 1.5 s)" % clean_turn)
+	_check(clean_turn > 0.6 and absf(_reference.bank) > deg_to_rad(40.0), "reference plane banks and turns (%.2f rad in 1.5 s, banked %.0f degrees)" % [clean_turn, rad_to_deg(absf(_reference.bank))])
 	_check(_reference.flap_deploy() > 0.9, "pulling hard drops the combat flaps")
 	var rudderless: float = absf(_yaw_drift(_attacker))
-	_check(rudderless < clean_turn * 0.8 and rudderless > clean_turn * 0.4, "without a rudder the plane still turns, but weakly (%.2f vs %.2f rad)" % [rudderless, clean_turn])
+	_check(rudderless < clean_turn * 0.95 and rudderless > clean_turn * 0.6, "without a rudder the plane still turns on its bank, a little less well (%.2f vs %.2f rad)" % [rudderless, clean_turn])
 	# Turning right is *toward* the tip-less side, which the damage helps.
 	_check(absf(_yaw_drift(_tip_lost)) > 0.5, "the tip-less plane answers the stick (%.2f rad)" % absf(_yaw_drift(_tip_lost)))
 	# Right stick against a missing left wing: the pilot can fight the roll.
-	_check(_yaw_drift(_wing_lost) < 0.25, "full opposite stick checks the one-winged plane's spin (yaw %.2f rad in 1.5 s)" % _yaw_drift(_wing_lost))
+	_check(_yaw_drift(_wing_lost) < _one_wing_spin * 0.9, "full opposite stick slows the one-winged plane's spin (%.2f against %.2f rad in 1.5 s)" % [_yaw_drift(_wing_lost), _one_wing_spin])
+	_check(_wing_lost.bank < _one_wing_bank - 0.15, "and lifts the low side some of the way (bank %.2f against %.2f rad)" % [_wing_lost.bank, _one_wing_bank])
 	var flap: Node3D = _reference.visual.get_node("Model").find_child("FlapL", true, false) as Node3D
 	var rudder: Node3D = _reference.visual.get_node("Model").find_child("Rudder", true, false) as Node3D
 	_check(flap != null and rudder != null, "the model has separate flap and rudder pieces")
@@ -384,10 +393,14 @@ func _check_right_turn() -> void:
 
 func _check_pull_up() -> void:
 	var clean_pull: float = _reference.pitch - _pitch_start[_reference.get_instance_id()]
-	_check(clean_pull > 0.5, "reference plane pitches up normally (%.2f rad in 1 s)" % clean_pull)
+	_check(clean_pull > 0.2 and _reference.load_factor() > 1.8, "reference plane pulls up as hard as its speed allows (%.2f rad in 1 s at %.1f g)" % [clean_pull, _reference.load_factor()])
+	# g for the airspeed it has: less wing gives less of it.
+	var tip_grip: float = _tip_lost.load_factor() / pow(_tip_lost.speed / _tip_lost.stats.stall_speed, 2.0)
+	var clean_grip: float = _reference.load_factor() / pow(_reference.speed / _reference.stats.stall_speed, 2.0)
+	_check(tip_grip < clean_grip * 0.9, "with a wingtip gone the wings cannot pull as hard for the same speed (%.2f against %.2f)" % [tip_grip, clean_grip])
 	var one_wing_pull: float = _wing_lost.pitch - _pitch_start[_wing_lost.get_instance_id()]
-	_check(_wing_lost.alive and one_wing_pull > 0.05, "the one-winged plane's pilot can still raise the nose (%.2f rad)" % one_wing_pull)
-	_check(one_wing_pull < clean_pull * 0.8, "though not as well as a whole plane")
+	_check(_wing_lost.alive, "the one-winged plane is still being flown, stick hard over and back")
+	_check(one_wing_pull < clean_pull * 0.8, "but half its lift cannot raise the nose as a whole plane's can (%.2f against %.2f rad)" % [one_wing_pull, clean_pull])
 
 
 func _check_engines() -> void:
@@ -439,6 +452,14 @@ func _final_checks() -> void:
 			"score is BLUE 2 - 2 RED (got %d - %d)" % [_manager.team_score(Teams.Id.TEAM_BLUE), _manager.team_score(Teams.Id.TEAM_RED)])
 	_check(_reference.alive and _engine_hit.alive and _attacker.alive, "planes with lesser damage are still flying at the end")
 	_check(_collided.is_empty(), "no test plane touched another aircraft")
+
+
+## True once the four planes that cannot stay up have all gone in.
+func _all_lost() -> bool:
+	for plane: PlaneActor in [_wing_lost, _tail_lost, _engine_lost, _fuel_hit]:
+		if not _died_at.has(plane.get_instance_id()):
+			return false
+	return _clock >= 30.0
 
 
 func _set_stick(steer: Vector2) -> void:

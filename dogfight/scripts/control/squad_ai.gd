@@ -43,17 +43,20 @@ const HEAD_ON_BREAK_TIME: float = 0.6
 ## Any plane that will pass within this distance inside AVOID_LOOKAHEAD
 ## seconds is dodged, friend or foe.
 const AVOID_MISS_DISTANCE: float = 14.0
-const AVOID_LOOKAHEAD: float = 0.8
-const MIN_SAFE_ALTITUDE: float = 70.0
+const AVOID_LOOKAHEAD: float = 1.2
+const MIN_SAFE_ALTITUDE: float = 90.0
 ## Seconds of look-ahead used for the "am I about to hit something" checks.
-const TERRAIN_LOOKAHEAD: float = 2.6
+const TERRAIN_LOOKAHEAD: float = 5.0
+## Straight steps used to follow the curve of a turn when looking ahead.
+const PATH_STEPS: int = 3
 ## Number of physics ticks of target history kept for the reaction delay.
 const TRACK_SAMPLES: int = 40
 const LANE_OFFSET: float = 70.0
-## Bots drift back into this height band so the fight stays between the
-## cliff tops and the ceiling instead of creeping ever higher.
-const PREFERRED_ALTITUDE_MIN: float = 140.0
-const PREFERRED_ALTITUDE_MAX: float = 480.0
+## Bots drift back into this height band: above the tallest island, which a
+## plane cannot turn away from in the room it has once it is among them, and
+## below the ceiling so the fight does not creep ever higher.
+const PREFERRED_ALTITUDE_MIN: float = 280.0
+const PREFERRED_ALTITUDE_MAX: float = 560.0
 ## A shot is taken when the gun line passes within this many metres of the
 ## aim point, even if the angular fire cone says no (close-range snapshots).
 const SNAPSHOT_MISS_DISTANCE: float = 7.0
@@ -88,6 +91,9 @@ var _break_timer: float = 0.0
 var _break_side: float = 1.0
 var _avoid_side: float = 1.0
 var _obstacle_ahead: bool = false
+## For judging how fast the plane is turning between one think and the next.
+var _last_yaw: float = 0.0
+var _think_gap: float = THINK_INTERVAL
 # --- Human factors, all derived from `skill` in setup() ---------------------
 ## Seconds between seeing the target do something and responding to it.
 var _reaction_time: float = 0.25
@@ -195,6 +201,7 @@ func _physics_process(delta: float) -> void:
 	if _think_timer <= 0.0:
 		# Rookies also think a little slower.
 		_think_timer = THINK_INTERVAL * lerpf(1.6, 1.0, skill)
+		_think_gap = _think_timer
 		_think()
 	_fly()
 	# Hands are not instant: move the real stick toward the wanted position.
@@ -372,7 +379,9 @@ func _fly_recover(input: PlaneInput) -> void:
 	if plane.global_position.y > plane.arena_ceiling - 40.0 and not _obstacle_ahead:
 		steer.y = -0.5  # Too high rather than too low.
 	if _obstacle_ahead:
-		steer.x = _avoid_side
+		# Turning is what clears an island; some pull as well, but not so
+		# much that the turn is starved of lift.
+		steer = Vector2(_avoid_side, 0.45)
 	input.steer = steer
 
 
@@ -521,9 +530,10 @@ func _pull_trigger(looks_good: bool, delta: float) -> bool:
 func _fly_patrol(input: PlaneInput) -> void:
 	# Lazy orbit around the arena centre at a personal height.
 	_patrol_phase += 0.004
-	var radius: float = plane.arena_radius * 0.35
+	# Inside the ring of islands, and above the tallest of them.
+	var radius: float = plane.arena_radius * 0.26
 	var point: Vector3 = plane.arena_center + Vector3(cos(_patrol_phase) * radius, 0.0, sin(_patrol_phase) * radius)
-	point.y = 260.0 + _lane.y * 90.0
+	point.y = 330.0 + _lane.y * 50.0
 	var desired: Vector3 = (point - plane.global_position).normalized()
 	desired = (desired + _separation() * SEPARATION_WEIGHT).normalized()
 	desired.y += _altitude_bias()
@@ -589,20 +599,41 @@ func _is_altitude_unsafe() -> bool:
 	return height > plane.arena_ceiling
 
 
-## Ray ahead along the flight path against the world layer. Also probes left
-## and right to decide which way to turn away.
+## Looks ahead for something solid, both straight off the nose and round the
+## curve the plane is actually flying (a turning plane does not go where its
+## nose points). Also probes left and right to decide which way to turn away;
+## if that does not settle it, it turns toward the middle of the arena, where
+## there is nothing to hit.
 func _check_obstacle_ahead() -> bool:
 	var space: PhysicsDirectSpaceState3D = plane.get_world_3d().direct_space_state
 	var origin: Vector3 = plane.global_position
 	var nose: Vector3 = plane.forward()
 	var reach: float = maxf(plane.speed, 40.0) * TERRAIN_LOOKAHEAD
-	if not _ray_blocked(space, origin, origin + nose * reach):
+	var blocked: bool = _ray_blocked(space, origin, origin + nose * reach)
+	if not blocked:
+		# Along the turn: a few straight steps, each swung round by how far
+		# the plane will have turned by then.
+		var turn_rate: float = wrapf(plane.yaw - _last_yaw, -PI, PI) / maxf(_think_gap, 0.01)
+		var step_time: float = TERRAIN_LOOKAHEAD / float(PATH_STEPS)
+		var point: Vector3 = origin
+		for step: int in range(PATH_STEPS):
+			var heading: Vector3 = nose.rotated(Vector3.UP, turn_rate * step_time * (float(step) + 0.5))
+			var next: Vector3 = point + heading * maxf(plane.speed, 40.0) * step_time
+			if _ray_blocked(space, point, next):
+				blocked = true
+				break
+			point = next
+	_last_yaw = plane.yaw
+	if not blocked:
 		return false
 	var right: Vector3 = Vector3(cos(plane.yaw), 0.0, -sin(plane.yaw))
 	var right_blocked: bool = _ray_blocked(space, origin, origin + (nose + right * 0.7).normalized() * reach)
 	var left_blocked: bool = _ray_blocked(space, origin, origin + (nose - right * 0.7).normalized() * reach)
 	if right_blocked != left_blocked:
 		_avoid_side = -1.0 if right_blocked else 1.0
+	else:
+		var to_center: Vector3 = plane.arena_center - origin
+		_avoid_side = 1.0 if to_center.dot(right) >= 0.0 else -1.0
 	return true
 
 

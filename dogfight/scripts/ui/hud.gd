@@ -161,6 +161,9 @@ func _update_flight_panel() -> void:
 	if shown == null or not is_instance_valid(shown):
 		return
 	var readout: String = "SPD %3d km/h   ALT %4d m" % [roundi(shown.speed_kmh()), roundi(maxf(shown.altitude(), 0.0))]
+	# How hard the wings are pulling, once it is more than a gentle turn.
+	if not shown.is_on_ground() and shown.load_factor() >= 1.5:
+		readout += "   %.1f G" % shown.load_factor()
 	if shown.broken_gear_mask() != 0:
 		readout += "   GEAR BROKEN"
 	elif shown.gear_deploy > 0.02:
@@ -249,6 +252,8 @@ func _flight_guidance() -> String:
 		return "Ease the stick back to lift off"
 	if player.is_going_down():
 		return "You are going down - fly it as far as you can"
+	if player.is_stalling():
+		return "STALLING - ease the nose down to get your speed back"
 	var home_distance: float = INF
 	if _home != null:
 		home_distance = Vector2(player.global_position.x - _home.global_position.x, player.global_position.z - _home.global_position.z).length()

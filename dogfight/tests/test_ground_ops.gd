@@ -281,16 +281,21 @@ func _fly_player() -> void:
 				_check(is_zero_approx(_player.gear_deploy) and not _player.is_gear_down(), "they are up and locked (%.2f)" % _player.gear_deploy)
 				_check((_player.audio.get_node("Gear") as AudioStreamPlayer3D).stream != null, "the undercarriage has a sound")
 				_check(_player.speed > _speed_gear_down + top * 0.1, "and the plane is faster for it (%.0f -> %.0f m/s)" % [_speed_gear_down, _player.speed])
-				input.throttle = 0.25
+				input.throttle = 0.5
 				_altitude_mark = _player.global_position.y
 				_next_stage()
 		8:
-			# Throttle back: it slows down, and below flying speed it sinks.
+			# Half throttle holds a lower speed; closing it altogether leaves a
+			# glider that slows until its wings can no longer hold it level.
 			input.steer = Vector2(0.0, _hold_pitch(_player, 0.0))
-			if _stage_clock >= 13.0:
-				_check(_player.speed < top * 0.62, "throttling back slows the plane (%.0f of %.0f m/s)" % [_player.speed, top])
-				_check(_player.lift_ratio() < 1.0 and _player.global_position.y < _altitude_mark - 5.0, "and too slow, it sinks (lift %.2f, lost %.0f m)" % [_player.lift_ratio(), _altitude_mark - _player.global_position.y])
-				_check(_player.is_engine_running(), "the engine is still running at low throttle")
+			if _stage_clock >= 8.0 and input.throttle > 0.0:
+				_check(_player.speed < top * 0.85 and _player.speed > _player.stats.stall_speed and not _player.is_stalling(),
+						"half throttle holds a lower speed, still flying (%.0f of %.0f m/s)" % [_player.speed, top])
+				input.throttle = 0.0
+			if _stage_clock >= 21.0:
+				_check(_player.speed < top * 0.66, "closing the throttle slows the plane (%.0f of %.0f m/s)" % [_player.speed, top])
+				_check(_player.global_position.y < _altitude_mark - 5.0, "until it can no longer hold its height (%.0f m lost)" % (_altitude_mark - _player.global_position.y))
+				_check(_player.is_engine_running(), "the engine is still running with the throttle closed")
 				input.throttle = 1.0
 				_next_stage()
 		9:
@@ -396,12 +401,16 @@ func _add_case(label: String, plane: PlaneActor, across: float, along: float, pi
 	var right: Vector3 = direction.cross(Vector3.UP).normalized()
 	var origin: Vector3 = _field.runway_start() + direction * along + right * across + Vector3.UP * APPROACH_HEIGHT
 	var heading: Vector3 = right if sideways else direction
+	if pitch_deg < -20.0:
+		# A dive: already pointing at the ground, from higher up.
+		origin += Vector3.UP * 60.0
+		heading = heading.rotated(heading.cross(Vector3.UP).normalized(), case.approach_pitch)
 	plane.set_engine_running(true)
 	plane.set_gear_down(wheels)
 	plane.input.throttle = APPROACH_THROTTLE
 	plane.throttle = APPROACH_THROTTLE
 	plane.speed = plane.stats.top_speed * 0.68
-	plane.teleport(Transform3D(Basis.looking_at(heading, Vector3.UP), origin))
+	plane.teleport(Transform3D(Basis.looking_at(heading.normalized(), Vector3.UP), origin))
 	plane.touched_down.connect(func(_plane: PlaneActor, sink: float, wheels_down: bool) -> void:
 		if case.touchdowns.is_empty():
 			case.on_wheels = wheels_down

@@ -16,10 +16,20 @@ extends CharacterBody3D
 ## another aircraft hard enough. Until then the pilot keeps whatever control
 ## the remaining parts give, all the way down.
 ##
-## Flight is still deliberately simple: the plane flies where its nose points,
-## the stick sets yaw/pitch rates and banking is automatic. On top of that sits
-## a lift check: too little wing or too little speed and the plane sinks and
-## its nose drops, whatever the stick says.
+## The controls are simple (stick sideways = turn, stick back = nose up) but
+## what they act on is physics. Lift goes with the square of airspeed and is
+## counted in g. The stick asks the wings for lift: enough upward to hold or
+## change the flight path, and some sideways to turn, which the plane gets by
+## banking. The wings can only give what the airspeed allows, so:
+##  - a turn is a bank, it is wider the faster the plane flies and tightest
+##    at the speed where the wings can just reach the g limit;
+##  - pulling hard costs speed (drag from making lift), so a turn held too
+##    long gets slower and wider;
+##  - too slow, the wings cannot hold the plane up and its path curves
+##    downward. Nothing drops it: it descends, picks up speed, and flies
+##    again. Putting the nose down gets the speed back sooner;
+##  - with the engine stopped or idling it is a glider, trading height for
+##    speed at about 1 in 6.
 ##
 ## Planes start on the ground. The pilot starts the engine, opens the throttle
 ## and rolls down the runway; the wheels stay on the ground until there is
@@ -97,15 +107,51 @@ const COLLISION_LAYER_WORLD: int = 1
 const COLLISION_LAYER_PLANES: int = 2
 
 const MAX_PITCH: float = deg_to_rad(72.0)
-const MAX_BANK: float = deg_to_rad(62.0)
+const MAX_BANK: float = deg_to_rad(78.0)
 ## How quickly yaw/pitch rates follow the stick (1/s), scaled by roll_rate.
 const STICK_RESPONSE: float = 5.0
 const BANK_RESPONSE: float = 4.0
 ## Nose drifts back to level when the stick's pitch axis is released.
 const AUTO_LEVEL_RATE: float = 0.35
-## Speed gained/lost per second when flying straight down/up (m/s^2).
-const GRAVITY_ACCEL: float = 18.0
-const MIN_SPEED_RATIO: float = 0.35
+## Gravity as the flight model feels it (m/s^2): the pull that lift has to
+## balance, what a dive earns and a climb costs. Scaled up from the real 9.8,
+## like the speeds, so manoeuvres play out in seconds on a small battlefield.
+const FLIGHT_GRAVITY: float = 20.0
+## The most g the airframe (and the pilot) will stand.
+const G_LIMIT: float = 5.0
+## Share of the available lift that can be used pushing the nose down.
+const NEGATIVE_G_SHARE: float = 0.4
+## Share of the available lift the pilot will ask for.
+const LIFT_IN_HAND: float = 0.97
+## How quickly the wings take up the load the stick asks for (1/s).
+const LOAD_RESPONSE: float = 5.0
+## Below this share of stalling-speed airflow the controls stop getting softer.
+const CONTROL_MIN_AIRFLOW: float = 0.3
+## Slowest airspeed used for "how fast does lift bend the path" (m/s), and the
+## smallest cosine divided by, so nothing runs away near a standstill or
+## flying straight up or down.
+const MIN_AERO_SPEED: float = 14.0
+const MIN_COSINE: float = 0.2
+## PlaneStats.turn_rate of a plane of ordinary agility.
+const REFERENCE_TURN_RATE: float = deg_to_rad(60.0)
+## The rudder alone skids the nose round this fast at full deflection.
+const RUDDER_YAW_RATE: float = deg_to_rad(7.0)
+
+# --- Drag ------------------------------------------------------------------------
+## Gliding: a clean plane is at its best at this multiple of its stalling
+## speed, where the drag of pushing through the air (PARASITE_DRAG, in g) is
+## about equal to the drag of making lift. That is a glide of roughly 1 in 6.
+const BEST_GLIDE_SPEED_RATIO: float = 1.25
+const PARASITE_DRAG: float = 0.075
+## Drag of making lift, in g, pulling 1 g at the stalling speed. It goes up
+## with the square of the g pulled, which is what a hard turn costs.
+const INDUCED_DRAG: float = 0.12
+const MIN_INDUCED_LIFT: float = 0.3
+## Extra drag of things hanging in the airflow, as a share of the clean plane's.
+const GEAR_PARASITE: float = 0.6
+const FLAP_PARASITE: float = 0.4
+const WING_PARASITE: float = 0.5
+const WINDMILL_DRAG: float = 0.35
 const DIVE_SPEED_RATIO: float = 1.3
 
 # --- Lift ---------------------------------------------------------------------
@@ -116,22 +162,19 @@ const WINGTIP_LIFT: float = 0.4
 const HOLED_WING_LIFT: float = 0.5
 ## Dropped flaps add this much lift, which is what makes them useful when slow.
 const FLAP_LIFT_BONUS: float = 0.12
-## With no lift at all the plane falls this fast (m/s) and its nose drops this
-## quickly; with part of its lift, proportionally less.
-const SINK_SPEED: float = 42.0
-const NOSE_DROP_RATE: float = deg_to_rad(30.0)
 
 # --- What the parts do for the controls ----------------------------------------
 ## Uneven lift drags the plane toward its weaker side: yaw rate and bank angle
 ## with one whole wing missing.
 const WING_PULL_YAW: float = deg_to_rad(22.0)
 const WING_PULL_BANK: float = deg_to_rad(52.0)
+## Share of a damaged wing's pull the pilot can hold off with full opposite
+## stick and both ailerons working.
+const HOLD_AGAINST_WING: float = 0.8
 ## Extra authority lost when turning *away* from the weaker side.
 const WING_OPPOSITE_TURN_LOSS: float = 0.35
-## Turning is mostly banking: with no ailerons only this much turn is left.
-const TURN_WITHOUT_AILERONS: float = 0.4
-## The rudder supplies this share of what remains.
-const RUDDER_TURN_SHARE: float = 0.35
+## Turning is banking: with no ailerons only this much roll is left.
+const ROLL_WITHOUT_AILERONS: float = 0.3
 ## With no elevators only this much pitch authority is left.
 const PITCH_WITHOUT_ELEVATORS: float = 0.08
 ## Fishtailing: the nose hunts from side to side when the rudder is hurt, and
@@ -148,7 +191,6 @@ const TAIL_FEEL_LOSS: float = 0.3
 ## Combat flaps drop automatically when the stick is pulled past this much.
 const FLAP_DEPLOY_STICK: float = 0.6
 const FLAP_SPEED: float = 2.2
-const FLAP_TURN_BONUS: float = 0.18
 const FLAP_DRAG: float = 0.12
 const FLAP_PULL_YAW: float = deg_to_rad(6.0)
 const FLAP_PULL_BANK: float = deg_to_rad(14.0)
@@ -158,10 +200,6 @@ const WING_DRAG: float = 0.12
 # --- Engine and fuel -------------------------------------------------------------
 const ENGINE_SPEED_LOSS: float = 0.4
 const ENGINE_ACCEL_LOSS: float = 0.6
-## Engine stopped: the windmilling propeller drags the plane down to this
-## fraction of top speed unless it dives.
-const DEAD_ENGINE_SPEED_RATIO: float = 0.3
-const DEAD_ENGINE_RESPONSE: float = 0.5
 ## A holed fuselage leaks fuel: fraction of the tank lost per second at full
 ## damage (it leaks with the square of the damage, so light damage weeps).
 const FUEL_LEAK_RATE: float = 0.05
@@ -174,9 +212,6 @@ const ENGINE_START_TIME: float = 2.3
 const ENGINE_STOP_TIME: float = 1.2
 ## How fast the engine follows the lever (full travel per second).
 const THROTTLE_SLEW: float = 1.4
-## With the throttle closed the plane slows this quickly toward gliding speed
-## (1/s). Much gentler than a dead engine's windmilling propeller.
-const IDLE_RESPONSE: float = 0.14
 
 # --- Undercarriage ---------------------------------------------------------------
 ## Seconds for the wheels to travel fully up or down.
@@ -220,12 +255,17 @@ const LIFTOFF_GRACE: float = 0.8
 ## After leaving the ground the flight model is eased in rather than switched
 ## on: the climb builds over LIFTOFF_CLIMB_TIME, the stick's pitch authority
 ## over LIFTOFF_CONTROL_TIME, and the engine's pull over LIFTOFF_THRUST_TIME
-## (from what it had on the runway up to LIFTOFF_THRUST_GAIN times that).
+## (from what it had on the runway up to FLIGHT_THRUST_GAIN times that).
 const LIFTOFF_CLIMB_TIME: float = 1.6
 const LIFTOFF_CONTROL_TIME: float = 2.5
 const LIFTOFF_CONTROL_START: float = 0.3
 const LIFTOFF_THRUST_TIME: float = 5.0
-const LIFTOFF_THRUST_GAIN: float = 3.5
+## The speed a throttle setting works toward is top speed times the setting
+## raised to this power.
+const THROTTLE_SPEED_POWER: float = 0.4
+## The most the engine can pull in flight, as a multiple of what it manages
+## standing on the runway. A little under 0.4 g for a stock plane.
+const FLIGHT_THRUST_GAIN: float = 1.35
 ## The landing flaps stay down after the wheels come up until the plane is
 ## going this share of top speed, so cleaning up does not drop it.
 const CLEAN_UP_SPEED_RATIO: float = 0.68
@@ -417,6 +457,8 @@ var _doomed_by: PlaneActor
 var _flap_deploy: float = 0.0
 var _fishtail_phase: float = 0.0
 var _lift_ratio: float = 1.0
+## How hard the wings are pulling, in g (1 = level flight).
+var _load: float = 1.0
 var _knock_velocity: Vector3 = Vector3.ZERO
 ## One bit per Part that is no longer on the plane (itself or its parent gone).
 var _gone_mask: int = 0
@@ -712,6 +754,19 @@ func lift_ratio() -> float:
 	return _lift_ratio
 
 
+## How hard the wings are pulling right now, in g: 1 in level flight, more in
+## a turn or a pull-up, less when the nose is being pushed over.
+func load_factor() -> float:
+	return _load
+
+
+## True when the plane is flying and its wings cannot hold it up: too slow, or
+## too little wing left. It is not falling out of the sky, but its path is
+## curving down until it has the speed back.
+func is_stalling() -> bool:
+	return alive and not is_on_ground() and _lift_ratio < 1.0
+
+
 ## Rough overall state for the AI, 1 = factory fresh, 0 = wreck: the weakest of
 ## lift, engine and pitch control.
 func condition() -> float:
@@ -906,6 +961,7 @@ func respawn(spawn_transform: Transform3D, parked: bool = false) -> void:
 	control_state = Vector3.ZERO
 	_flap_deploy = 0.0
 	_lift_ratio = 1.0
+	_load = 1.0
 	_knock_velocity = Vector3.ZERO
 	_evade_time = 0.0
 	_evade_cooldown = 0.0
@@ -1107,84 +1163,135 @@ func _integrate_flight(delta: float) -> void:
 	var flap_asymmetry: float = (left_flap - right_flap) * _flap_deploy
 
 	# --- Control authority --------------------------------------------------
-	# Less wing means wider turns and weaker pull-ups.
-	var agility: float = (0.4 + 0.6 * wing_lift) * (1.0 + FLAP_TURN_BONUS * flap_effect)
-	var yaw_authority: float = agility * lerpf(TURN_WITHOUT_AILERONS, 1.0, ailerons) * lerpf(1.0 - RUDDER_TURN_SHARE, 1.0, rudder)
+	var roll_authority: float = lerpf(ROLL_WITHOUT_AILERONS, 1.0, ailerons)
 	if steer.x * asymmetry < 0.0:
 		# Turning away from the weak side means lifting it with what is left of it.
-		yaw_authority *= 1.0 - WING_OPPOSITE_TURN_LOSS * minf(absf(asymmetry), 1.0)
-	var pitch_authority: float = agility * lerpf(PITCH_WITHOUT_ELEVATORS, 1.0, elevators)
+		roll_authority *= 1.0 - WING_OPPOSITE_TURN_LOSS * minf(absf(asymmetry), 1.0)
+	var pitch_authority: float = lerpf(PITCH_WITHOUT_ELEVATORS, 1.0, elevators)
 	var control_feel: float = (1.0 - FUSELAGE_FEEL_LOSS * fuselage_damage) * (1.0 - TAIL_FEEL_LOSS * tail_damage)
 
-	# --- Lift: is there enough of it to stay up? -----------------------------
+	# --- Lift: how hard can the wings pull right now? --------------------------
+	# Lift goes with the square of airspeed. It is counted in units of the
+	# plane's weight ("g"): 1.0 is exactly enough to hold the plane up, 2.0 can
+	# hold a 60-degree banked turn, and less than 1.0 cannot hold it up at all.
 	var speed_fraction: float = speed / maxf(stats.stall_speed, 1.0)
-	var speed_lift: float = clampf(speed_fraction * speed_fraction, 0.0, 1.0)
 	var closeness: float = _ground_closeness()
-	_lift_ratio = clampf(wing_lift * speed_lift * (1.0 + FLAP_LIFT_BONUS * flap_effect) * (1.0 + GROUND_EFFECT_LIFT * closeness), 0.0, 1.0)
-	var lift_deficit: float = 1.0 - _lift_ratio
+	var lift_available: float = wing_lift * speed_fraction * speed_fraction * (1.0 + FLAP_LIFT_BONUS * flap_effect) * (1.0 + GROUND_EFFECT_LIFT * closeness)
+	_lift_ratio = clampf(lift_available, 0.0, 1.0)
+	var max_load: float = minf(lift_available, G_LIMIT)
+	# The controls work by airflow too: slow, they are soft, but never dead.
+	var airflow: float = clampf(speed_fraction * speed_fraction, CONTROL_MIN_AIRFLOW, 1.0)
+	var airspeed: float = maxf(speed, MIN_AERO_SPEED)
+	var cos_path: float = maxf(cos(pitch), MIN_COSINE)
 
-	# --- Stick -> turn rates, eased so the plane has a little weight ---------
-	var response: float = 1.0 - exp(-STICK_RESPONSE * stats.roll_rate * control_feel * delta)
-	var yaw_target: float = -steer.x * stats.turn_rate * yaw_authority - asymmetry * WING_PULL_YAW - flap_asymmetry * FLAP_PULL_YAW
+	# --- What the pilot is asking of the wings ----------------------------------
+	# Fore and aft: how fast to swing the flight path up or down.
+	var pitch_demand: float = steer.y * stats.pitch_rate * pitch_authority * airflow
+	if _airborne_time < LIFTOFF_CONTROL_TIME:
+		# Just off the runway: the stick comes alive gradually, not all at once.
+		pitch_demand *= lerpf(LIFTOFF_CONTROL_START, 1.0, _airborne_time / LIFTOFF_CONTROL_TIME)
+	if closeness > 0.0 and gear_deploy > 0.5 and pitch < -FLARE_PITCH and steer.y > -0.5:
+		# The flare: ease the nose up over the last few metres.
+		pitch_demand += FLARE_RATE * closeness * clampf((-FLARE_PITCH - pitch) / deg_to_rad(6.0), 0.0, 1.0)
+	if tail_gone:
+		pitch_demand -= TAIL_GONE_DIVE_RATE
+	elif tail_damage > 0.5:
+		pitch_demand -= TAIL_TRIM_RATE * (tail_damage - 0.5) * 2.0
+	elif absf(steer.y) < 0.05 and elevators > 0.2 and lift_available >= 1.0:
+		# Hands off, the plane is trimmed to drift back to level flight.
+		pitch_demand -= pitch * AUTO_LEVEL_RATE
+	# Sideways: how fast to turn (positive = left).
+	var turn_demand: float = -steer.x * stats.turn_rate * roll_authority * airflow
+	# In g: what holds the flight path where it is, what the pilot adds or
+	# takes off it, and what the turn needs sideways.
+	var level_load: float = cos(pitch)
+	var pull: float = pitch_demand * airspeed / FLIGHT_GRAVITY
+	var side: float = turn_demand * airspeed * cos_path / FLIGHT_GRAVITY
+	# A little lift is kept in hand, or a turn held at the very limit would
+	# sag every time the speed dipped.
+	var wanted: Vector2 = _share_out_lift(level_load, pull, side, max_load * LIFT_IN_HAND)
+
+	# --- Bank: a plane turns by leaning its lift into the turn ------------------
+	var bank_target: float = clampf(atan2(wanted.y, maxf(wanted.x, MIN_COSINE)), -MAX_BANK, MAX_BANK)
+	# Uneven lift hangs the weaker side low. Holding the stick over against it
+	# takes some of that off with whatever ailerons and rudder are left: not
+	# enough to fly a one-winged plane home, enough to choose where it goes in.
+	var opposing: float = clampf(-steer.x * signf(asymmetry), 0.0, 1.0)
+	var wing_pull: float = asymmetry * (1.0 - HOLD_AGAINST_WING * opposing * ailerons)
+	bank_target -= wing_pull * WING_PULL_BANK + flap_asymmetry * FLAP_PULL_BANK
+	bank = lerpf(bank, bank_target, 1.0 - exp(-BANK_RESPONSE * stats.roll_rate * control_feel * airflow * delta))
+
+	# --- Load: how hard the wings are actually pulling --------------------------
+	# The pilot pulls enough to keep the upward part of the lift he wants at
+	# the bank the plane has got to, up to all the lift there is.
+	var load_target: float = wanted.x
+	if wanted.x > 0.0:
+		load_target = minf(wanted.x / maxf(cos(bank), MIN_COSINE), max_load)
+	_load = lerpf(_load, load_target, 1.0 - exp(-LOAD_RESPONSE * control_feel * delta))
+	_load = minf(_load, max_load)  # Lift can go faster than the stick does.
+
+	# --- The flight path ---------------------------------------------------------
+	# Lift across the path bends it: the upward part against gravity changes
+	# the climb or dive, the sideways part turns the plane. Both bend it less
+	# the faster the plane is going, so fast turns are wide ones.
+	_pitch_rate = FLIGHT_GRAVITY / airspeed * (_load * cos(bank) - level_load)
+	_yaw_rate = FLIGHT_GRAVITY / airspeed * _load * sin(bank) / cos_path * (stats.turn_rate / REFERENCE_TURN_RATE)
+	# The rudder skids the nose round a little, which is all the turning there
+	# is at speeds too low to bank; uneven wings and flaps drag it round too.
+	_yaw_rate += -steer.x * RUDDER_YAW_RATE * rudder * airflow - wing_pull * WING_PULL_YAW - flap_asymmetry * FLAP_PULL_YAW
 	var wander: float = (1.0 - rudder) + (FIN_GONE_FISHTAIL if fin_gone else 0.0)
 	if wander > 0.0:
 		# Nothing is holding the nose straight, so it swings from side to side.
 		_fishtail_phase = wrapf(_fishtail_phase + TAU * FISHTAIL_HZ * delta, 0.0, TAU)
-		yaw_target += sin(_fishtail_phase) * FISHTAIL_RATE * wander
-	var pitch_target: float = steer.y * stats.pitch_rate * pitch_authority
-	if _airborne_time < LIFTOFF_CONTROL_TIME:
-		# Just off the runway: the stick comes alive gradually, not all at once.
-		pitch_target *= lerpf(LIFTOFF_CONTROL_START, 1.0, _airborne_time / LIFTOFF_CONTROL_TIME)
-	if closeness > 0.0 and gear_deploy > 0.5 and pitch < -FLARE_PITCH and steer.y > -0.5:
-		# The flare: ease the nose up over the last few metres.
-		pitch_target += FLARE_RATE * closeness * clampf((-FLARE_PITCH - pitch) / deg_to_rad(6.0), 0.0, 1.0)
-	# The nose falls through when the wings are not carrying the plane.
-	pitch_target -= NOSE_DROP_RATE * lift_deficit
-	if tail_gone:
-		pitch_target -= TAIL_GONE_DIVE_RATE
-	elif tail_damage > 0.5:
-		pitch_target -= TAIL_TRIM_RATE * (tail_damage - 0.5) * 2.0
-	_yaw_rate = lerpf(_yaw_rate, yaw_target, response)
-	_pitch_rate = lerpf(_pitch_rate, pitch_target, response)
+		_yaw_rate += sin(_fishtail_phase) * FISHTAIL_RATE * wander
 	yaw = wrapf(yaw + _yaw_rate * delta, -PI, PI)
 	pitch = clampf(pitch + _pitch_rate * delta, -MAX_PITCH, MAX_PITCH)
-	if absf(steer.y) < 0.05 and tail_damage <= 0.5 and lift_deficit < 0.05 and elevators > 0.2:
-		pitch = lerpf(pitch, 0.0, 1.0 - exp(-AUTO_LEVEL_RATE * delta))
-
-	# Auto-bank into the turn (cosmetic: guns fire along the nose regardless),
-	# hanging the weaker side low.
-	var bank_target: float = -steer.x * MAX_BANK * lerpf(0.3, 1.0, ailerons) - asymmetry * WING_PULL_BANK - flap_asymmetry * FLAP_PULL_BANK
-	bank = lerpf(bank, bank_target, 1.0 - exp(-BANK_RESPONSE * stats.roll_rate * control_feel * delta))
 	rotation = Vector3(pitch, yaw, bank)
 
-	# --- Speed: the throttle sets what the engine is asked for; climbing ------
-	# bleeds speed and diving builds it.
+	# --- Speed -------------------------------------------------------------------
+	# Under power the engine works the plane toward the speed it can hold (its
+	# ordinary drag is part of that balance). What is not under power is a
+	# glider: drag that grows with the square of speed slows it, and only
+	# putting the nose down keeps it flying. Either way, making the wings pull
+	# hard costs speed, and climbing spends it where diving earns it.
 	var drive: float = _drive()
 	var drag: float = (1.0 - WING_DRAG * (2.0 - left_lift - right_lift)) * (1.0 - FLAP_DRAG * _flap_deploy) * (1.0 - GEAR_DRAG * gear_deploy)
 	var powered_speed: float = stats.top_speed * (1.0 - ENGINE_SPEED_LOSS * (1.0 - power)) * drag
 	var powered_response: float = stats.acceleration * (1.0 - ENGINE_ACCEL_LOSS * (1.0 - power))
-	# With no drive at all the plane settles to a glide: quickly behind a dead
-	# engine's windmilling propeller, gently behind one that is merely idling.
-	var glide_response: float = IDLE_RESPONSE if power > 0.0 else DEAD_ENGINE_RESPONSE
-	var target_speed: float = lerpf(stats.top_speed * DEAD_ENGINE_SPEED_RATIO, powered_speed, drive)
-	var engine_response: float = lerpf(glide_response, powered_response, drive)
-	var gravity_pull: float = -sin(pitch) * GRAVITY_ACCEL
+	# Speed goes roughly with the cube root of power, so half throttle is
+	# still about three-quarters of top speed, and a quarter will not hold
+	# the plane up.
+	var engine_pull: float = drive * (powered_speed * pow(drive, THROTTLE_SPEED_POWER) - speed) * powered_response
+	if engine_pull > 0.0:
+		# A propeller can only pull so hard, however slow the plane is going:
+		# it cannot hang the plane on its nose or snatch it out of a stall.
+		# Fresh off the runway it pulls no harder than it did on it, then
+		# works up to what it gives in flight.
+		var thrust_gain: float = lerpf(1.0, FLIGHT_THRUST_GAIN, clampf(_airborne_time / LIFTOFF_THRUST_TIME, 0.0, 1.0))
+		engine_pull = minf(engine_pull, _ground_thrust(drive, power) * thrust_gain)
+	var glide_fraction: float = speed / maxf(stats.stall_speed * BEST_GLIDE_SPEED_RATIO, 1.0)
+	var dirtiness: float = 1.0 + GEAR_PARASITE * gear_deploy + FLAP_PARASITE * _flap_deploy + WING_PARASITE * (2.0 - left_lift - right_lift)
+	if not _engine_running or power <= 0.0:
+		dirtiness += WINDMILL_DRAG  # A dead propeller turning in the wind.
+	var coasting_drag: float = (1.0 - drive) * FLIGHT_GRAVITY * PARASITE_DRAG * glide_fraction * glide_fraction * dirtiness
+	# Drag from making lift: it goes with the square of how hard the wings
+	# pull, and it is worst slow. (Level flight's share is already in the
+	# powered balance above, hence "minus drive".)
+	var lift_drag: float = FLIGHT_GRAVITY * INDUCED_DRAG * (_load * _load - drive * minf(lift_available, 1.0)) / maxf(lift_available, MIN_INDUCED_LIFT)
+	var gravity_pull: float = -sin(pitch) * FLIGHT_GRAVITY
 	if pitch > 0.0:
 		gravity_pull /= maxf(stats.climb_rate, 0.1)
 		if _airborne_time < LIFTOFF_CLIMB_TIME:
 			# The climb is still building (see below), and so is its cost.
 			gravity_pull *= smoothstep(0.0, 1.0, _airborne_time / LIFTOFF_CLIMB_TIME)
-	var engine_pull: float = (target_speed - speed) * engine_response
-	if _airborne_time < LIFTOFF_THRUST_TIME and engine_pull > 0.0:
-		# Fresh off the runway the engine pulls no harder than it did on it,
-		# then works up to its full effect.
-		engine_pull = minf(engine_pull, _ground_thrust(drive, power) * lerpf(1.0, LIFTOFF_THRUST_GAIN, _airborne_time / LIFTOFF_THRUST_TIME))
-	speed += (engine_pull + gravity_pull) * delta
+	speed += (engine_pull - coasting_drag - lift_drag + gravity_pull) * delta
 	speed = clampf(speed, 0.0, stats.top_speed * DIVE_SPEED_RATIO)
 
 	control_state = Vector3(steer.x, steer.y, _flap_deploy)
 	_knock_velocity = _knock_velocity.lerp(Vector3.ZERO, 1.0 - exp(-KNOCK_DAMPING * delta))
-	velocity = forward() * speed + Vector3.DOWN * SINK_SPEED * lift_deficit + _evade_velocity() + _knock_velocity
+	# The plane goes where it is pointed. Nothing "drops" it: when the wings
+	# cannot hold it, the path above has already curved downward.
+	velocity = forward() * speed + _evade_velocity() + _knock_velocity
 	if _airborne_time < LIFTOFF_CLIMB_TIME and velocity.y > 0.0:
 		# The climb builds from nothing instead of starting with a jump.
 		velocity.y *= smoothstep(0.0, 1.0, _airborne_time / LIFTOFF_CLIMB_TIME)
@@ -1424,6 +1531,27 @@ func _ground_thrust(drive: float, power: float) -> float:
 	return GROUND_THRUST * (stats.acceleration / REFERENCE_ACCELERATION) * drive * (1.0 - ENGINE_ACCEL_LOSS * (1.0 - power))
 
 
+## Splits the lift there is between what the pilot wants upward and sideways.
+## [param level_load] is the g that holds the flight path where it is,
+## [param pull] the g the stick adds to that (negative = pushing), and
+## [param side] the g the turn asks for. Returns (upward g, sideways g).
+## Holding the path comes first: what is left over is shared between the
+## pull and the turn in the proportion they were asked for.
+func _share_out_lift(level_load: float, pull: float, side: float, max_load: float) -> Vector2:
+	var up: float = level_load + pull
+	if up < 0.0:
+		# Pushing right over: negative g, and no turning while at it.
+		return Vector2(maxf(up, -NEGATIVE_G_SHARE * max_load), 0.0)
+	if max_load <= level_load:
+		# Not even enough to hold the path: all of it goes upward.
+		return Vector2(minf(up, max_load), 0.0)
+	if up * up + side * side <= max_load * max_load:
+		return Vector2(up, side)
+	var asked: float = pull * pull + side * side
+	var share: float = (-level_load * pull + sqrt(level_load * level_load * pull * pull + asked * (max_load * max_load - level_load * level_load))) / asked
+	return Vector2(level_load + share * pull, share * side)
+
+
 func _lift_off() -> void:
 	_on_ground = false
 	_belly = false
@@ -1519,6 +1647,7 @@ func _touch_down(field: Airfield, sink: float) -> void:
 		_impact_damage(low_wingtip, WINGTIP_STRIKE_DAMAGE)
 
 	_on_ground = true
+	_load = 1.0
 	_belly = not gear_usable()
 	_ground_field = field
 	_ground_height = global_position.y - field.surface_y()
