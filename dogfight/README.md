@@ -144,7 +144,25 @@ HUD (CanvasLayer)                         hud.gd
 - **Match rules** (`MatchManager5v5`): ticket drain, every loss gives the other
   team a point, first to 25 or the higher score after 3 minutes, 5 s respawn
   above the team's base with 2.5 s spawn protection.
-- **Bots** pick targets by score (range, angle off the nose, low health) with a
+- **Damage is per part.** Besides the hull, a plane has an engine, two wings and
+  a tail, each with its own smaller health pool. `PlaneActor.locate_hit` decides
+  which one a bullet struck; `apply_damage` always hurts the hull and, for a
+  part hit, that part too. What damage does:
+
+  | Part | As it takes damage | Destroyed |
+  | --- | --- | --- |
+  | Wing | wider turns, drags and hangs toward that side, slow to turn away from it, sluggish stick, extra drag | spins in, breaks up within 2.6 s |
+  | Tail | weak pitch and rudder, sluggish stick, nose-heavy past half damage | almost no pitch control, dives |
+  | Engine | lower top speed, slow to regain speed | on fire, glides, stalls unless it dives |
+
+  Whoever destroys a part is credited with the takedown however the plane then
+  dies. The Squad Repair Pulse patches damaged parts but not destroyed ones.
+  The HUD shows the player's parts on a small diagram under the commander panel
+  and names damaged parts under the current target.
+- **Bots** are tuned to fly like people: they aim at where the target was a
+  reaction time ago (so jinking throws them off), their aim wanders, they
+  misjudge lead, their stick movement is rate-limited and they fire in bursts.
+  In bots-only test matches about 14% of their shots land. They pick targets by score (range, angle off the nose, low health) with a
   penalty for targets team-mates already claimed, approach in personal lanes,
   push apart when close, avoid the sea and cliffs, and break/roll when shot
   from behind.
@@ -220,8 +238,9 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 | Test | What it checks |
 | --- | --- |
 | `TestProgression` | card tables, upgrade flow, Commander Level thresholds, slot rules, stat building, save/load, lead maths |
+| `TestDamageModel` | hit location, hull vs part damage, each damaged part changes handling against an undamaged reference, destroyed wing/engine/tail bring the plane down and credit the attacker, repair |
 | `TestPlayerFlow` | 1 player + 9 bots through Input actions: fire, roll, nitro, crash gives a ticket, 5 s respawn |
-| `TestMatchSim` (3 seeds) | full bots-only match: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, bots do not crash |
+| `TestMatchSim` (3 seeds) | full bots-only match: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, bots do not crash, bot accuracy stays in a human-like 2-30% band |
 | hangar / lobby | scenes load and the lobby hands over to the arena without script errors |
 
 These run headless, so they prove rules and wiring, not feel. Screens were also

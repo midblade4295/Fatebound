@@ -13,6 +13,17 @@ extends Node
 ##   ENGAGE   chase the chosen target, lead it, fire when the guns bear.
 ##   PATROL   nobody in range -> loop around the middle of the arena.
 ##
+## Bots are built to fly like people, not like turrets:
+##  - They react late. Aiming uses where the target was `_reaction_time` ago,
+##    projected forward along its old velocity, so a target flying straight is
+##    easy and one that jinks or rolls leaves them shooting at empty sky.
+##  - Their aim wanders around the target instead of sitting on it, more so
+##    for rookies, when they are being shot at, and when their plane is hurt.
+##  - They misjudge deflection for a few seconds at a time, then correct.
+##  - Their hands are not instant: stick movement is rate-limited.
+##  - They squeeze the trigger a beat after the shot appears, hold it a beat
+##    after it has gone, and fire in bursts.
+##
 ## Anti-clumping has three layers: target scoring penalises enemies that
 ## team-mates already claimed (SquadBlackboard), every bot approaches from its
 ## own offset "lane", and a separation force pushes nearby planes apart.
@@ -29,7 +40,8 @@ const BREAK_OFF_TIME: float = 1.3
 const MIN_SAFE_ALTITUDE: float = 70.0
 ## Seconds of look-ahead used for the "am I about to hit something" checks.
 const TERRAIN_LOOKAHEAD: float = 2.6
-const STEER_GAIN: float = 9.0
+## Number of physics ticks of target history kept for the reaction delay.
+const TRACK_SAMPLES: int = 40
 const LANE_OFFSET: float = 70.0
 ## Bots drift back into this height band so the fight stays between the
 ## cliff tops and the ceiling instead of creeping ever higher.
@@ -57,8 +69,32 @@ var _break_timer: float = 0.0
 var _break_side: float = 1.0
 var _avoid_side: float = 1.0
 var _obstacle_ahead: bool = false
-var _aim_error: Vector3 = Vector3.ZERO
-var _aim_error_timer: float = 0.0
+# --- Human factors, all derived from `skill` in setup() ---------------------
+## Seconds between seeing the target do something and responding to it.
+var _reaction_time: float = 0.25
+## How hard the stick is pushed per radian of aiming error.
+var _steer_gain: float = 6.0
+## Stick travel per second (2.0 = centre to full deflection in half a second).
+var _stick_speed: float = 5.0
+## Size of the aim wander, in radians at the target.
+var _wobble_amplitude: float = 0.02
+var _wobble_phase: Vector2 = Vector2.ZERO
+var _wobble_rate: Vector2 = Vector2.ONE
+## Current misjudgement of lead: 0.2 means "pulling 20% too much deflection".
+var _lead_bias: float = 0.0
+var _lead_bias_timer: float = 0.0
+var _trigger_delay: float = 0.15
+var _trigger_linger: float = 0.2
+var _on_target_time: float = 0.0
+var _off_target_time: float = INF
+var _burst_time: float = 0.0
+var _burst_pause: float = 0.0
+var _stick: Vector2 = Vector2.ZERO
+## Ring buffer of where the target has been (see _perceive_target).
+var _track_positions: Array[Vector3] = []
+var _track_velocities: Array[Vector3] = []
+var _track_head: int = 0
+var _track_count: int = 0
 ## Personal approach lane: x = sideways, y = vertical, both -1..1.
 var _lane: Vector2 = Vector2.ZERO
 var _patrol_phase: float = 0.0
@@ -76,6 +112,17 @@ func setup(controlled_plane: PlaneActor, manager: MatchManager5v5, shared_blackb
 	_patrol_phase = _rng.randf_range(0.0, TAU)
 	_think_timer = _rng.randf_range(0.0, THINK_INTERVAL)  # Stagger bots across frames.
 	_evade_side = 1.0 if _rng.randf() > 0.5 else -1.0
+	# Personality: every number a little different per bot, all tied to skill.
+	_reaction_time = lerpf(0.40, 0.15, skill) + _rng.randf_range(-0.03, 0.03)
+	_steer_gain = lerpf(4.5, 8.0, skill)
+	_stick_speed = lerpf(3.5, 8.0, skill)
+	_wobble_amplitude = deg_to_rad(lerpf(2.4, 0.6, skill))
+	_wobble_phase = Vector2(_rng.randf_range(0.0, TAU), _rng.randf_range(0.0, TAU))
+	_wobble_rate = Vector2(_rng.randf_range(1.1, 2.2), _rng.randf_range(1.3, 2.6))
+	_trigger_delay = lerpf(0.30, 0.08, skill)
+	_trigger_linger = _rng.randf_range(0.15, 0.3)
+	_track_positions.resize(TRACK_SAMPLES)
+	_track_velocities.resize(TRACK_SAMPLES)
 	plane.damaged.connect(_on_plane_damaged)
 	plane.died.connect(_on_plane_died)
 
@@ -98,13 +145,23 @@ func _physics_process(delta: float) -> void:
 	_threat_age += delta
 	_evade_timer = maxf(_evade_timer - delta, 0.0)
 	_break_timer = maxf(_break_timer - delta, 0.0)
-	_aim_error_timer -= delta
+	_burst_pause = maxf(_burst_pause - delta, 0.0)
+	_wobble_phase += _wobble_rate * delta
+	_lead_bias_timer -= delta
+	if _lead_bias_timer <= 0.0:
+		# Settle on a new (wrong) idea of how much to lead for a few seconds.
+		_lead_bias_timer = _rng.randf_range(2.0, 4.5)
+		_lead_bias = _rng.randfn(0.0, lerpf(0.35, 0.08, skill))
+	_record_target()
 	_think_timer -= delta
 	if _think_timer <= 0.0:
 		# Rookies also think a little slower.
 		_think_timer = THINK_INTERVAL * lerpf(1.6, 1.0, skill)
 		_think()
 	_fly()
+	# Hands are not instant: move the real stick toward the wanted position.
+	_stick = _stick.move_toward(plane.input.steer, _stick_speed * delta)
+	plane.input.steer = _stick
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +230,10 @@ func _set_target(new_target: PlaneActor) -> void:
 	if target != null:
 		blackboard.release(target)
 	target = new_target
+	# New target: nothing is known about how it has been flying yet.
+	_track_count = 0
+	_on_target_time = 0.0
+	_off_target_time = INF
 	if target != null:
 		blackboard.claim(target)
 	if plane != null and is_instance_valid(plane):
@@ -248,9 +309,7 @@ func _fly_engage(input: PlaneInput) -> void:
 		input.steer = Vector2(_break_side, _vertical_escape()) * _max_stick()
 		return
 
-	var lead: Vector3 = Ballistics.lead_point(my_position, plane.velocity,
-			target.global_position, target.velocity, plane.stats.bullet_speed)
-	var aim_point: Vector3 = lead + _current_aim_error(distance)
+	var aim_point: Vector3 = _human_aim_point(my_position, distance)
 
 	# Far away, fly toward a personal lane beside/above the target so bots
 	# converge from different angles; the lane fades out as they close in.
@@ -264,11 +323,73 @@ func _fly_engage(input: PlaneInput) -> void:
 	desired.y += _altitude_bias() * lane_strength
 	input.steer = _steer_toward(desired.normalized()) * _max_stick()
 
-	# Fire only when the nose is actually on the lead point and in gun range.
-	# Rookies spray a wider cone; everyone takes point-blank snapshots.
+	# The trigger follows what the pilot *thinks* is a good shot: the nose near
+	# their own (imperfect) aim point. Whether bullets land is up to physics.
 	var angle_off: float = Ballistics.angle_off_nose(my_position, plane.forward(), aim_point)
-	var fire_cone: float = maxf(deg_to_rad(lerpf(5.5, 2.5, skill)), atan(SNAPSHOT_MISS_DISTANCE / maxf(distance, 1.0)))
-	input.firing = distance < plane.stats.gun_range * 0.95 and angle_off < fire_cone
+	var fire_cone: float = maxf(deg_to_rad(lerpf(6.0, 3.0, skill)), atan(SNAPSHOT_MISS_DISTANCE / maxf(distance, 1.0)))
+	var looks_good: bool = distance < plane.stats.gun_range * 0.95 and angle_off < fire_cone
+	input.firing = _pull_trigger(looks_good, get_physics_process_delta_time())
+
+
+## Where this pilot is trying to put the gunsight. Starts from the true lead
+## solution for the target *as perceived* (late), then adds the pilot's own
+## errors: misjudged deflection and a wandering hand.
+func _human_aim_point(my_position: Vector3, distance: float) -> Vector3:
+	var seen_position: Vector3 = target.global_position
+	var seen_velocity: Vector3 = target.velocity
+	if _track_count > 0:
+		var ticks_ago: int = clampi(roundi(_reaction_time * float(Engine.physics_ticks_per_second)), 0, _track_count - 1)
+		var index: int = posmod(_track_head - 1 - ticks_ago, TRACK_SAMPLES)
+		seen_velocity = _track_velocities[index]
+		# The pilot assumes the target kept doing what it was last seen doing.
+		seen_position = _track_positions[index] + seen_velocity * (float(ticks_ago) / float(Engine.physics_ticks_per_second))
+	var lead: Vector3 = Ballistics.lead_point(my_position, plane.velocity, seen_position, seen_velocity, plane.stats.bullet_speed)
+	var aim_point: Vector3 = seen_position + (lead - seen_position) * (1.0 + _lead_bias)
+
+	# Wander: two slow sine waves per axis, never repeating in step. Worse
+	# under fire and when the pilot is fighting a damaged plane.
+	var stress: float = 1.0
+	if _threat_age < 1.5:
+		stress += 0.7
+	stress += 0.6 * maxf(maxf(plane.part_damage.y, plane.part_damage.z), plane.part_damage.w)
+	var wander: Vector2 = Vector2(
+			0.65 * sin(_wobble_phase.x) + 0.35 * sin(_wobble_phase.x * 2.7 + 1.3),
+			0.65 * sin(_wobble_phase.y) + 0.35 * sin(_wobble_phase.y * 2.3 + 0.4))
+	var right: Vector3 = Vector3(cos(plane.yaw), 0.0, -sin(plane.yaw))
+	return aim_point + (right * wander.x + Vector3.UP * wander.y) * _wobble_amplitude * stress * distance
+
+
+## Remembers where the target is each tick so aiming can look into the past.
+func _record_target() -> void:
+	if target == null or not is_instance_valid(target) or not target.alive:
+		_track_count = 0
+		return
+	_track_positions[_track_head] = target.global_position
+	_track_velocities[_track_head] = target.velocity
+	_track_head = (_track_head + 1) % TRACK_SAMPLES
+	_track_count = mini(_track_count + 1, TRACK_SAMPLES)
+
+
+## Trigger discipline. [param looks_good] is "the sight picture is right now".
+## Returns whether the guns fire this tick.
+func _pull_trigger(looks_good: bool, delta: float) -> bool:
+	if looks_good:
+		_on_target_time += delta
+		_off_target_time = 0.0
+	else:
+		_off_target_time += delta
+		_on_target_time = 0.0
+	# Squeeze a beat late, and keep squeezing a beat after the shot has gone.
+	var squeezing: bool = _on_target_time >= _trigger_delay or (plane.input.firing and _off_target_time < _trigger_linger)
+	if not squeezing or _burst_pause > 0.0:
+		return false
+	# Short bursts with a breath between them, not one endless stream.
+	if _burst_time <= 0.0:
+		_burst_time = _rng.randf_range(0.5, 1.3)
+	_burst_time -= delta
+	if _burst_time <= 0.0:
+		_burst_pause = _rng.randf_range(0.2, 0.55)
+	return true
 
 
 func _fly_patrol(input: PlaneInput) -> void:
@@ -291,8 +412,8 @@ func _steer_toward(direction: Vector3) -> Vector2:
 	var yaw_error: float = wrapf(desired_yaw - plane.yaw, -PI, PI)
 	var pitch_error: float = desired_pitch - plane.pitch
 	return Vector2(
-			clampf(-yaw_error * STEER_GAIN, -1.0, 1.0),
-			clampf(pitch_error * STEER_GAIN, -1.0, 1.0))
+			clampf(-yaw_error * _steer_gain, -1.0, 1.0),
+			clampf(pitch_error * _steer_gain, -1.0, 1.0))
 
 
 ## Push away from every nearby plane (either team) so formations stay loose.
@@ -307,15 +428,6 @@ func _separation() -> Vector3:
 		if distance < SEPARATION_RADIUS and distance > 0.01:
 			push += away / distance * (1.0 - distance / SEPARATION_RADIUS)
 	return push
-
-
-## Slowly wandering aim offset: rookies drift metres off, aces barely at all.
-func _current_aim_error(distance: float) -> Vector3:
-	if _aim_error_timer <= 0.0:
-		_aim_error_timer = _rng.randf_range(0.4, 0.9)
-		var spread: float = lerpf(0.02, 0.003, skill)
-		_aim_error = Vector3(_rng.randfn(0.0, spread), _rng.randfn(0.0, spread), _rng.randfn(0.0, spread))
-	return _aim_error * distance
 
 
 func _max_stick() -> float:

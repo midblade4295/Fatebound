@@ -223,6 +223,7 @@ func _spawn_plane(slot: PilotSlot) -> void:
 		var data: PlaneData = GameCatalog.best_plane_for_level(slot.commander_level)
 		plane.setup(data, _build_bot_stats(data, slot.commander_level), slot.team, slot.display_name, 1)
 	plane.is_human = slot.is_human
+	plane.seed_random(int(_rng.randi()))
 	plane.arena_center = arena_center
 	plane.arena_radius = arena_radius
 	plane.arena_ceiling = arena_ceiling

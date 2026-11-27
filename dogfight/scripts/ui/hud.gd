@@ -2,7 +2,8 @@ class_name Hud
 extends CanvasLayer
 ## In-match HUD for landscape phones (scenes/hud/HUD.tscn).
 ##
-##   top-left     Commander Level badge, Hangar XP, speed / altitude, hull bar
+##   top-left     Commander Level badge, Hangar XP, speed / altitude, hull bar,
+##                and under it the damage diagram (engine, wings, tail)
 ##   top-centre   compact score bar:  BLUE score | 5v5 + clock | RED score
 ##   top-right    circular radar
 ##   bottom-left  virtual flight stick
@@ -15,15 +16,27 @@ extends CanvasLayer
 
 const KILL_FEED_LINES: int = 4
 const KILL_FEED_TIME: float = 5.0
+const ALERT_TIME: float = 2.8
+## What to tell the player when one of *their* parts changes state:
+## [part][state] with state 0 = repaired, 1 = damaged, 2 = critical, 3 = destroyed.
+const PART_ALERTS: Dictionary[int, Array] = {
+	PlaneActor.Part.ENGINE: ["ENGINE REPAIRED", "ENGINE HIT - losing power", "ENGINE FAILING", "ENGINE DEAD - you are gliding"],
+	PlaneActor.Part.LEFT_WING: ["LEFT WING PATCHED", "LEFT WING HIT - pulling left", "LEFT WING CRITICAL", "LEFT WING GONE"],
+	PlaneActor.Part.RIGHT_WING: ["RIGHT WING PATCHED", "RIGHT WING HIT - pulling right", "RIGHT WING CRITICAL", "RIGHT WING GONE"],
+	PlaneActor.Part.TAIL: ["TAIL PATCHED", "TAIL HIT - sluggish controls", "ELEVATOR FAILING - nose heavy", "TAIL GONE - no pitch control"],
+}
 
 var match_manager: MatchManager5v5
 var player: PlaneActor
 var camera: ChaseCamera
 
 var _feed_ages: Array[float] = []
+var _alert_text: String = ""
+var _alert_time: float = 0.0
 
 @onready var _overlay: HudWorldOverlay = %WorldOverlay
 @onready var _radar: Radar = %Radar
+@onready var _damage_diagram: DamageDiagram = %DamageDiagram
 @onready var _level_label: Label = %LevelLabel
 @onready var _title_label: Label = %TitleLabel
 @onready var _xp_bar: ProgressBar = %XpBar
@@ -82,6 +95,10 @@ func bind(manager: MatchManager5v5, chase_camera: ChaseCamera, local_plane: Plan
 	_fire_button.visible = has_player
 	_roll_button.visible = has_player
 	_gadget_button.visible = has_player
+	_damage_diagram.plane = player
+	_damage_diagram.visible = has_player
+	for plane: PlaneActor in manager.get_planes():
+		plane.part_state_changed.connect(_on_part_state_changed)
 	if has_player:
 		player.damaged.connect(_on_player_damaged)
 		_gadget_button.caption = player.stats.gadget_name.to_upper() if player.has_gadget() else "NO GADGET"
@@ -97,6 +114,7 @@ func _process(delta: float) -> void:
 	_update_clock()
 	_update_flight_panel()
 	_update_buttons()
+	_alert_time = maxf(_alert_time - delta, 0.0)
 	_update_messages()
 	_age_kill_feed(delta)
 
@@ -148,9 +166,14 @@ func _update_messages() -> void:
 			if slot != null and slot.respawn_timer > 0.0:
 				headline = "SHOT DOWN"
 				detail = "Back in the air in %d" % ceili(slot.respawn_timer)
+			elif player != null and player.alive and player.is_spinning_out():
+				headline = "GOING DOWN"
+				detail = "Wing shot off"
 			elif player != null and player.alive and player.is_out_of_bounds():
 				headline = "RETURN TO BATTLE"
 				detail = "Autopilot is turning you around"
+			elif _alert_time > 0.0:
+				detail = _alert_text
 		MatchManager5v5.Phase.FINISHED:
 			pass
 	if _center_message.text != headline:
@@ -200,6 +223,19 @@ func _on_takedown(victim: PilotSlot, killer: PilotSlot) -> void:
 func _on_bullet_hit(_victim: PlaneActor, shooter: PlaneActor, _world_position: Vector3) -> void:
 	if shooter == player and player != null:
 		_overlay.show_hit_marker()
+
+
+## Damage reports: the player's own parts, and enemy parts the player shot off.
+func _on_part_state_changed(plane: PlaneActor, part: PlaneActor.Part, state: PlaneActor.PartState) -> void:
+	if player == null or not PART_ALERTS.has(part):
+		return
+	if plane == player:
+		var lines: Array = PART_ALERTS[part]
+		_alert_text = str(lines[state])
+		_alert_time = ALERT_TIME
+	elif state == PlaneActor.PartState.DESTROYED and plane.recent_attacker() == player:
+		_alert_text = "%s: %s shot off!" % [plane.pilot_name, PlaneActor.PART_NAMES[part].to_lower()]
+		_alert_time = ALERT_TIME
 
 
 func _on_player_damaged(_victim: PlaneActor, _amount: float, _attacker: PlaneActor) -> void:

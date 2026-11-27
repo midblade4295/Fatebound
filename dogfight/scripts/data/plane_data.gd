@@ -24,7 +24,7 @@ extends Resource
 
 @export_group("Guns")
 @export var base_fire_rate: float = 10.0
-@export var base_bullet_damage: float = 48.0
+@export var base_bullet_damage: float = 150.0
 @export var bullet_speed: float = 420.0
 @export var gun_range: float = 480.0
 @export var gun_spread_deg: float = 0.6

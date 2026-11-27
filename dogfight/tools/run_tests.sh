@@ -58,10 +58,11 @@ run() {   # run <name> <marker> <timeout> <scene> [user args...]
   fi
 }
 
-run progression        PROGRESSION_OK  120 res://tests/TestProgression.tscn
-run player_flow        PLAYER_FLOW_OK  180 res://tests/TestPlayerFlow.tscn
+run progression        PROGRESSION_OK  60 res://tests/TestProgression.tscn
+run player_flow        PLAYER_FLOW_OK  90 res://tests/TestPlayerFlow.tscn
+run damage_model       DAMAGE_MODEL_OK 90 res://tests/TestDamageModel.tscn
 for seed in 1 7 42; do
-  run "match_sim_seed_$seed" MATCH_SIM_OK 300 res://tests/TestMatchSim.tscn "seed=$seed"
+  run "match_sim_seed_$seed" MATCH_SIM_OK 120 res://tests/TestMatchSim.tscn "seed=$seed"
 done
 # Menus: load, run two seconds, and (lobby) hand over to the arena.
 run_scene() {   # run_scene <name> <frames> <scene>

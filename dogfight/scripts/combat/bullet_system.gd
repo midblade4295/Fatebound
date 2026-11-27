@@ -132,7 +132,8 @@ func _step_bullets(delta: float) -> void:
 			var victim: PlaneActor = hit["collider"] as PlaneActor
 			var shooter: PlaneActor = _shooters[index]
 			if victim != null and is_instance_valid(shooter):
-				victim.apply_damage(_damages[index], shooter, _burn_dps[index], _burn_durations[index])
+				victim.apply_damage(_damages[index], shooter, _burn_dps[index], _burn_durations[index],
+						victim.locate_hit(hit_position, _velocities[index]))
 				bullet_hit.emit(victim, shooter, hit_position)
 			_show_spark(hit_position)
 			_remove(index)

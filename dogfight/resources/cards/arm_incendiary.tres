@@ -11,5 +11,5 @@ category = 1
 rarity = 2
 glyph = "FIRE"
 damage_bonus = 0.02
-burn_dps = 20.0
+burn_dps = 60.0
 burn_duration = 3.0

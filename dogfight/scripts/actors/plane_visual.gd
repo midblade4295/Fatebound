@@ -29,6 +29,9 @@ var _nitro_flames: Array[MeshInstance3D] = []
 var _damage_smoke: CPUParticles3D
 var _fire_particles: CPUParticles3D
 var _screen_smoke: CPUParticles3D
+## Smoke / fire emitters per damageable part: engine, left wing, right wing, tail.
+var _part_smoke: Array[CPUParticles3D] = []
+var _part_fire: Array[CPUParticles3D] = []
 var _gun_offsets: Array[Vector3] = []
 var _prop_speed: float = 40.0
 
@@ -198,9 +201,18 @@ func set_roll_angle(angle: float) -> void:
 
 func set_damage_state(hp_ratio: float, burning: bool) -> void:
 	if _damage_smoke != null:
-		_damage_smoke.emitting = hp_ratio < 0.5
+		_damage_smoke.emitting = hp_ratio < 0.35
 	if _fire_particles != null:
-		_fire_particles.emitting = burning or hp_ratio < 0.25
+		_fire_particles.emitting = burning or hp_ratio < 0.2
+
+
+## Shows where the plane is hurt: grey smoke from a damaged part, flames from
+## a destroyed one. [param damage] = (engine, left wing, right wing, tail), 0..1.
+func set_part_damage(damage: Vector4) -> void:
+	for index: int in range(_part_smoke.size()):
+		var amount: float = damage[index]
+		_part_smoke[index].emitting = amount >= 0.4
+		_part_fire[index].emitting = amount >= 1.0
 
 
 func set_boosting(active: bool) -> void:
@@ -215,6 +227,7 @@ func set_smoke_screen(active: bool) -> void:
 
 func stop_effects() -> void:
 	set_damage_state(1.0, false)
+	set_part_damage(Vector4.ZERO)
 	set_boosting(false)
 	set_smoke_screen(false)
 	for flash: MeshInstance3D in _muzzle_flashes:
@@ -238,6 +251,23 @@ func _build_particles(length: float, radius: float) -> void:
 	_fire_particles.position = Vector3(0.0, radius * 0.2, -length * 0.32)
 	_screen_smoke = _make_trail("SmokeScreen", Color(0.93, 0.95, 1.0, 0.85), 48, 2.6, 3.0, 12.0)
 	_screen_smoke.position = Vector3(0.0, 0.0, length * 0.5)
+	# Same order as PlaneActor.part_damage: engine, left wing, right wing, tail.
+	_part_smoke.clear()
+	_part_fire.clear()
+	var half_span: float = _gun_offsets[1].x / VISUAL_SCALE * 1.6 if _gun_offsets.size() > 1 else radius * 3.0
+	var anchors: Array[Vector3] = [
+		Vector3(0.0, radius * 0.3, -length * 0.34),
+		Vector3(-half_span, -radius * 0.3, -length * 0.05),
+		Vector3(half_span, -radius * 0.3, -length * 0.05),
+		Vector3(0.0, radius * 0.5, length * 0.5),
+	]
+	for anchor: Vector3 in anchors:
+		var smoke: CPUParticles3D = _make_trail("PartSmoke", Color(0.2, 0.2, 0.22, 0.75), 20, 1.0, 0.9, 3.6)
+		smoke.position = anchor
+		_part_smoke.append(smoke)
+		var fire: CPUParticles3D = _make_trail("PartFire", Color(1.0, 0.5, 0.1, 0.95), 14, 0.35, 0.9, 2.0)
+		fire.position = anchor
+		_part_fire.append(fire)
 
 
 func _make_trail(trail_name: String, color: Color, amount: int, lifetime: float, start_scale: float, end_scale: float) -> CPUParticles3D:

@@ -22,6 +22,8 @@ const LEAD_COLOR: Color = Color(1.0, 0.84, 0.25)
 const LOCK_COLOR: Color = Color(0.5, 1.0, 0.45)
 const HIT_MARKER_TIME: float = 0.14
 const DAMAGE_FLASH_TIME: float = 0.35
+## Short labels for damaged parts under the current target, indexed by PlaneActor.Part.
+const PART_TAGS: Array[String] = ["", "ENGINE", "L WING", "R WING", "TAIL"]
 
 var camera: Camera3D
 var match_manager: MatchManager5v5
@@ -106,6 +108,13 @@ func _draw_enemy_marker(plane: PlaneActor, at: Vector2, distance: float, is_targ
 	draw_rect(Rect2(bar_origin, Vector2(bar_width * plane.hp_ratio(), 8.0)), ENEMY_COLOR)
 	UiStyle.draw_outlined_text(self, "%s  %dm" % [plane.pilot_name, roundi(distance)],
 			at + Vector2(-150.0, -half - 30.0), 20, UiStyle.WHITE, 300.0, 5)
+	# Which of the target's parts are already hurt (shoot there to finish it).
+	var hurt: PackedStringArray = PackedStringArray()
+	for part: PlaneActor.Part in [PlaneActor.Part.ENGINE, PlaneActor.Part.LEFT_WING, PlaneActor.Part.RIGHT_WING, PlaneActor.Part.TAIL]:
+		if plane.part_state(part) != PlaneActor.PartState.OK:
+			hurt.append(PART_TAGS[part])
+	if not hurt.is_empty():
+		UiStyle.draw_outlined_text(self, "  ".join(hurt), at + Vector2(-150.0, half + 26.0), 18, LEAD_COLOR, 300.0, 5)
 
 
 func _draw_ally_marker(at: Vector2, distance: float) -> void:

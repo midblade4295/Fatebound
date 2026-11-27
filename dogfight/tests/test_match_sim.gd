@@ -24,6 +24,9 @@ var _clump_hits: int = 0
 var _sample_timer: float = 0.0
 var _finished: bool = false
 var _max_bullets: int = 0
+var _shots: int = 0
+var _parts_destroyed: Array[int] = [0, 0, 0, 0, 0]
+var _parts_damaged: int = 0
 
 
 func _ready() -> void:
@@ -49,6 +52,8 @@ func _ready() -> void:
 		plane.damaged.connect(_on_damaged)
 		plane.died.connect(_on_died)
 		plane.respawned.connect(_on_respawned)
+		plane.shot_fired.connect(func(_shooter: PlaneActor) -> void: _shots += 1)
+		plane.part_state_changed.connect(_on_part_state_changed)
 	_check(_manager.get_planes().size() == 10, "expected 10 planes, got %d" % _manager.get_planes().size())
 	var blue: int = 0
 	for slot: PilotSlot in _manager.get_roster():
@@ -76,6 +81,13 @@ func _on_damaged(victim: PlaneActor, _amount: float, attacker: PlaneActor) -> vo
 	_damage_events += 1
 	if attacker != null and attacker != victim and attacker.team == victim.team:
 		_friendly_hits += 1
+
+
+func _on_part_state_changed(_plane: PlaneActor, part: PlaneActor.Part, state: PlaneActor.PartState) -> void:
+	if state == PlaneActor.PartState.DESTROYED:
+		_parts_destroyed[part] += 1
+	elif state == PlaneActor.PartState.DAMAGED:
+		_parts_damaged += 1
 
 
 func _on_died(victim: PlaneActor, killer: PlaneActor) -> void:
@@ -128,6 +140,11 @@ func _report() -> void:
 	print("sim_time=%.1fs  score blue=%d red=%d  winner=%d" % [_sim_time, blue, red, _manager.winning_team])
 	print("shot_kills=%d crashes=%d respawns=%d damage_events=%d friendly_hits=%d" % [_shot_kills, _crashes, _respawns, _damage_events, _friendly_hits])
 	print("min_respawn_gap=%.2fs clump_rate=%.3f max_bullets=%d" % [_min_respawn_gap, clump_rate, _max_bullets])
+	var accuracy: float = float(_damage_events) / float(maxi(_shots, 1))
+	print("shots=%d accuracy=%.1f%% hits_per_takedown=%.1f" % [_shots, accuracy * 100.0, float(_damage_events) / float(maxi(blue + red, 1))])
+	print("parts damaged=%d destroyed engine=%d left_wing=%d right_wing=%d tail=%d" % [_parts_damaged,
+			_parts_destroyed[PlaneActor.Part.ENGINE], _parts_destroyed[PlaneActor.Part.LEFT_WING],
+			_parts_destroyed[PlaneActor.Part.RIGHT_WING], _parts_destroyed[PlaneActor.Part.TAIL]])
 	for slot: PilotSlot in _manager.get_roster():
 		print("  %-5s %-14s lvl%-2d skill %.2f  K %d  D %d  %s" % [Teams.name_of(slot.team), slot.display_name,
 				slot.commander_level, slot.bot_skill, slot.kills, slot.deaths, slot.plane.plane_data.display_name])
@@ -144,6 +161,8 @@ func _report() -> void:
 	_check(blue <= _manager.score_limit() and red <= _manager.score_limit(), "score went past the limit")
 	_check(clump_rate < 0.05, "team-mates clump: %.1f%% of samples within 25 m" % (clump_rate * 100.0))
 	_check(_max_bullets < BulletSystem.MAX_BULLETS, "bullet pool saturated")
+	_check(accuracy > 0.02 and accuracy < 0.3, "bot accuracy %.1f%% is outside the human-like 2-30%% band" % (accuracy * 100.0))
+	_check(_parts_damaged > 0, "no part was ever damaged")
 
 	if _failures.is_empty():
 		print("MATCH_SIM_OK")

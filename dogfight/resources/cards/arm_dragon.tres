@@ -12,5 +12,5 @@ rarity = 3
 glyph = "DRGN"
 fire_rate_bonus = 0.02
 damage_bonus = 0.04
-burn_dps = 26.0
+burn_dps = 80.0
 burn_duration = 4.0

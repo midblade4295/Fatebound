@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
 [ext_resource type="Script" path="res://scripts/ui/hud_world_overlay.gd" id="2_overlay"]
 [ext_resource type="Script" path="res://scripts/ui/radar.gd" id="3_radar"]
 [ext_resource type="Script" path="res://scripts/ui/touch_flight_stick.gd" id="4_stick"]
 [ext_resource type="Script" path="res://scripts/ui/action_button.gd" id="5_button"]
+[ext_resource type="Script" path="res://scripts/ui/damage_diagram.gd" id="6_damage"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
@@ -88,6 +89,17 @@ unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
 value = 100.0
+
+[node name="DamageDiagram" type="Control" parent="Root"]
+unique_name_in_owner = true
+script = ExtResource("6_damage")
+layout_mode = 1
+anchors_preset = -1
+offset_left = 28.0
+offset_top = 174.0
+offset_right = 178.0
+offset_bottom = 324.0
+mouse_filter = 2
 
 [node name="ScoreBar" type="HBoxContainer" parent="Root"]
 layout_mode = 1

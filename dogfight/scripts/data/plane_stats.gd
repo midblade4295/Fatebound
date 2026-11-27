@@ -22,7 +22,7 @@ var roll_rate: float = 1.0
 # --- Guns ---
 ## Rounds per second, all guns combined.
 var fire_rate: float = 10.0
-var bullet_damage: float = 48.0
+var bullet_damage: float = 150.0
 var bullet_speed: float = 420.0
 var gun_range: float = 480.0
 var gun_spread_deg: float = 0.6
