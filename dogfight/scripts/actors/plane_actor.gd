@@ -32,12 +32,13 @@ extends CharacterBody3D
 ##    speed at about 1 in 6.
 ##
 ## Planes start on the ground. The pilot starts the engine, opens the throttle
-## and rolls down the runway; the wheels stay on the ground until there is
-## enough speed for the wings to carry the plane *and* the stick is eased back.
-## Coming home works the other way round: gear down, throttle back, and put it
-## on the island. How gently decides what it costs: nothing, strained wings, a
-## collapsed undercarriage leg or two, a smashed propeller (see _touch_down).
-## Only flying into the ground destroys the plane. Standing still on its own
+## and rolls down the runway on real wheels: it swings, it has to be held
+## straight, the tail has to be lifted, and it leaves the ground when the
+## wings lift it. Coming home works the other way round: gear down, throttle
+## back, and put it on the island. How gently each wheel (or anything else)
+## meets the ground decides what it costs: nothing, strained wings, a
+## collapsed undercarriage leg, a scraped wingtip, a smashed propeller (see
+## _ground_strike). Only flying into the ground destroys the plane. Standing still on its own
 ## airfield, a plane is repaired.
 ##
 ## Networking: the server (multiplayer authority of this node) runs all of
@@ -175,44 +176,24 @@ const DEFAULT_WHEEL_HEIGHT: float = 3.4
 const DEFAULT_BELLY_HEIGHT: float = 1.9
 
 # --- On the ground ---------------------------------------------------------------
-## Rolling resistance (m/s^2, with the full weight on the wheels): tarmac,
-## grass, and sliding on the belly.
-const ROLL_RUNWAY: float = 0.4
-const ROLL_GRASS: float = 1.1
-const BELLY_FRICTION: float = 8.5
+# Nothing here moves the plane. Its wheels are sprung legs with tyres and its
+# belly, nose, wingtips and tail are hard points (see FlightDynamics); the
+# actor only says what ground is under it and reads off how hard things hit.
+## Rolling resistance as a share of the load on a wheel: tarmac and grass.
+const ROLL_RUNWAY: float = 0.03
+const ROLL_GRASS: float = 0.09
 ## Wheel brakes come on by themselves when the throttle is closed.
-const WHEEL_BRAKES: float = 6.5
 const BRAKE_THROTTLE: float = 0.04
-## Steering on the ground: the tightest turn, and the most sideways grip.
-const GROUND_TURN_RATE: float = deg_to_rad(42.0)
-const GROUND_GRIP: float = 5.5
-const GROUND_PITCH_RATE: float = deg_to_rad(14.0)
-## The tail comes up between these fractions of take-off speed.
-const TAIL_UP_START: float = 0.35
-const TAIL_UP_END: float = 0.65
-## Near flying speed, easing the stick back lifts the nose up to this far
-## while the wheels are still rolling. The plane leaves the ground when its
-## wings are carrying its whole weight, and not before.
-const ROTATE_PITCH: float = deg_to_rad(8.0)
-const ROTATE_SPEED_START: float = 0.7
-const ROTATE_SPEED_END: float = 0.95
-## Leaving the ground needs power on or the stick back: a landing plane with
-## the throttle closed stays down. And for this long after touching down it
-## stays down whatever.
-const LIFTOFF_STICK: float = 0.15
-const LIFTOFF_THROTTLE: float = 0.5
-const LANDING_SETTLE_TIME: float = 1.5
-const LIFTOFF_GRACE: float = 0.8
-## Fresh off the ground the pilot is gentle with the stick: his pull comes in
-## over this long.
-const LIFTOFF_CONTROL_TIME: float = 1.5
-const LIFTOFF_CONTROL_START: float = 0.45
-## Take-off swing: under power, slow, the propeller's torque and slipstream
-## pull the nose to the left by up to this much (rad/s). It fades as the
-## rudder gets air over it, and it takes right stick or right pedal to hold.
-const TAKEOFF_SWING: float = deg_to_rad(3.0)
-## How much of the aileron and rudder trim the take-off wants is already wound on at lift-off.
-const TAKEOFF_TRIM_SHARE: float = 0.4
+## The plane counts as on the ground while the ground carries more than this
+## share of its weight, and as flying again once nothing has touched for
+## this long (a bounce is not a take-off).
+const ON_GROUND_WEIGHT: float = 0.02
+const AIRBORNE_AFTER: float = 0.3
+## While a wheel is on the ground the stick's sideways travel works the rudder
+## bar as well as this share of the ailerons; the rudder part fades out over
+## this long (s) after the last wheel leaves it.
+const GROUND_AILERON_SHARE: float = 0.5
+const STICK_STEERS_FADE: float = 0.7
 ## The landing flaps stay down after the wheels come up until the plane is
 ## going this much faster than its clean stalling speed, so cleaning up does
 ## not drop it.
@@ -223,36 +204,38 @@ const GROUND_CRASH_SPEED: float = 10.0
 # --- Close to the ground ----------------------------------------------------------
 ## Within this height of an airfield (metres under the wheels) the air
 ## trapped under the wings helps: more lift and less drag (ground effect).
+## That is all the help there is: the flare is the pilot's to fly.
 const GROUND_EFFECT_HEIGHT: float = 10.0
-## With the wheels down the pilot eases the stick back over the last few
-## metres to check the descent, as in a flare, unless he is holding it forward.
-const FLARE_STICK: float = 0.55
-const FLARE_FULL_SINK: float = 6.0
 ## A plane this far under the surface as it crosses the edge of the island has
 ## caught the lip with its wheels; further under, it has flown into the cliff.
 const LIP_DEPTH: float = 1.5
 const CLIFF_DEPTH: float = 6.0
 
 # --- Landing -----------------------------------------------------------------------
-# Rates of descent (m/s) at the surface. See _touch_down().
+# How fast (m/s, straight down) a wheel or a hard point meets the ground. See _ground_strike().
 ## Up to this is a good landing.
 const FIRM_LANDING_SINK: float = 6.0
-## Above this one undercarriage leg collapses; above the next, both.
+## A leg that meets the ground faster than this collapses. Each leg is
+## judged on its own arrival: level, both go together; one wing low, the
+## low one takes it all.
 const GEAR_COLLAPSE_SINK: float = 9.5
-const BOTH_LEGS_SINK: float = 12.5
 ## Above this, or steeper or more banked than these, the plane is destroyed.
 ## Everything short of it is survivable.
 const FATAL_SINK: float = 22.0
 const FATAL_NOSE_DOWN: float = deg_to_rad(30.0)
 const FATAL_BANK: float = deg_to_rad(70.0)
-## Nose lower than this at touchdown and the propeller hits the runway; lower
-## than the second and the undercarriage folds as well.
+## With the nose about this low on its wheels the propeller reaches the
+## ground (the HUD warns of it; the propeller's own tip decides).
 const PROP_STRIKE_PITCH: float = deg_to_rad(9.0)
-const NOSE_COLLAPSE_PITCH: float = deg_to_rad(18.0)
-## A wing this low scrapes its tip; this low and the tip is torn off and the
-## leg on that side goes with it.
-const WINGTIP_STRIKE_BANK: float = deg_to_rad(14.0)
-const WINGTIP_TORN_BANK: float = deg_to_rad(30.0)
+## A wingtip that meets the ground faster than this (m/s), or with the plane
+## banked more than this, is torn off; slower, it is scraped.
+const WINGTIP_TORN_SPEED: float = 6.0
+const WINGTIP_TORN_BANK: float = deg_to_rad(42.0)
+## A tip dragging along the ground wears away at this rate (share of its
+## strength per second at 30 m/s).
+const WINGTIP_SCRAPE_RATE: float = 0.12
+## How far the propeller's tips reach below the cowling (m).
+const PROP_BELOW_COWLING: float = 0.35
 ## Damage, as a share of each part's strength.
 const FIRM_LANDING_WING_DAMAGE: float = 0.3
 const FIRM_LANDING_FUSELAGE_DAMAGE: float = 0.2
@@ -266,13 +249,6 @@ const CRASH_TAIL_DAMAGE: float = 0.5
 ## Bits of the broken-undercarriage mask.
 const GEAR_LEFT: int = 1
 const GEAR_RIGHT: int = 2
-## A plane on one leg: how far it leans, how high it sits between belly and
-## wheels, how hard the dragging wingtip slows it and swings it round.
-const ONE_LEG_BANK: float = deg_to_rad(9.0)
-const ONE_LEG_HEIGHT: float = 0.5
-const ONE_LEG_FRICTION: float = 6.5
-const ONE_LEG_YAW_RATE: float = deg_to_rad(14.0)
-
 # --- Repairs at the home airfield ---------------------------------------------------
 ## The plane must be standing this still, for this long, before work starts.
 const SERVICE_MAX_SPEED: float = 1.0
@@ -352,7 +328,7 @@ const FLAG_PROP_BROKEN: int = 8192
 # --- Arena limits, set by the match manager ---------------------------------
 var arena_center: Vector3 = Vector3.ZERO
 var arena_radius: float = 3200.0
-var arena_ceiling: float = 2400.0
+var arena_ceiling: float = 4500.0
 
 ## Places a plane can land. Set by the match manager; with none, there is no
 ## ground to stand on and every surface is a crash.
@@ -371,8 +347,8 @@ var weapons_locked: bool = false
 var current_target: PlaneActor
 
 ## The aeroplane itself: a rigid body with real mass, in real gravity, flown by
-## the air on its surfaces. It owns the plane's motion while it is in the air
-## (on the ground the wheels do; see _integrate_ground).
+## the air on its surfaces and, when they are touching, by the ground under
+## its wheels. It owns the plane's motion all the time.
 var flight: FlightDynamics
 ## Attitude in radians, read off the plane's orientation every tick. yaw: 0
 ## faces -Z, positive turns left. pitch: positive is nose up. bank: positive is
@@ -382,10 +358,11 @@ var yaw: float = 0.0
 var pitch: float = 0.0
 var bank: float = 0.0
 
-## Yaw rate on the ground, rad/s.
-var _yaw_rate: float = 0.0
 ## Sideslip last tick, for the pilot's feet.
 var _last_slip: float = 0.0
+## How much the stick's sideways travel is working the rudder bar: 1 on the
+## ground, fading to 0 just after leaving it.
+var _stick_steers: float = 0.0
 ## Seconds until each gun station can fire again, and where each one's muzzle
 ## is (in this node's space; from the model).
 var _gun_cooldowns: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
@@ -401,7 +378,6 @@ var _last_attacker_age: float = INF
 ## Whoever destroyed a part: they get the credit however the plane then dies.
 var _doomed_by: PlaneActor
 var _flap_deploy: float = 0.0
-var _knock_velocity: Vector3 = Vector3.ZERO
 ## One bit per Part that is no longer on the plane (itself or its parent gone).
 var _gone_mask: int = 0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -418,10 +394,6 @@ var _engine_spool: float = 1.0
 var _gear_lever_down: bool = false
 var _ground_field: Airfield
 ## Height of the plane's origin above the surface right now.
-var _ground_height: float = 0.0
-var _liftoff_grace: float = 0.0
-## Seconds left after a touchdown during which the plane will not leave the ground again.
-var _landing_settle: float = 0.0
 var _service_time: float = 0.0
 var _refit_timer: float = 0.0
 var _service_start_load: float = 0.0
@@ -429,17 +401,22 @@ var _stranded_time: float = 0.0
 ## Collapsed undercarriage legs (GEAR_LEFT | GEAR_RIGHT) and a smashed propeller.
 var _gear_broken: int = 0
 var _prop_broken: bool = false
-## Seconds since the wheels left the ground; INF for a plane that did not
-## take off from a runway (so nothing is being eased in).
-var _airborne_time: float = INF
+## Seconds since anything last touched the ground, and whether it has been
+## properly in the air since (so that arriving counts as a touchdown).
+var _air_time: float = INF
+var _was_flying: bool = true
+## The hardest any part met the ground in the arrival now going on, m/s, and
+## how much of a crash's airframe damage (0..1) that arrival has already done.
+var _arrival_sink: float = 0.0
+var _crash_taken: float = 0.0
+var _underside_scraped: bool = false
+## How fast the plane was coming down just before this tick's step, m/s.
+var _sink_before: float = 0.0
+## Whether the plane was over an airfield last tick (to notice the edge).
+var _over_field: bool = false
 ## Landing flaps held down after take-off until there is speed to spare.
 var _takeoff_flaps: bool = false
-# Undercarriage geometry, measured from the model in _ready().
-## Origin height with the tail up and the main wheels on the ground.
-var _wheel_height: float = DEFAULT_WHEEL_HEIGHT
-## Origin height and nose-up angle sitting on all three wheels.
-var _rest_height: float = DEFAULT_WHEEL_HEIGHT
-var _rest_pitch: float = deg_to_rad(12.0)
+## How far the bottom of the fuselage is below the plane's centre (from the model).
 var _belly_height: float = DEFAULT_BELLY_HEIGHT
 
 ## The gun that fired most recently (PlaneAudio reads it for the right sound).
@@ -633,12 +610,20 @@ func home_airfield() -> Airfield:
 	return null
 
 
-## Height of the wheels (or the belly, with the wheels up) above whatever is
+## Height of the lowest part of the plane that could touch (its wheels if they
+## are down, otherwise its belly, propeller or a wingtip) above whatever is
 ## underneath: the airfield if the plane is over one, otherwise the sea.
 func height_above_ground() -> float:
 	var field: Airfield = airfield_at(global_position)
 	var floor_y: float = field.surface_y() if field != null else 0.0
-	return global_position.y - floor_y - _ride_height()
+	return flight.clearance(global_position.y - floor_y)
+
+
+## What the airspeed indicator reads, m/s: true airspeed scaled for the
+## thinner air up high. The stall, take-off and approach speeds are all in
+## these terms, at any height.
+func indicated_speed() -> float:
+	return flight.indicated_airspeed if is_multiplayer_authority() else speed
 
 
 ## 0.0 = pristine .. 1.0 = destroyed.
@@ -691,8 +676,6 @@ func engine_power() -> float:
 ## Fraction of the lift needed to stay level that the wings could make at
 ## this speed. Below 1.0 the plane cannot hold itself up, whatever the pilot does.
 func lift_ratio() -> float:
-	if is_on_ground():
-		return clampf(flight.available_load(speed) * _wing_lift(), 0.0, 1.0)
 	return clampf(flight.available_load(flight.airspeed) * _wing_lift(), 0.0, 1.0)
 
 
@@ -757,8 +740,9 @@ func altitude() -> float:
 	return global_position.y
 
 
+## Indicated airspeed in km/h, as on the HUD.
 func speed_kmh() -> float:
-	return speed * 3.6
+	return indicated_speed() * 3.6
 
 
 ## True when at least one fitted gun is still attached to the plane.
@@ -864,14 +848,11 @@ func repair_parts(amount: float) -> void:
 			part_state_changed.emit(self, part, after)
 
 
-## A shove from a mid-air collision: the plane is pushed by [param push] (m/s)
-## and its nose is kicked round by [param yaw_kick] rad/s. What happens next is
-## up to the air.
+## A shove from a collision with another aircraft: the plane is pushed by
+## [param push] (m/s) and its nose is kicked round by [param yaw_kick] rad/s.
+## What happens next is up to the air, or the ground.
 func knock(push: Vector3, yaw_kick: float) -> void:
-	if _on_ground:
-		_knock_velocity += push
-		_yaw_rate += yaw_kick
-		return
+	flight.wake()
 	flight.velocity += push
 	flight.angular_velocity.y += yaw_kick
 	# A glancing blow rolls the plane as well as swinging it.
@@ -890,12 +871,10 @@ func destroy(killer: PlaneActor) -> void:
 ## off, wheels down, throttle closed, waiting for its pilot.
 func respawn(spawn_transform: Transform3D, parked: bool = false) -> void:
 	global_transform = spawn_transform.orthonormalized()
-	_read_angles_from_transform()
-	bank = 0.0
-	_yaw_rate = 0.0
 	var field: Airfield = airfield_at(global_position) if parked else null
 	_on_ground = field != null
 	_ground_field = field
+	_over_field = field != null
 	_belly = false
 	_engine_running = not _on_ground
 	_engine_spool = 1.0 if _engine_running else 0.0
@@ -903,30 +882,23 @@ func respawn(spawn_transform: Transform3D, parked: bool = false) -> void:
 	input.throttle = throttle
 	_gear_lever_down = _on_ground
 	gear_deploy = 1.0 if _on_ground else 0.0
-	_liftoff_grace = 0.0
-	_landing_settle = 0.0
 	_service_time = 0.0
 	_service_start_load = 0.0
 	_stranded_time = 0.0
 	_gear_broken = 0
 	_prop_broken = false
-	_airborne_time = INF
+	_air_time = 0.0 if _on_ground else INF
+	_was_flying = not _on_ground
+	_arrival_sink = 0.0
+	_crash_taken = 0.0
+	_underside_scraped = false
 	_takeoff_flaps = _on_ground
-	if _on_ground:
-		pitch = _rest_pitch
-		_ground_height = _rest_height
-		global_position.y = field.surface_y() + _ground_height
-		speed = 0.0
-	else:
-		speed = stats.top_speed * CRUISE_SPEED_RATIO
-	rotation = Vector3(pitch, yaw, bank)
-	velocity = forward() * speed
 	part_damage.fill(0.0)
 	_gone_mask = 0
 	fuel = 1.0
 	control_state = Vector3.ZERO
-	_flap_deploy = 0.0
-	_knock_velocity = Vector3.ZERO
+	rudder_state = 0.0
+	_flap_deploy = 1.0 if _on_ground else 0.0
 	_burn_time = 0.0
 	_burn_dps = 0.0
 	_burn_source = null
@@ -944,11 +916,34 @@ func respawn(spawn_transform: Transform3D, parked: bool = false) -> void:
 	flight.aileron = 0.0
 	flight.elevator = 0.0
 	flight.rudder = 0.0
-	flight.reset(global_transform.basis, velocity)
+	if _on_ground:
+		_stand_on_wheels(field)
+	else:
+		speed = stats.top_speed * CRUISE_SPEED_RATIO
+		velocity = forward() * speed
+		flight.altitude = global_position.y
+		flight.ground_gap = INF
+		flight.reset(global_transform.basis, velocity)
+	_read_angles_from_transform()
 	_refresh_status_flags()
 	# Without this the interpolator would smear the plane across the map.
 	reset_physics_interpolation()
 	respawned.emit(self)
+
+
+## Stands the plane on its three wheels where it is, pointing the way it is
+## pointing, at rest. (A new plane wheeled out; a wreck jacked up.)
+func _stand_on_wheels(field: Airfield) -> void:
+	_set_contacts()
+	var stand: Vector2 = flight.standing_attitude()
+	var heading: float = global_transform.basis.get_euler().y
+	global_transform = Transform3D(Basis.from_euler(Vector3(stand.x, heading, 0.0)), Vector3(global_position.x, field.surface_y() + stand.y, global_position.z))
+	speed = 0.0
+	velocity = Vector3.ZERO
+	flight.altitude = global_position.y
+	flight.reset(global_transform.basis, Vector3.ZERO)
+	flight.ground_gap = stand.y
+	flight.weight_on_ground = 1.0
 
 
 ## Moves the plane somewhere else as it is, damage and all, with no spawn
@@ -957,17 +952,32 @@ func respawn(spawn_transform: Transform3D, parked: bool = false) -> void:
 func teleport(new_transform: Transform3D) -> void:
 	_on_ground = false
 	_belly = false
-	_airborne_time = INF
+	_air_time = INF
+	_was_flying = true
+	_arrival_sink = 0.0
+	_crash_taken = 0.0
+	_underside_scraped = false
+	_over_field = airfield_at(new_transform.origin) != null
 	_spawn_shield = 0.0
 	global_transform = new_transform.orthonormalized()
-	_yaw_rate = 0.0
-	_knock_velocity = Vector3.ZERO
 	velocity = forward() * speed
 	_apply_condition()
+	flight.altitude = global_position.y
+	flight.ground_gap = INF
 	flight.reset(global_transform.basis, velocity)
 	_read_angles_from_transform()
 	_refresh_status_flags()
 	reset_physics_interpolation()
+
+
+## Gives the plane a velocity (m/s, in the world) where it is, flying or not.
+## For tests and editor tools: a plane dropped on to a runway, say.
+func throw(new_velocity: Vector3) -> void:
+	flight.wake()
+	flight.velocity = new_velocity
+	flight.angular_velocity = Vector3.ZERO
+	velocity = new_velocity
+	speed = new_velocity.length()
 
 
 ## Starts or stops the engine at once, with no starter and no spool-up.
@@ -983,6 +993,7 @@ func set_engine_running(running: bool) -> void:
 func set_gear_down(down: bool) -> void:
 	_gear_lever_down = down
 	gear_deploy = 1.0 if down else 0.0
+	_set_contacts()
 	_refresh_status_flags()
 
 
@@ -1042,8 +1053,10 @@ func _set_stats(value: PlaneStats) -> void:
 	if stats == null:
 		return
 	flight = stats.make_flight()
-	if is_inside_tree():
+	if is_node_ready():
+		_measure_undercarriage()
 		_apply_condition()
+		flight.altitude = global_position.y
 		flight.reset(global_transform.basis, velocity)
 
 
@@ -1084,14 +1097,7 @@ func _integrate_flight(delta: float) -> void:
 	var steer: Vector2 = input.steer.limit_length(1.0)
 	_tick_engine(delta)
 	_tick_gear(delta)
-	_liftoff_grace = maxf(_liftoff_grace - delta, 0.0)
-	_landing_settle = maxf(_landing_settle - delta, 0.0)
-	_airborne_time += delta
 	_apply_condition()
-	if _on_ground:
-		if _integrate_ground(steer, delta):
-			return
-		# Left the ground this tick (took off, or ran off the edge): fly on.
 	_fly(steer, delta)
 
 
@@ -1124,37 +1130,56 @@ func _apply_condition() -> void:
 	flight.damage_drag = ragged
 
 
-## One tick in the air. The pilot moves the controls; FlightDynamics does the
-## flying.
+## One tick, in the air or on the ground: it is the same aeroplane and the
+## same physics either way. The pilot moves the controls, the actor says where
+## the ground is and how thick the air is, and FlightDynamics does the rest.
 func _fly(steer: Vector2, delta: float) -> void:
 	# Fuel: a holed fuselage leaks, a destroyed one dumps the lot.
 	var fuselage_damage: float = part_damage[Part.FUSELAGE]
-	if fuel > 0.0 and fuselage_damage > 0.0:
+	if fuel > 0.0 and fuselage_damage > 0.0 and not _on_ground:
 		var leak: float = FUEL_DUMP_RATE if fuselage_damage >= 1.0 else FUEL_LEAK_RATE * fuselage_damage * fuselage_damage
 		leak *= stats.fuel_leak  # Self-sealing tanks.
 		fuel = maxf(fuel - leak * delta, 0.0)
 
 	# Combat flaps: pulling hard drops them for more lift at the cost of drag,
 	# until the airflow is too fast for them.
+	var indicated: float = flight.indicated_airspeed
 	var flap_demand: float = clampf((steer.y - FLAP_DEPLOY_STICK) / (1.0 - FLAP_DEPLOY_STICK), 0.0, 1.0)
-	flap_demand *= 1.0 - smoothstep(0.9, 1.1, speed / maxf(stats.top_speed * FLAP_LIMIT_SPEED_RATIO, 1.0))
+	flap_demand *= 1.0 - smoothstep(0.9, 1.1, indicated / maxf(stats.top_speed * FLAP_LIMIT_SPEED_RATIO, 1.0))
 	# The landing flaps come down with the wheels, and after a take-off they
 	# stay down until the plane has speed in hand.
 	if gear_deploy > 0.5:
 		_takeoff_flaps = true
-	elif speed >= stats.stall_speed * CLEAN_UP_STALL_MARGIN:
+	elif indicated >= stats.stall_speed * CLEAN_UP_STALL_MARGIN:
 		_takeoff_flaps = false
 	flap_demand = maxf(flap_demand, maxf(gear_deploy, 1.0 if _takeoff_flaps else 0.0))
+	if _on_ground:
+		flap_demand = gear_deploy
 	_flap_deploy = move_toward(_flap_deploy, flap_demand, FLAP_SPEED * delta)
 	flight.flaps = _flap_deploy
-	var closeness: float = _ground_closeness()
-	flight.ground_effect = closeness
 
-	var wanted: Vector3 = _pilot_controls(steer, closeness, delta)
+	# Where it is: how thick the air, and what ground (if any) is under it.
+	var field: Airfield = airfield_at(global_position)
+	flight.altitude = global_position.y
+	if field != null:
+		if not _over_field and not _cross_the_lip(field):
+			return
+		flight.ground_gap = global_position.y - field.surface_y()
+		flight.rolling_drag = ROLL_RUNWAY if field.is_on_runway(global_position) else ROLL_GRASS
+	else:
+		flight.ground_gap = INF
+	_over_field = field != null
+	_ground_field = field
+	_set_contacts()
+	flight.brake = 1.0 if input.throttle <= BRAKE_THROTTLE else 0.0
+	flight.ground_effect = _ground_closeness()
+
+	var wanted: Vector3 = _pilot_controls(steer, delta)
 	flight.aileron = move_toward(flight.aileron, wanted.x, CONTROL_SLEW * delta)
 	flight.elevator = move_toward(flight.elevator, wanted.y, CONTROL_SLEW * delta)
 	flight.rudder = move_toward(flight.rudder, wanted.z, CONTROL_SLEW * delta)
 	flight.update_trim(delta)
+	_sink_before = maxf(-flight.velocity.y, 0.0)
 	flight.step(delta)
 
 	velocity = flight.velocity
@@ -1163,43 +1188,66 @@ func _fly(steer: Vector2, delta: float) -> void:
 	_read_angles_from_transform()
 	control_state = Vector3(flight.aileron, flight.elevator, _flap_deploy)
 	rudder_state = flight.rudder
-	if _meet_the_ground(delta):
+	_read_the_ground(delta)
+	if not alive:
 		return
-	var collision: KinematicCollision3D = move_and_collide(velocity * delta)
+	var collision: KinematicCollision3D = move_and_collide(flight.displacement)
 	if collision != null:
-		# Hit the sea, a cliff or a building. Apart from a bad landing this is
-		# the only way a plane dies on its own; credit whoever put it in this state.
-		_die(recent_attacker())
+		if _on_ground and speed <= GROUND_CRASH_SPEED:
+			# Taxied into a hangar: it stops there.
+			flight.velocity = Vector3.ZERO
+			flight.angular_velocity = Vector3.ZERO
+		else:
+			# Hit the sea, a cliff or a building. Apart from flying into the
+			# runway this is the only way a plane dies on its own; credit
+			# whoever put it in this state.
+			_die(recent_attacker())
+			return
+	if _on_ground and field != null:
+		_tick_service(field, delta)
+		if field.team != team and speed < SERVICE_MAX_SPEED:
+			_stranded_time += delta
+			if _stranded_time >= STRANDED_TIME:
+				_die(recent_attacker())
+		else:
+			_stranded_time = 0.0
 
 
 ## Where the pilot puts the controls this tick: x = aileron (+ rolls right),
 ## y = elevator (+ pulls the nose up), z = rudder (+ swings the nose right).
 ## All are measured from the trimmed position (see FlightDynamics.update_trim).
-func _pilot_controls(steer: Vector2, closeness: float, delta: float) -> Vector3:
-	var roll_stick: float = steer.x
+##
+## There is one stick for a thumb. Sideways it is always the ailerons; while
+## any wheel is on the ground it works the rudder bar as well (which is also
+## the tail wheel and, with the brakes on, which wheel is braked harder), and
+## the ailerons only partly. So holding the stick against the swing on the
+## take-off run holds the wing down against the engine's torque too, which is
+## what a pilot's hands and feet would be doing. The rudder part fades out
+## over the moment after the wheels leave the ground. The pedals are always
+## the rudder.
+func _pilot_controls(steer: Vector2, delta: float) -> Vector3:
+	var touching: float = 1.0 if flight.weight_on_ground > ON_GROUND_WEIGHT else 0.0
+	_stick_steers = move_toward(_stick_steers, touching, delta / (STICK_STEERS_FADE if touching < _stick_steers else 0.1))
+	var on_wheels: float = _stick_steers
+	var roll_stick: float = steer.x * lerpf(1.0, GROUND_AILERON_SHARE, on_wheels)
 	var pitch_stick: float = steer.y
-	var feet: float = clampf(input.rudder, -1.0, 1.0)
+	var feet: float = clampf(input.rudder + steer.x * on_wheels, -1.0, 1.0)
 	# Leaving the battle area, the pilot is turned back toward it.
-	var urgency: float = _bounds_urgency()
+	var urgency: float = _bounds_urgency() * (1.0 - on_wheels)
 	if urgency > 0.0:
 		var help: Vector3 = FlightPilot.fly_toward(self, _bounds_direction(), BOUNDS_LOAD)
 		roll_stick = lerpf(roll_stick, help.x, urgency)
 		pitch_stick = lerpf(pitch_stick, help.y, urgency)
-	if _airborne_time < LIFTOFF_CONTROL_TIME and pitch_stick > 0.0:
-		pitch_stick *= lerpf(LIFTOFF_CONTROL_START, 1.0, _airborne_time / LIFTOFF_CONTROL_TIME)
-	if closeness > 0.0 and gear_deploy > 0.5 and velocity.y < 0.0 and steer.y > -0.5:
-		# The flare: check the descent over the last few metres.
-		pitch_stick += FLARE_STICK * closeness * clampf(-velocity.y / FLARE_FULL_SINK, 0.0, 1.0)
 	# Nobody can hold the stick against eight times their own weight.
 	if pitch_stick > 0.0:
 		pitch_stick *= 1.0 - smoothstep(G_EASE_START, G_EASE_END, flight.load_factor)
 	elif pitch_stick < 0.0:
 		pitch_stick *= 1.0 - smoothstep(-NEGATIVE_G_EASE_START, -NEGATIVE_G_EASE_END, -flight.load_factor)
-	# Feet: push the ball back to the middle, and check its swing.
+	# Feet, in the air: push the ball back to the middle, and check its swing.
 	var slip_rate: float = (flight.beta - _last_slip) / maxf(delta, 0.001)
 	_last_slip = flight.beta
-	if absf(feet) < 0.05:
-		feet = clampf(flight.beta * COORDINATION_GAIN + slip_rate * COORDINATION_DAMPING, -1.0, 1.0) * (1.0 - STALLED_FEET_LOSS * clampf(flight.stall * 2.0, 0.0, 1.0))
+	if absf(input.rudder) < 0.05 and on_wheels < 1.0:
+		feet += (1.0 - on_wheels) * clampf(flight.beta * COORDINATION_GAIN + slip_rate * COORDINATION_DAMPING, -1.0, 1.0) * (1.0 - STALLED_FEET_LOSS * clampf(flight.stall * 2.0, 0.0, 1.0))
 	return Vector3(clampf(roll_stick, -1.0, 1.0), clampf(pitch_stick, -1.0, 1.0), feet)
 
 
@@ -1248,24 +1296,59 @@ func _propeller_ratio() -> float:
 	return 0.0 if is_on_ground() else clampf(speed / maxf(stats.top_speed, 1.0), 0.0, 1.0) * 0.25
 
 
-## Reads the wheel positions off the model: how high the plane stands with its
-## tail up, and how high and how nose-up it sits on all three wheels.
+## Reads off the model where the plane meets the ground (wheels, belly,
+## propeller, wingtips, tail) and gives that to the flight model.
 func _measure_undercarriage() -> void:
-	var contacts: Array[Vector3] = visual.undercarriage_contacts()
-	_belly_height = maxf(visual.belly_depth(), 0.5)
-	if contacts.size() < 2:
-		_wheel_height = _belly_height + (DEFAULT_WHEEL_HEIGHT - DEFAULT_BELLY_HEIGHT)
-		_rest_height = _wheel_height
-		_rest_pitch = 0.0
+	if visual == null or hitboxes == null or flight == null:
 		return
-	# Side view: x = distance behind the origin (+Z), y = height.
-	var main_wheel: Vector2 = Vector2(contacts[0].z, contacts[0].y)
-	var tail_wheel: Vector2 = Vector2(contacts[1].z, contacts[1].y)
-	var ground_line: Vector2 = tail_wheel - main_wheel
-	_wheel_height = maxf(-main_wheel.y, _belly_height)
-	_rest_pitch = clampf(atan2(ground_line.y, ground_line.x), 0.0, deg_to_rad(20.0))
-	# Distance from the origin to the line through both contact points.
-	_rest_height = absf(main_wheel.x * tail_wheel.y - main_wheel.y * tail_wheel.x) / maxf(ground_line.length(), 0.01)
+	_belly_height = maxf(visual.belly_depth(), 0.5)
+	var main_wheel: Vector3 = Vector3(-_belly_height, -DEFAULT_WHEEL_HEIGHT, -_belly_height)
+	var tail_wheel: Vector3 = Vector3(0.0, -(DEFAULT_WHEEL_HEIGHT - 1.4), _belly_height * 2.3)
+	var contacts: Array[Vector3] = visual.undercarriage_contacts()
+	if contacts.size() >= 2:
+		main_wheel = contacts[0]
+		tail_wheel = contacts[1]
+	var engine: AABB = _part_bounds(Part.ENGINE)
+	var wingtip: AABB = _part_bounds(Part.LEFT_WINGTIP)
+	var tail: AABB = _part_bounds(Part.TAIL)
+	# The propeller's disc reaches a little below the cowling.
+	var nose: Vector3 = Vector3(0.0, minf(engine.position.y, -_belly_height) - PROP_BELOW_COWLING, engine.position.z)
+	var tip: Vector3 = Vector3(wingtip.position.x, wingtip.position.y, wingtip.get_center().z)
+	var tail_bottom: Vector3 = Vector3(0.0, tail.position.y, tail.end.z)
+	flight.set_undercarriage(main_wheel, tail_wheel, _belly_height, nose, tip, tail_bottom)
+	_set_contacts()
+
+
+## The whole extent of a part (a part can be several boxes), in the plane's axes.
+func _part_bounds(part: Part) -> AABB:
+	var bounds: AABB = AABB()
+	var found: bool = false
+	for index: int in range(hitboxes.solid_boxes.size()):
+		if hitboxes.parts[index] != part:
+			continue
+		bounds = hitboxes.solid_boxes[index] if not found else bounds.merge(hitboxes.solid_boxes[index])
+		found = true
+	if not found:
+		bounds = AABB(Vector3(-0.5, -_belly_height, -0.5), Vector3.ONE)
+	return bounds
+
+
+## Tells the flight model which wheels and hard points are there to touch
+## the ground: a wheel that is up, broken off or gone with its wing is not.
+func _set_contacts() -> void:
+	if flight.contact_enabled.size() < FlightDynamics.CONTACT_COUNT:
+		return
+	# (A plane lying on its belly has no wheels under it until it is jacked up.)
+	var wheels_down: bool = gear_deploy >= 0.98 and not _belly
+	var left_wing: bool = not is_part_gone(Part.LEFT_WING)
+	var right_wing: bool = not is_part_gone(Part.RIGHT_WING)
+	var tail: bool = not is_part_gone(Part.TAIL)
+	flight.contact_enabled[FlightDynamics.Contact.LEFT_WHEEL] = 1 if wheels_down and left_wing and _gear_broken & GEAR_LEFT == 0 else 0
+	flight.contact_enabled[FlightDynamics.Contact.RIGHT_WHEEL] = 1 if wheels_down and right_wing and _gear_broken & GEAR_RIGHT == 0 else 0
+	flight.contact_enabled[FlightDynamics.Contact.TAIL_WHEEL] = 1 if tail else 0
+	flight.contact_enabled[FlightDynamics.Contact.LEFT_TIP] = 1 if left_wing else 0
+	flight.contact_enabled[FlightDynamics.Contact.RIGHT_TIP] = 1 if right_wing else 0
+	flight.contact_enabled[FlightDynamics.Contact.TAIL] = 1 if tail else 0
 
 
 ## How many main undercarriage legs the plane can stand on right now: 2, 1
@@ -1281,252 +1364,167 @@ func _legs_standing() -> int:
 	return legs
 
 
-## Which way a plane on one leg leans: +1 with the left leg missing (left wing
-## on the ground), -1 with the right leg missing, 0 if it is not on one leg.
-func _lean_side() -> float:
-	if _legs_standing() != 1:
-		return 0.0
-	var left_missing: bool = _gear_broken & GEAR_LEFT != 0 or is_part_gone(Part.LEFT_WING)
-	return 1.0 if left_missing else -1.0
-
-
-## Origin height above the ground for the plane's attitude and wheels.
-func _ride_height() -> float:
-	var legs: int = _legs_standing()
-	if legs == 0:
-		return _belly_height
-	if legs == 1:
-		return lerpf(_belly_height, _wheel_height, ONE_LEG_HEIGHT)
-	var tail_down: float = clampf(pitch / maxf(_rest_pitch, 0.001), 0.0, 1.0)
-	return lerpf(_wheel_height, _rest_height, tail_down)
-
-
-## How close the wheels are to an airfield's surface: 0 at GROUND_EFFECT_HEIGHT
-## or more (and anywhere that is not over an airfield), 1 touching it.
+## How close the lowest part of the plane is to an airfield's surface: 0 at
+## GROUND_EFFECT_HEIGHT or more (and anywhere that is not over an airfield),
+## 1 touching it.
 func _ground_closeness() -> float:
-	var field: Airfield = airfield_at(global_position)
-	if field == null:
+	if not is_finite(flight.ground_gap):
 		return 0.0
-	var gap: float = global_position.y - field.surface_y() - _ride_height()
-	return clampf(1.0 - gap / GROUND_EFFECT_HEIGHT, 0.0, 1.0)
+	return clampf(1.0 - flight.clearance(flight.ground_gap) / GROUND_EFFECT_HEIGHT, 0.0, 1.0)
 
 
 # ---------------------------------------------------------------------------
 # On the ground
 # ---------------------------------------------------------------------------
 
-## One tick of rolling (or sliding) along the airfield. Returns false if the
-## plane left the ground this tick, so the caller carries on with flight.
-func _integrate_ground(steer: Vector2, delta: float) -> bool:
-	var field: Airfield = airfield_at(global_position)
-	if field == null:
-		# Ran off the edge of the island. Whatever happens next is flying.
+## The plane has just come in over the edge of an airfield. If it is above
+## the surface that is all there is to it. A little under, it has caught the
+## lip with whatever is lowest: it is lifted on to the top with its
+## undercarriage wrecked. Well under, it has flown into the cliff. Returns
+## false if the plane was destroyed.
+func _cross_the_lip(field: Airfield) -> bool:
+	var gap: float = global_position.y - field.surface_y()
+	var under: float = -flight.clearance(gap)
+	if under <= 0.05:
+		return true
+	if under > CLIFF_DEPTH:
+		_die(recent_attacker())
+		return false
+	global_position.y += under
+	if under > LIP_DEPTH:
+		_break_gear(GEAR_LEFT | GEAR_RIGHT)
+		_impact_damage(Part.FUSELAGE, BELLY_FUSELAGE_DAMAGE)
+	flight.velocity.y = maxf(flight.velocity.y, 0.0)
+	return true
+
+
+## Reads off what the ground did to the plane this tick: which wheels and
+## hard points met it and how fast, what that broke, and whether the plane
+## is now on the ground or back in the air.
+func _read_the_ground(delta: float) -> void:
+	var hardest: float = 0.0
+	for index: int in range(FlightDynamics.CONTACT_COUNT):
+		var hit: float = flight.contact_impact[index]
+		if hit <= 0.0:
+			continue
+		flight.contact_impact[index] = 0.0
+		hardest = maxf(hardest, hit)
+		_ground_strike(index as FlightDynamics.Contact, hit)
+		if not alive:
+			return
+	_arrival_sink = maxf(_arrival_sink, hardest)
+	if flight.weight_on_ground > ON_GROUND_WEIGHT:
+		_air_time = 0.0
+		# A propeller that reaches the ground is finished, whatever the speed.
+		if flight.is_touching(FlightDynamics.Contact.NOSE):
+			_break_propeller()
+		# Metal dragged along the ground wears away.
+		var ground_speed: float = Vector2(velocity.x, velocity.z).length()
+		if ground_speed > 3.0:
+			var wear: float = WINGTIP_SCRAPE_RATE * delta * ground_speed / 30.0
+			if flight.is_touching(FlightDynamics.Contact.LEFT_TIP):
+				_scrape(Part.LEFT_WINGTIP, wear)
+			if flight.is_touching(FlightDynamics.Contact.RIGHT_TIP):
+				_scrape(Part.RIGHT_WINGTIP, wear)
+		# Once it is lying on its belly it stays there until it is jacked up.
+		if not gear_usable():
+			_belly = true
+		if not _on_ground:
+			_on_ground = true
+			_service_time = 0.0
+			if _was_flying:
+				_was_flying = false
+				touched_down.emit(self, _arrival_sink, not _belly)
+		return
+	_air_time += delta
+	if _air_time < AIRBORNE_AFTER:
+		return  # A hop. It may yet come down again.
+	if _on_ground:
 		_on_ground = false
 		_belly = false
-		_ground_field = null
-		_airborne_time = INF
-		_take_to_the_air()
-		return false
-	_ground_field = field
-	if not _belly and not gear_usable():
-		_belly = true  # A leg, or the wing it hangs from, has just gone.
-	var lean: float = _lean_side()
-
-	# --- Lift: are the wings carrying it yet? -----------------------------------
-	_takeoff_flaps = true
-	_flap_deploy = move_toward(_flap_deploy, gear_deploy, FLAP_SPEED * delta)
-	flight.flaps = _flap_deploy
-	# x = lift as a share of the weight, y = thrust less air drag (m/s^2).
-	var roll: Vector2 = flight.ground_roll(maxf(pitch, 0.0), speed)
-	var lift: float = roll.x
-	var elevators: float = 0.5 * (part_health(Part.LEFT_ELEVATOR) + part_health(Part.RIGHT_ELEVATOR))
-	var pull: float = clampf(steer.y, 0.0, 1.0) * lerpf(0.1, 1.0, elevators)
-	# It flies when the wings carry its whole weight, and not a moment before:
-	# enough speed, and the nose up enough for the wing to bite.
-	if not _belly and lift >= 1.0 and _landing_settle <= 0.0 and (pull > LIFTOFF_STICK or _drive() > LIFTOFF_THROTTLE):
-		_lift_off()
-		return false
-
-	# --- Speed: thrust against the air, the wheels and the brakes ----------------
-	var weight_on_wheels: float = clampf(1.0 - lift, 0.0, 1.0)
-	var resistance: float = BELLY_FRICTION
-	if lean != 0.0:
-		resistance = ONE_LEG_FRICTION
-	elif not _belly:
-		resistance = ROLL_RUNWAY if field.is_on_runway(global_position) else ROLL_GRASS
-		if input.throttle <= BRAKE_THROTTLE:
-			resistance += WHEEL_BRAKES
-	speed = maxf(speed + (roll.y - resistance * weight_on_wheels) * delta, 0.0)
-
-	# --- Steering: rudder and tail wheel, limited by grip at speed ------------
-	var speed_share: float = speed / maxf(takeoff_speed(), 1.0)
-	var turn_limit: float = minf(GROUND_TURN_RATE, GROUND_GRIP / maxf(speed, 0.1)) * clampf(speed / 2.0, 0.0, 1.0)
-	if _belly:
-		turn_limit *= 0.15
-	var feet: float = clampf(steer.x + input.rudder, -1.0, 1.0)
-	var yaw_target: float = -feet * turn_limit * lerpf(0.5, 1.0, part_health(Part.RUDDER))
-	if not _belly and is_engine_running():
-		# The swing: torque and the corkscrewing slipstream shove the nose left
-		# until there is enough air over the rudder to hold it.
-		yaw_target += TAKEOFF_SWING * _drive() * (1.0 - smoothstep(0.3, 1.0, speed_share)) * clampf(speed / 4.0, 0.0, 1.0)
-	# On one leg the dragging wingtip pulls the plane round toward itself.
-	yaw_target += lean * ONE_LEG_YAW_RATE * clampf(speed / 20.0, 0.0, 1.0)
-	_yaw_rate = lerpf(_yaw_rate, yaw_target, 1.0 - exp(-STICK_RESPONSE * delta))
-	yaw = wrapf(yaw + _yaw_rate * delta, -PI, PI)
-
-	# --- Attitude: tail down at rest, coming up as the speed builds, and then --
-	# the nose lifting as the pilot eases the stick back near flying speed.
-	var tail_up: float = smoothstep(TAIL_UP_START, TAIL_UP_END, speed_share)
-	var pitch_target: float = 0.0
-	if not _belly:
-		var nose_lift: float = pull * smoothstep(ROTATE_SPEED_START, ROTATE_SPEED_END, speed_share)
-		pitch_target = maxf(_rest_pitch * (1.0 - tail_up), ROTATE_PITCH * nose_lift)
-	pitch = move_toward(pitch, pitch_target, GROUND_PITCH_RATE * delta)
-	bank = lerpf(bank, lean * ONE_LEG_BANK, 1.0 - exp(-6.0 * delta))
-	rotation = Vector3(pitch, yaw, bank)
-	_ground_height = move_toward(_ground_height, _ride_height(), 3.0 * delta)
-
-	# --- Move ------------------------------------------------------------------
-	control_state = Vector3(steer.x, steer.y, _flap_deploy)
-	rudder_state = feet
-	_knock_velocity = _knock_velocity.lerp(Vector3.ZERO, 1.0 - exp(-KNOCK_DAMPING * delta))
-	var heading: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
-	velocity = heading * speed + Vector3(_knock_velocity.x, 0.0, _knock_velocity.z)
-	var collision: KinematicCollision3D = move_and_collide(velocity * delta)
-	if collision != null:
-		if speed > GROUND_CRASH_SPEED:
-			_die(recent_attacker())
-			return true
-		speed = 0.0
-	global_position.y = field.surface_y() + _ground_height
-	_tick_service(field, delta)
-	if field.team != team and speed < SERVICE_MAX_SPEED:
-		_stranded_time += delta
-		if _stranded_time >= STRANDED_TIME:
-			_die(recent_attacker())
-	else:
-		_stranded_time = 0.0
-	return true
+		_service_time = 0.0
+		# Protection for a freshly wheeled-out plane ends once it is flying.
+		_spawn_shield = minf(_spawn_shield, SPAWN_SHIELD_TIME)
+		lifted_off.emit(self)
+	_was_flying = true
+	_arrival_sink = 0.0
+	_crash_taken = 0.0
+	_underside_scraped = false
 
 
-## Hands the plane, as it is at this instant, over to the flight model.
-func _take_to_the_air() -> void:
-	_apply_condition()
-	flight.aileron = 0.0
-	flight.elevator = 0.0
-	flight.rudder = 0.0
-	flight.reset(global_transform.basis, velocity)
-	# The tabs are set for the take-off, but nobody sets them perfectly: the
-	# engine's torque is felt until the pilot has trimmed it out.
-	flight.trim.y *= TAKEOFF_TRIM_SHARE
-	flight.trim.z *= TAKEOFF_TRIM_SHARE
-
-
-func _lift_off() -> void:
-	_on_ground = false
-	_belly = false
-	_ground_field = null
-	_service_time = 0.0
-	_liftoff_grace = LIFTOFF_GRACE
-	_airborne_time = 0.0
-	_take_to_the_air()
-	# Protection for a freshly wheeled-out plane ends once it is flying.
-	_spawn_shield = minf(_spawn_shield, SPAWN_SHIELD_TIME)
-	lifted_off.emit(self)
-
-
-## Called in flight just before moving. If this tick would take the plane into
-## the top of an airfield it lands there, however well or badly, and this
-## returns true.
-func _meet_the_ground(delta: float) -> bool:
-	var field: Airfield = airfield_at(global_position)
-	if field == null:
-		return false
-	var floor_y: float = field.surface_y() + _ride_height()
-	var below: float = floor_y - global_position.y
-	if below > CLIFF_DEPTH:
-		# Well under the surface: it flew into the side of the island.
-		_die(recent_attacker())
-		return true
-	if global_position.y + velocity.y * delta > floor_y:
-		return false
-	var sink: float = -velocity.y
-	if below > LIP_DEPTH:
-		# Too low over the edge: the lip of the island takes the wheels off.
-		sink = maxf(sink, gear_collapse_sink() + below)
-	elif sink <= 0.0 or (_liftoff_grace > 0.0 and sink < 2.0):
-		return false  # Skimming the surface on the way up.
-	_touch_down(field, sink)
-	return true
-
-
-## The plane has reached the surface, coming down at [param sink] m/s.
+## One wheel or hard point has just met the ground, coming down at
+## [param hit] m/s. What that does depends on what it was and how hard.
 ##
-## Gently and level, on its wheels, is a landing. Rougher than that and the
-## aeroplane pays for it, a piece at a time: strained wings, a collapsed
-## undercarriage leg (then it slides on a wingtip), both legs (then it slides
-## on its belly), a smashed propeller, a torn-off wingtip, a wrecked airframe.
-## The pilot walks away from all of those, and at home the ground crew can
-## mend them. Only flying into the ground (a dive, or upside down) destroys
-## the plane outright.
-func _touch_down(field: Airfield, sink: float) -> void:
-	global_position.y = field.surface_y() + _ride_height()
-	var nose_down: float = -pitch
-	if sink > FATAL_SINK or nose_down > FATAL_NOSE_DOWN or absf(bank) > FATAL_BANK:
-		_die(recent_attacker())
-		return
-	# +1 = left wing low, -1 = right wing low. Level: whichever luck picks.
-	var low_side: float = signf(bank)
-	if absf(bank) < deg_to_rad(1.0):
-		low_side = 1.0 if _rng.randf() < 0.5 else -1.0
-	var low_leg: int = GEAR_LEFT if low_side > 0.0 else GEAR_RIGHT
-	var low_wingtip: Part = Part.LEFT_WINGTIP if low_side > 0.0 else Part.RIGHT_WINGTIP
-
-	# Stronger legs move every threshold the undercarriage is responsible for.
+## Gently, on the wheels, is a landing. Rougher than that and the aeroplane
+## pays for it, a piece at a time: strained wings, a collapsed undercarriage
+## leg (it then drops on to that wingtip and the propeller), a scraped or
+## torn-off wingtip, a wrecked airframe. The pilot walks away from all of
+## those, and at home the ground crew can mend them. Only flying into the
+## ground (a dive, on its side, or upside down) destroys the plane outright.
+func _ground_strike(contact: FlightDynamics.Contact, hit: float) -> void:
+	if _was_flying and not _on_ground:
+		# First touch of an arrival: was it a landing at all?
+		if hit > FATAL_SINK or -pitch > FATAL_NOSE_DOWN or absf(bank) > FATAL_BANK:
+			_die(recent_attacker())
+			return
 	var firm_sink: float = firm_landing_sink()
 	var collapse_sink: float = gear_collapse_sink()
-	if gear_usable():
-		if sink > firm_sink:
-			# A heavy arrival strains whatever the legs are bolted to.
-			var strain: float = clampf((sink - firm_sink) / (collapse_sink - firm_sink), 0.0, 1.0)
-			_impact_damage(Part.LEFT_WING, FIRM_LANDING_WING_DAMAGE * strain)
-			_impact_damage(Part.RIGHT_WING, FIRM_LANDING_WING_DAMAGE * strain)
-			_impact_damage(Part.FUSELAGE, FIRM_LANDING_FUSELAGE_DAMAGE * strain)
-		if sink > BOTH_LEGS_SINK * stats.gear_strength or nose_down > NOSE_COLLAPSE_PITCH:
-			_break_gear(GEAR_LEFT | GEAR_RIGHT)
-		elif sink > collapse_sink or absf(bank) > WINGTIP_TORN_BANK:
-			_break_gear(low_leg)
-		if nose_down > PROP_STRIKE_PITCH:
+	match contact:
+		FlightDynamics.Contact.LEFT_WHEEL, FlightDynamics.Contact.RIGHT_WHEEL:
+			var left: bool = contact == FlightDynamics.Contact.LEFT_WHEEL
+			if hit > firm_sink:
+				# A heavy arrival strains whatever the leg is bolted to.
+				var strain: float = clampf((hit - firm_sink) / (collapse_sink - firm_sink), 0.0, 1.0)
+				_impact_damage(Part.LEFT_WING if left else Part.RIGHT_WING, FIRM_LANDING_WING_DAMAGE * strain)
+				_impact_damage(Part.FUSELAGE, FIRM_LANDING_FUSELAGE_DAMAGE * strain * 0.5)
+			if hit > collapse_sink:
+				_break_gear(GEAR_LEFT if left else GEAR_RIGHT)
+		FlightDynamics.Contact.TAIL_WHEEL:
+			if hit > collapse_sink:
+				_impact_damage(Part.TAIL, CRASH_TAIL_DAMAGE * clampf(hit / FATAL_SINK, 0.0, 1.0))
+		FlightDynamics.Contact.BELLY:
+			_scrape_underside(hit)
+		FlightDynamics.Contact.NOSE:
 			_break_propeller()
-	if not gear_usable():
-		# No wheels under it, or not enough of them: the nose goes down, the
-		# propeller digs in and the underside takes the scrape.
-		_break_propeller()
-		_impact_damage(Part.FUSELAGE, BELLY_FUSELAGE_DAMAGE)
-	if sink > GEAR_COLLAPSE_SINK:
-		# Beyond what the undercarriage can absorb, the airframe takes the rest.
-		var crash: float = clampf((sink - GEAR_COLLAPSE_SINK) / (FATAL_SINK - GEAR_COLLAPSE_SINK), 0.0, 1.0)
-		_impact_damage(Part.LEFT_WING, CRASH_WING_DAMAGE * crash)
-		_impact_damage(Part.RIGHT_WING, CRASH_WING_DAMAGE * crash)
-		_impact_damage(Part.FUSELAGE, CRASH_FUSELAGE_DAMAGE * crash)
-		_impact_damage(Part.ENGINE, CRASH_ENGINE_DAMAGE * crash)
-		_impact_damage(Part.TAIL, CRASH_TAIL_DAMAGE * crash)
-	if absf(bank) > WINGTIP_TORN_BANK:
-		_impact_damage(low_wingtip, 1.0)
-	elif absf(bank) > WINGTIP_STRIKE_BANK:
-		_impact_damage(low_wingtip, WINGTIP_STRIKE_DAMAGE)
+			if not gear_usable():
+				# No wheels under it: the cowling is the underside too.
+				_scrape_underside(hit)
+		FlightDynamics.Contact.LEFT_TIP, FlightDynamics.Contact.RIGHT_TIP:
+			var tip: Part = Part.LEFT_WINGTIP if contact == FlightDynamics.Contact.LEFT_TIP else Part.RIGHT_WINGTIP
+			if hit > WINGTIP_TORN_SPEED or absf(bank) > WINGTIP_TORN_BANK:
+				_impact_damage(tip, 1.0)
+			else:
+				_impact_damage(tip, WINGTIP_STRIKE_DAMAGE * clampf(hit / WINGTIP_TORN_SPEED, 0.25, 1.0))
+		FlightDynamics.Contact.TAIL:
+			_impact_damage(Part.TAIL, CRASH_TAIL_DAMAGE * clampf(hit / GEAR_COLLAPSE_SINK, 0.1, 1.0))
+	if contact >= FlightDynamics.Contact.BELLY and hit > GEAR_COLLAPSE_SINK:
+		# Airframe on the ground at a speed no undercarriage would have taken.
+		# It is how fast the whole aeroplane was coming down that wrecks it,
+		# not how fast one corner of it was whipped into the ground. (Several
+		# hard points arrive in one crash; the airframe pays once.)
+		var crash: float = clampf((minf(hit, _sink_before) - GEAR_COLLAPSE_SINK) / (FATAL_SINK - GEAR_COLLAPSE_SINK), 0.0, 1.0) - _crash_taken
+		if crash > 0.0:
+			_crash_taken += crash
+			_impact_damage(Part.LEFT_WING, CRASH_WING_DAMAGE * crash)
+			_impact_damage(Part.RIGHT_WING, CRASH_WING_DAMAGE * crash)
+			_impact_damage(Part.FUSELAGE, CRASH_FUSELAGE_DAMAGE * crash)
+			_impact_damage(Part.ENGINE, CRASH_ENGINE_DAMAGE * crash)
+			_impact_damage(Part.TAIL, CRASH_TAIL_DAMAGE * crash)
 
-	_on_ground = true
-	_belly = not gear_usable()
-	_ground_field = field
-	_ground_height = global_position.y - field.surface_y()
-	speed = Vector2(velocity.x, velocity.z).length()
-	_yaw_rate = flight.angular_velocity.y * 0.3
-	_landing_settle = LANDING_SETTLE_TIME
-	_service_time = 0.0
-	_airborne_time = INF
-	_refresh_status_flags()
-	touched_down.emit(self, sink, not _belly)
+
+## The underside has met the ground with no wheels in between. Once per arrival.
+func _scrape_underside(hit: float) -> void:
+	if _underside_scraped:
+		return
+	_underside_scraped = true
+	_impact_damage(Part.FUSELAGE, BELLY_FUSELAGE_DAMAGE * clampf(hit / 3.0, 0.4, 1.0))
+
+
+## Wear on a part being dragged along the ground (no alert for every tick of it).
+func _scrape(part: Part, share: float) -> void:
+	if share <= 0.0 or is_part_gone(part):
+		return
+	_damage_part(part, share * maxf(stats.max_hp * PART_STRENGTH[part], 1.0), null)
 
 
 ## Collapses undercarriage legs ([param legs] is GEAR_LEFT, GEAR_RIGHT or both).
@@ -1535,6 +1533,7 @@ func _break_gear(legs: int) -> void:
 	if newly == 0:
 		return
 	_gear_broken |= newly
+	_set_contacts()
 	damaged.emit(self, stats.max_hp * 0.1, null)
 
 
@@ -1613,7 +1612,8 @@ func _tick_service(field: Airfield, delta: float) -> void:
 		var after: PartState = part_state(part)
 		if after != before:
 			part_state_changed.emit(self, part, after)
-	if _refit_timer <= 0.0 and _prop_broken:
+	# (A new propeller is no use to a plane still lying on its nose.)
+	if _refit_timer <= 0.0 and _prop_broken and not _belly:
 		_prop_broken = false
 		_refit_timer = SERVICE_REFIT_TIME
 	if _refit_timer <= 0.0 and _gear_broken & GEAR_LEFT != 0 and not is_part_gone(Part.LEFT_WING):
@@ -1627,6 +1627,7 @@ func _tick_service(field: Airfield, delta: float) -> void:
 		_gear_lever_down = true
 		if gear_deploy >= 0.98:
 			_belly = false
+			_stand_on_wheels(field)
 	if not needs_service():
 		_doomed_by = null
 		_last_attacker = null

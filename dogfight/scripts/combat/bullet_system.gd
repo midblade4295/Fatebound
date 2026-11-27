@@ -152,7 +152,7 @@ func _step_bullets(delta: float) -> void:
 	var index: int = _count - 1
 	# Iterate backwards so swap-removal never skips a bullet.
 	while index >= 0:
-		var velocity: Vector3 = Ballistics.step(_velocities[index], delta)
+		var velocity: Vector3 = Ballistics.step(_velocities[index], delta, Ballistics.air_at(_positions[index].y))
 		_velocities[index] = velocity
 		var from: Vector3 = _positions[index]
 		var to: Vector3 = from + velocity * delta

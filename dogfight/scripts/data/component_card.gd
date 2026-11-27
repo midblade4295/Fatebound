@@ -91,6 +91,9 @@ const XP_REWARD_BY_MARK: Array[int] = [15, 40, 100, 250]
 ## Wing span. More wing (positive) lowers the stalling and take-off speed and
 ## the drag of a hard turn; less raises them.
 @export_range(-0.5, 0.5, 0.005) var lift_bonus: float = 0.0
+## Metres added to the height up to which the engine holds full power (a
+## better supercharger). Not scaled by Mark.
+@export_range(0.0, 4000.0, 50.0) var altitude_bonus: float = 0.0
 
 @export_group("Protection")
 ## How much more punishment every part of the airframe takes.
@@ -188,6 +191,7 @@ func apply_to(stats: PlaneStats, mark: int) -> void:
 	stats.max_lift *= 1.0 + scaled(turn_rate_bonus, mark)
 	stats.roll_power *= 1.0 + scaled(roll_rate_bonus, mark)
 	stats.wing_factor *= 1.0 + scaled(lift_bonus, mark)
+	stats.critical_altitude += altitude_bonus
 	stats.max_hp *= 1.0 + scaled(toughness_bonus, mark)
 	stats.fuel_leak *= 1.0 - clampf(scaled(leak_reduction, mark), 0.0, 0.95)
 	stats.gear_strength *= 1.0 + scaled(gear_strength_bonus, mark)
@@ -205,6 +209,8 @@ func stat_lines(mark: int) -> PackedStringArray:
 	_append_percent(lines, "Wing lift", turn_rate_bonus, mark)
 	_append_percent(lines, "Roll", roll_rate_bonus, mark)
 	_append_percent(lines, "Wing span", lift_bonus, mark)
+	if altitude_bonus > 0.0:
+		lines.append("Full power %d m higher" % roundi(altitude_bonus))
 	_append_percent(lines, "Toughness", toughness_bonus, mark)
 	if leak_reduction > 0.0:
 		lines.append("Fuel leaks %d%% slower" % roundi(clampf(scaled(leak_reduction, mark), 0.0, 0.95) * 100.0))

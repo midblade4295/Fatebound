@@ -84,6 +84,16 @@ func _init() -> void:
 		_turn_test()
 	if which == "all" or which == "glide":
 		_glide_test()
+	if which == "all" or which == "air":
+		_air_test()
+	if which == "all" or which == "ground":
+		_stand_test()
+		_takeoff_test(0.6)
+		_brake_test()
+		_swerve_test()
+		_landing_test(2.5)
+		_landing_test(2.5, true)
+		_landing_test(5.0, true)
 	quit()
 
 
@@ -204,3 +214,189 @@ func _glide_test() -> void:
 		_tick(f)
 		if i % 600 == 0:
 			print(_line(float(i) * DT, f), "  glide ratio %.1f" % (f.airspeed / maxf(-f.velocity.y, 0.1)))
+
+
+# ---------------------------------------------------------------------------
+# The air at height
+# ---------------------------------------------------------------------------
+
+func _air_test() -> void:
+	print("--- AIR: what height does")
+	var f: FlightDynamics = _make("spitfire")
+	for height: float in [0.0, 1500.0, 3000.0, 4500.0, 6000.0]:
+		print("   %5.0f m: density %.3f (%.0f%%), sound %.0f m/s, power %.0f%%, top speed %.0f m/s true = %.0f indicated" % [height, FlightDynamics.density_at(height),
+				FlightDynamics.density_at(height) / FlightDynamics.AIR_DENSITY * 100.0, FlightDynamics.sound_speed_at(height), f.power_share_at(height) * 100.0,
+				f.top_speed_at(height), f.top_speed_at(height) * sqrt(FlightDynamics.density_at(height) / FlightDynamics.AIR_DENSITY)])
+	print("--- DIVE: straight down from 6000 m at full power")
+	f = _start("spitfire", 120.0, 6000.0)
+	f.reset(Basis(Vector3.RIGHT, deg_to_rad(-80.0)), Basis(Vector3.RIGHT, deg_to_rad(-80.0)) * Vector3(0.0, 0.0, -120.0))
+	for i: int in range(60 * 14):
+		f.altitude = _height
+		f.elevator = clampf((deg_to_rad(-80.0) - asin(clampf(-f.basis.z.y, -1.0, 1.0))) * 2.0 - f.angular_velocity.x, -1.0, 1.0)
+		_tick(f)
+		if i % 120 == 0:
+			print(_line(float(i) * DT, f), " mach %.2f ias %.0f" % [f.mach, f.indicated_airspeed])
+
+
+# ---------------------------------------------------------------------------
+# On the ground
+# ---------------------------------------------------------------------------
+
+var _place: Vector3 = Vector3.ZERO
+
+
+func _ground_start(kind: String, speed: float) -> FlightDynamics:
+	var f: FlightDynamics = _make(kind)
+	var stand: Vector2 = f.standing_attitude()
+	f.reset(Basis(Vector3.RIGHT, stand.x), Vector3(0.0, 0.0, -speed))
+	f.ground_gap = stand.y
+	f.gear = 1.0
+	f.flaps = 1.0
+	_place = Vector3.ZERO
+	return f
+
+
+func _ground_tick(f: FlightDynamics) -> void:
+	f.ground_effect = clampf(1.0 - f.clearance(f.ground_gap) / 10.0, 0.0, 1.0)
+	f.step(DT)
+	_place += f.displacement
+
+
+func _ground_line(t: float, f: FlightDynamics) -> String:
+	return "t=%5.1f v=%5.1f pitch=%5.1f bank=%5.1f hdg=%6.1f clear=%5.2f vy=%5.1f on_ground=%.2f loads=(%5.0f %5.0f %5.0f) x=%6.1f z=%7.1f touching=%s" % [
+		t, f.velocity.length(), _pitch(f), _bank(f), _heading(f), f.clearance(f.ground_gap), f.velocity.y, f.weight_on_ground,
+		f.contact_load[0], f.contact_load[1], f.contact_load[2], _place.x, -_place.z, _touching(f)]
+
+
+func _touching(f: FlightDynamics) -> String:
+	var names: PackedStringArray = PackedStringArray()
+	for index: int in range(FlightDynamics.CONTACT_COUNT):
+		if f.is_touching(index as FlightDynamics.Contact):
+			names.append(FlightDynamics.Contact.keys()[index])
+	return ",".join(names)
+
+
+## Rudder that holds the plane heading north down the line x = 0. (Heading is
+## in degrees, positive to the right; yaw rate is positive to the left.)
+func _feet(f: FlightDynamics) -> float:
+	return clampf(-_heading(f) * 0.06 + f.angular_velocity.y * 1.2 - _place.x * 0.01, -1.0, 1.0)
+
+
+func _stand_test() -> void:
+	print("--- STAND: engine off, brakes on")
+	var f: FlightDynamics = _ground_start("spitfire", 0.0)
+	f.engine_turning = false
+	f.engine_output = 0.0
+	f.brake = 1.0
+	print("  standing attitude %.1f deg at %.2f m" % [rad_to_deg(f.standing_attitude().x), f.standing_attitude().y])
+	for i: int in range(60 * 4):
+		_ground_tick(f)
+		if i % 60 == 0:
+			print(_ground_line(float(i) * DT, f), " asleep=%s" % f.asleep)
+
+
+func _takeoff_test(_pull: float) -> void:
+	print("--- TAKE-OFF: full throttle, feet holding the heading, stick forward to lift the tail, eased back at flying speed")
+	var f: FlightDynamics = _ground_start("spitfire", 0.0)
+	f.brake = 0.0
+	f.throttle = 1.0
+	var unstick: float = f.stall_speed(1.0) * 1.12
+	for i: int in range(60 * 40):
+		f.rudder = _feet(f) if f.weight_on_ground > 0.05 else 0.0
+		# Tail up to a level-ish attitude once there is air over the elevators,
+		# held there until flying speed, then the nose is eased up.
+		var wanted_pitch: float = deg_to_rad(13.0)
+		if f.indicated_airspeed > unstick:
+			wanted_pitch = deg_to_rad(9.0)
+		elif f.indicated_airspeed > 12.0:
+			wanted_pitch = deg_to_rad(4.0)
+		f.elevator = clampf((wanted_pitch - deg_to_rad(_pitch(f))) * 3.0 - f.angular_velocity.x * 1.0, -1.0, 1.0)
+		# One stick: on the wheels it is the rudder, off them the ailerons.
+		var light: float = clampf(1.0 - f.weight_on_ground * 2.0, 0.0, 1.0)
+		f.aileron = _level(f) * light
+		f.update_trim(DT)
+		_ground_tick(f)
+		if i % 60 == 0:
+			print(_ground_line(float(i) * DT, f), " rud=%.2f elev=%.2f ail=%.2f ias=%.0f" % [f.rudder, f.elevator, f.aileron, f.indicated_airspeed])
+		if f.clearance(f.ground_gap) > 15.0:
+			print("  AIRBORNE and climbing at t=%.1f after %.0f m" % [float(i) * DT, -_place.z])
+			break
+
+
+func _brake_test() -> void:
+	for push: float in [0.0, -1.0]:
+		print("--- BRAKES: rolling at 30 m/s, throttle closed, full brake, stick %.0f" % push)
+		var f: FlightDynamics = _ground_start("spitfire", 30.0)
+		f.reset(Basis.IDENTITY, Vector3(0.0, 0.0, -30.0))
+		f.ground_gap = -(f.contact_points[0].y + FlightDynamics.MAIN_LEG_SAG)
+		f.throttle = 0.0
+		f.brake = 1.0
+		f.elevator = push
+		for i: int in range(60 * 14):
+			f.rudder = _feet(f)
+			_ground_tick(f)
+			if i % 60 == 0:
+				print(_ground_line(float(i) * DT, f))
+			if f.velocity.length() < 0.1 and i > 60:
+				print("  STOPPED at t=%.1f after %.0f m" % [float(i) * DT, -_place.z])
+				break
+
+
+func _swerve_test() -> void:
+	print("--- SWERVE: rolling tail-down at 22 m/s, full right rudder held")
+	var f: FlightDynamics = _ground_start("spitfire", 22.0)
+	f.reset(Basis(Vector3.RIGHT, f.standing_attitude().x), Vector3(0.0, 0.0, -22.0))
+	f.ground_gap = f.standing_attitude().y
+	f.throttle = 0.3
+	f.rudder = 1.0
+	for i: int in range(60 * 8):
+		_ground_tick(f)
+		if i % 30 == 0:
+			print(_ground_line(float(i) * DT, f))
+
+
+## Aileron that rolls the wings level. (Bank here is in degrees, positive with
+## the right wing down; roll rate is positive rolling left.)
+func _level(f: FlightDynamics) -> float:
+	return clampf(-_bank(f) * 0.05 + f.angular_velocity.z * 0.3, -1.0, 1.0)
+
+
+## [param sink] m/s on the approach. With [param hold_off] the pilot flares:
+## throttle closed a couple of metres up and the nose held up into the
+## three-point attitude until it settles. Without, it is flown straight on.
+func _landing_test(sink: float, hold_off: bool = false) -> void:
+	print("--- LANDING: wheels down, coming down at %.1f m/s, %s" % [sink, "flared and held off" if hold_off else "flown straight on to the wheels"])
+	var f: FlightDynamics = _ground_start("spitfire", 0.0)
+	var speed: float = f.stall_speed(1.0) * 1.25
+	f.reset(Basis(Vector3.RIGHT, deg_to_rad(3.0)), Vector3(0.0, -sink, -speed))
+	f.ground_gap = -(f.contact_points[0].y) + 6.0
+	f.throttle = 0.25
+	f.settle_trim()
+	var touched: bool = false
+	var first_impact: float = 0.0
+	var highest_bounce: float = 0.0
+	for i: int in range(60 * 30):
+		if f.weight_on_ground > 0.0 and not touched:
+			touched = true
+			for index: int in range(FlightDynamics.CONTACT_COUNT):
+				first_impact = maxf(first_impact, f.contact_impact[index])
+		var room: float = f.clearance(f.ground_gap)
+		if touched:
+			highest_bounce = maxf(highest_bounce, room)
+			f.throttle = 0.0
+			f.brake = 1.0 if f.velocity.length() < 25.0 else 0.0
+		if hold_off:
+			if room < 2.5 or touched:
+				f.throttle = 0.0
+				f.elevator = clampf((deg_to_rad(11.5) - deg_to_rad(_pitch(f))) * 3.0 - f.angular_velocity.x * 1.0, -1.0, 1.0)
+		elif touched:
+			f.elevator = -0.15
+		f.rudder = _feet(f) if f.weight_on_ground > 0.05 else 0.0
+		f.aileron = _level(f)
+		f.update_trim(DT)
+		_ground_tick(f)
+		if i % 30 == 0 and i < 60 * 7 or i % 120 == 0:
+			print(_ground_line(float(i) * DT, f), " ias=%.0f" % f.indicated_airspeed)
+		if touched and f.velocity.length() < 0.1:
+			print("  STOPPED at t=%.1f after %.0f m; first touch at %.1f m/s, highest bounce %.2f m, impacts %s" % [float(i) * DT, -_place.z, first_impact, highest_bounce, str(f.contact_impact)])
+			break

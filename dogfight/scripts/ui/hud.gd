@@ -27,6 +27,8 @@ const KILL_FEED_TIME: float = 5.0
 const ALERT_TIME: float = 2.8
 ## The flight read-out warns of buffet past this share of the stalling angle.
 const BUFFET_WARNING: float = 0.88
+## On the take-off run the tail counts as still down with the nose above this.
+const TAIL_DOWN_PITCH: float = deg_to_rad(7.0)
 ## What losing or hurting each part means for the pilot, indexed by PlaneActor.Part.
 const PART_EFFECTS: Array[String] = [
 	"leaking fuel", "losing power", "pulling left", "pulling right", "pulling left", "pulling right",
@@ -164,6 +166,9 @@ func _update_flight_panel() -> void:
 	var shown: PlaneActor = player if player != null else camera.target
 	if shown == null or not is_instance_valid(shown):
 		return
+	# SPD is what the airspeed indicator reads: it is what the wings feel, so
+	# the stall and the approach are at the same figure at any height. Up
+	# high the plane is covering the ground faster than that.
 	var readout: String = "SPD %3d km/h   ALT %4d m" % [roundi(shown.speed_kmh()), roundi(maxf(shown.altitude(), 0.0))]
 	# How hard the wings are pulling, once it is more than a gentle turn.
 	if not shown.is_on_ground():
@@ -256,11 +261,16 @@ func _flight_guidance() -> String:
 			if player.engine_power() <= 0.0:
 				return "Engine dead - stop on your own airfield to have it repaired"
 			return "Press ENGINE to start up"
-		if player.input.throttle < 0.5 and player.speed < player.takeoff_speed() * 0.5:
+		var indicated: float = player.indicated_speed()
+		if player.input.throttle < 0.5 and indicated < player.takeoff_speed() * 0.5:
 			return "Open the throttle to roll (closed throttle = brakes)"
-		if player.speed < player.takeoff_speed():
-			return "Take-off speed %d km/h - the engine pulls left: hold it straight" % takeoff_kmh
-		return "Ease the stick back to lift off"
+		if indicated < player.takeoff_speed() * 0.3:
+			return "Hold it straight with the stick or pedals - the engine pulls left"
+		if indicated < player.takeoff_speed():
+			if player.pitch > TAIL_DOWN_PITCH:
+				return "Stick forward to lift the tail   (fly it off at %d km/h)" % takeoff_kmh
+			return "Tail up - hold it level and straight until %d km/h" % takeoff_kmh
+		return "Ease the stick back and let it fly off"
 	if player.is_going_down():
 		return "You are going down - fly it as far as you can"
 	if player.is_spinning():
@@ -271,18 +281,24 @@ func _flight_guidance() -> String:
 	if _home != null:
 		home_distance = Vector2(player.global_position.x - _home.global_position.x, player.global_position.z - _home.global_position.z).length()
 	if player.is_gear_down():
+		# Going up under power with the wheels still down is a take-off (or a
+		# go-around), not an approach.
+		if player.velocity.y > 1.0 and player.input.throttle > 0.8:
+			return "Climbing away - press GEAR to raise the wheels"
 		if home_distance < APPROACH_RANGE and player.height_above_ground() < 260.0:
 			var sink: float = maxf(-player.velocity.y, 0.0)
 			var arrival: float = player.predicted_touchdown_sink()
-			var verdict: String = "good"
+			var verdict: String = "good: hold the nose up and let it settle"
 			if arrival > PlaneActor.GEAR_COLLAPSE_SINK:
-				verdict = "too steep, the gear will not take it"
+				verdict = "too steep, the gear will not take it: flare!"
 			elif arrival > PlaneActor.FIRM_LANDING_SINK:
-				verdict = "firm"
+				verdict = "firm: ease the stick back"
 			elif player.pitch < -PlaneActor.PROP_STRIKE_PITCH:
 				verdict = "nose too low"
+			elif player.indicated_speed() > player.stats.landing_stall_speed * 1.45:
+				verdict = "fast: it will float and bounce"
 			return "Approach: %d km/h (stalls at %d)   descent %.0f m/s - %s" % [roundi(player.speed_kmh()), roundi(player.stats.landing_stall_speed * 3.6), sink, verdict]
-		if player.speed > player.stats.top_speed * 0.6:
+		if player.indicated_speed() > player.stats.top_speed * 0.6:
 			return "Wheels are down - press GEAR to raise them"
 	if _repair_hint_time > 0.0 and player.needs_service():
 		return "Damaged - land at your airfield and stop to be repaired"

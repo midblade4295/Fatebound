@@ -110,10 +110,14 @@ func _drop_player() -> void:
 	if field == null:
 		return
 	var direction: Vector3 = field.takeoff_direction()
+	# Put it just over the runway and let it arrive at that sink rate: what
+	# breaks is whatever the real contact with the ground breaks.
 	plane.set_engine_running(true)
-	plane.speed = plane.stats.landing_stall_speed * 1.3
-	plane.teleport(Transform3D(Basis.looking_at(direction, Vector3.UP), field.runway_start() + direction * 300.0 + Vector3.UP * 20.0))
-	plane._touch_down(field, _rough_landing)
+	plane.input.throttle = 0.0
+	var place: Vector3 = field.runway_start() + direction * 300.0
+	place.y = field.surface_y() + plane.flight.standing_attitude().y + 1.5
+	plane.teleport(Transform3D(Basis.looking_at(direction, Vector3.UP), place))
+	plane.throw(direction * plane.stats.landing_stall_speed * 1.2 + Vector3.DOWN * _rough_landing)
 
 
 func _fly_takeoff() -> void:
@@ -135,9 +139,11 @@ func _fly_takeoff() -> void:
 			var direction: Vector3 = field.takeoff_direction()
 			var place: Vector2 = field.runway_coordinates(plane.global_position)
 			var wanted_yaw: float = atan2(-direction.x, -direction.z) + atan(place.x / 70.0)
-			_press_axis(GameSession.ACTION_STEER_LEFT, GameSession.ACTION_STEER_RIGHT, -wrapf(wanted_yaw - plane.yaw, -PI, PI) * 5.0)
-		if plane.speed >= plane.takeoff_speed():
-			Input.action_press(GameSession.ACTION_PITCH_UP, 0.75)
+			_press_axis(GameSession.ACTION_STEER_LEFT, GameSession.ACTION_STEER_RIGHT, -wrapf(wanted_yaw - plane.yaw, -PI, PI) * 3.5 + plane.flight.angular_velocity.y * 1.2)
+		# Stick forward to get the tail up, then ease back at flying speed.
+		if plane.speed > 12.0:
+			var wanted_pitch: float = deg_to_rad(9.0 if plane.indicated_speed() >= plane.takeoff_speed() else 4.0)
+			_press_axis(GameSession.ACTION_PITCH_DOWN, GameSession.ACTION_PITCH_UP, (wanted_pitch - plane.pitch) * 4.0 - plane.flight.angular_velocity.x * 0.8)
 	else:
 		# Wings level, a gentle climb, and tidy the wheels away.
 		_press_axis(GameSession.ACTION_STEER_LEFT, GameSession.ACTION_STEER_RIGHT, plane.bank * 2.0 + plane.flight.angular_velocity.z * 0.4)

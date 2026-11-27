@@ -92,6 +92,16 @@ const START_DELAY_PER_METRE: float = 0.07
 ## A plane on the ground this close ahead in the same lane means "wait".
 const TAXI_HOLD_DISTANCE: float = 55.0
 const TAXI_LANE_WIDTH: float = 11.0
+## Keeping straight on the ground: rudder per radian off the line, and per
+## radian a second of swing.
+const GROUND_STEER_GAIN: float = 3.5
+const GROUND_STEER_DAMPING: float = 1.2
+## The take-off drill: from this indicated speed (m/s) the stick goes forward
+## to bring the tail up until the nose is this far above level, and at flying
+## speed the nose is eased up to the second angle.
+const TAIL_UP_SPEED: float = 12.0
+const TAIL_UP_PITCH: float = deg_to_rad(4.0)
+const UNSTICK_PITCH: float = deg_to_rad(9.0)
 ## Seconds a bot stays with an aeroplane that can no longer fly before he
 ## bails out (half that if it is on fire).
 const BAIL_OUT_TIME_MIN: float = 4.0
@@ -403,7 +413,7 @@ func _fly_upset(input: PlaneInput) -> void:
 		return
 	# Flying again: ease out of whatever dive that left it in.
 	_command = FlightPilot.pull_up(plane, 3.0)
-	if plane.speed > plane.stats.stall_speed * 1.35:
+	if plane.indicated_speed() > plane.stats.stall_speed * 1.35:
 		state = State.PATROL
 		_think_timer = 0.0
 
@@ -431,9 +441,15 @@ func _fly_takeoff(delta: float) -> void:
 		var direction: Vector3 = field.takeoff_direction()
 		var runway_yaw: float = atan2(-direction.x, -direction.z)
 		var desired_yaw: float = runway_yaw - atan((_takeoff_lane - place.x) / 70.0)
-		steer.x = clampf(-wrapf(desired_yaw - plane.yaw, -PI, PI) * 5.0, -1.0, 1.0)
-		if plane.speed >= plane.takeoff_speed():
-			steer.y = 0.75
+		# Feet: toward the line, and against whichever way the nose is swinging.
+		steer.x = clampf(-wrapf(desired_yaw - plane.yaw, -PI, PI) * GROUND_STEER_GAIN + plane.flight.angular_velocity.y * GROUND_STEER_DAMPING, -1.0, 1.0)
+		# Stick: forward to lift the tail as soon as there is air over the
+		# elevators, hold the plane level on its main wheels while the speed
+		# builds, then ease the nose up and let it fly itself off.
+		var indicated: float = plane.indicated_speed()
+		if indicated > TAIL_UP_SPEED:
+			var nose: float = UNSTICK_PITCH if indicated >= plane.takeoff_speed() else TAIL_UP_PITCH
+			steer.y = clampf((nose - plane.pitch) * 3.0 - plane.flight.angular_velocity.x, -1.0, 1.0)
 		_command = Vector3(steer.x, steer.y, 0.0)
 		return
 	if plane.is_on_ground():
@@ -460,7 +476,7 @@ func _fly_takeoff(delta: float) -> void:
 		heading = plane.forward()
 	heading = heading.normalized()
 	# Slow, the climb waits: speed first.
-	var in_hand: float = clampf((plane.speed - plane.stats.stall_speed * 1.15) / (plane.stats.stall_speed * 0.25), 0.0, 1.0)
+	var in_hand: float = clampf((plane.indicated_speed() - plane.stats.stall_speed * 1.15) / (plane.stats.stall_speed * 0.25), 0.0, 1.0)
 	heading.y = lerpf(0.03, TAKEOFF_CLIMB, in_hand)
 	_head(heading, TAKEOFF_LOAD)
 	if height >= TAKEOFF_CLIMB_HEIGHT:
@@ -598,7 +614,7 @@ func _human_aim_point(my_position: Vector3, distance: float) -> Vector3:
 		seen_velocity = _track_velocities[index]
 		# The pilot assumes the target kept doing what it was last seen doing.
 		seen_position = _track_positions[index] + seen_velocity * (float(ticks_ago) / float(Engine.physics_ticks_per_second))
-	var lead: Vector3 = Ballistics.lead_point(my_position, plane.velocity, seen_position, seen_velocity, plane.stats.bullet_speed)
+	var lead: Vector3 = Ballistics.lead_point(my_position, plane.velocity, seen_position, seen_velocity, plane.stats.bullet_speed, plane.flight.density_ratio)
 	var aim_point: Vector3 = seen_position + (lead - seen_position) * (1.0 + _lead_bias)
 
 	# Wander: two slow sine waves per axis, never repeating in step. Worse

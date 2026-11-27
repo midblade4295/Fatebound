@@ -18,6 +18,7 @@ base_power_kw = 1280.0
 base_drag = 0.0176
 base_max_lift = 1.4
 base_roll = 1.1
+base_critical_altitude = 4200.0
 body_color = Color(0.8118, 0.8392, 0.8667, 1)
 camo_color = Color(0.6039, 0.6549, 0.702, 1)
 belly_color = Color(0.9098, 0.9333, 0.9529, 1)

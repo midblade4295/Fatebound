@@ -300,7 +300,27 @@ func _judge() -> void:
 	_check(absf(cruise.plane.load_factor() - 1.0) < 0.06, "at 1 g (%.2f)" % cruise.plane.load_factor())
 	_check(absf(cruise.plane.bank) < deg_to_rad(25.0), "with its wings near enough level (%.0f degrees)" % rad_to_deg(cruise.plane.bank))
 	var flat_out: FlightCase = _cases["flat out"]
-	_check(absf(_speed(flat_out, 28) - top) < top * 0.04, "flat out and level it holds its top speed (%.0f of %.0f m/s)" % [_speed(flat_out, 28), top])
+	# Up here the air is thinner: less drag for the same power, so the true
+	# top speed is higher than at sea level, while the airspeed indicator
+	# (which shows what the wings feel) reads lower.
+	var flight: FlightDynamics = flat_out.plane.flight
+	var height: float = flat_out.plane.global_position.y
+	var top_here: float = flight.top_speed_at(height)
+	_check(absf(_speed(flat_out, 28) - top_here) < top_here * 0.04, "flat out and level it holds its top speed for that height (%.0f of %.0f m/s at %.0f m)" % [_speed(flat_out, 28), top_here, height])
+	_check(top_here > top * 1.02, "which is faster than at sea level, in thinner air (%.0f against %.0f m/s)" % [top_here, top])
+	_check(flat_out.plane.indicated_speed() < flat_out.plane.speed * 0.95, "though the airspeed indicator reads less than the true speed (%.0f against %.0f m/s)" % [flat_out.plane.indicated_speed(), flat_out.plane.speed])
+	_check(absf(flight.density_ratio - FlightDynamics.density_at(height) / FlightDynamics.AIR_DENSITY) < 0.001 and flight.density_ratio < 0.85,
+			"the plane is flying in the air of its own height (%.0f%% of sea level's at %.0f m)" % [flight.density_ratio * 100.0, height])
+
+	# --- The air ----------------------------------------------------------------------
+	_check(absf(FlightDynamics.density_at(0.0) - 1.225) < 0.001 and absf(FlightDynamics.density_at(5000.0) - 0.736) < 0.01, "the air thins with height as the standard atmosphere does (%.3f kg/m3 at 5000 m)" % FlightDynamics.density_at(5000.0))
+	_check(absf(FlightDynamics.sound_speed_at(0.0) - 340.3) < 0.5 and FlightDynamics.sound_speed_at(5000.0) < 322.0, "and sound travels slower in the cold up there (%.0f m/s at 5000 m)" % FlightDynamics.sound_speed_at(5000.0))
+	var above: float = flight.critical_altitude + 2500.0
+	_check(is_equal_approx(flight.power_share_at(flight.critical_altitude - 500.0), 1.0) and flight.power_share_at(above) < 0.82,
+			"the supercharger holds full power up to %.0f m; 2500 m above that the engine gives %.0f%%" % [flight.critical_altitude, flight.power_share_at(above) * 100.0])
+	_check(flight.top_speed_at(above + 2000.0) < flight.top_speed_at(flight.critical_altitude), "so there is a height where it is fastest, and higher is slower again (%.0f then %.0f m/s)" % [flight.top_speed_at(flight.critical_altitude), flight.top_speed_at(above + 2000.0)])
+	_check(absf(stats.stall_speed - flight.stall_speed()) < 0.01 and flight.true_speed(flight.stall_speed()) > stats.stall_speed * 1.08,
+			"it stalls at the same indicated speed anywhere, which up here is a faster true speed (%.0f against %.0f m/s)" % [flight.true_speed(flight.stall_speed()), stats.stall_speed])
 
 	# --- Aerobatics ------------------------------------------------------------------
 	var loop: FlightCase = _cases["loop"]

@@ -5,8 +5,11 @@ extends RefCounted
 ## A bullet leaves the muzzle at the gun's muzzle speed *plus* the firing
 ## plane's own velocity, then:
 ##  - gravity pulls it down (it drops about 1.7 m by 250 m, 5 m by 420 m), and
-##  - air drag slows it (it has lost roughly a fifth of its speed after 1 s),
-##    which also means it hits softer at long range.
+##  - air drag slows it (at sea level it has lost roughly a fifth of its speed
+##    after 1 s), which also means it hits softer at long range. Drag is the
+##    air's doing, so it scales with the air's density: every function takes
+##    [code]air[/code], the density there as a share of sea level's. High up a
+##    bullet keeps its speed longer and shoots flatter.
 ##
 ## BulletSystem integrates exactly this model every physics tick. The bots (and
 ## the optional player aim assist) use lead_point() below, which solves the
@@ -14,42 +17,56 @@ extends RefCounted
 
 ## Downward acceleration on bullets, m/s^2.
 const GRAVITY: float = 9.8
-## Linear air drag: fraction of speed lost per second.
+## Linear air drag at sea level: fraction of speed lost per second.
 const DRAG: float = 0.22
+## Drag never quite reaches nothing in these formulas (they divide by it).
+const THINNEST_AIR: float = 0.05
 ## Beyond this share of the bullet's theoretical maximum reach, treat the
 ## target as out of range rather than return a wild solution.
 const MAX_REACH_FRACTION: float = 0.95
 
 
 ## Advances a bullet's velocity by one time step (gravity + drag).
-static func step(velocity: Vector3, delta: float) -> Vector3:
-	return velocity + (Vector3.DOWN * GRAVITY - velocity * DRAG) * delta
+static func step(velocity: Vector3, delta: float, air: float = 1.0) -> Vector3:
+	return velocity + (Vector3.DOWN * GRAVITY - velocity * drag_in(air)) * delta
+
+
+## The drag rate in air of that density (1.0 = sea level).
+static func drag_in(air: float) -> float:
+	return DRAG * maxf(air, THINNEST_AIR)
+
+
+## The air's density at [param height], as a share of sea level's.
+static func air_at(height: float) -> float:
+	return FlightDynamics.density_at(height) / FlightDynamics.AIR_DENSITY
 
 
 ## Drag turns "seconds flown" into fewer "seconds' worth of distance". A bullet
 ## launched at velocity v has moved v * drag_time(t) after t seconds (before
 ## gravity). With no drag this would simply be t.
-static func drag_time(time: float) -> float:
-	return (1.0 - exp(-DRAG * time)) / DRAG
+static func drag_time(time: float, air: float = 1.0) -> float:
+	var drag: float = drag_in(air)
+	return (1.0 - exp(-drag * time)) / drag
 
 
 ## How far a bullet has fallen after [param time] seconds of flight.
-static func drop_after(time: float) -> float:
-	return GRAVITY * (time - drag_time(time)) / DRAG
+static func drop_after(time: float, air: float = 1.0) -> float:
+	return GRAVITY * (time - drag_time(time, air)) / drag_in(air)
 
 
 ## Seconds for a bullet launched at [param speed] to cover [param distance],
 ## or -1.0 if drag stops it first.
-static func time_to_travel(distance: float, speed: float) -> float:
+static func time_to_travel(distance: float, speed: float, air: float = 1.0) -> float:
 	var needed: float = distance / maxf(speed, 0.001)
-	if needed * DRAG >= MAX_REACH_FRACTION:
+	var drag: float = drag_in(air)
+	if needed * drag >= MAX_REACH_FRACTION:
 		return -1.0
-	return -log(1.0 - DRAG * needed) / DRAG
+	return -log(1.0 - drag * needed) / drag
 
 
 ## Where a bullet is, relative to its launch point, after [param time] seconds.
-static func bullet_offset(launch_velocity: Vector3, time: float) -> Vector3:
-	return launch_velocity * drag_time(time) + Vector3.DOWN * drop_after(time)
+static func bullet_offset(launch_velocity: Vector3, time: float, air: float = 1.0) -> Vector3:
+	return launch_velocity * drag_time(time, air) + Vector3.DOWN * drop_after(time, air)
 
 
 ## Returns the world position to point the guns at so that a bullet fired now
@@ -61,11 +78,12 @@ static func lead_point(
 		shooter_vel: Vector3,
 		target_pos: Vector3,
 		target_vel: Vector3,
-		bullet_speed: float) -> Vector3:
-	var time: float = intercept_time(shooter_pos, shooter_vel, target_pos, target_vel, bullet_speed)
+		bullet_speed: float,
+		air: float = 1.0) -> Vector3:
+	var time: float = intercept_time(shooter_pos, shooter_vel, target_pos, target_vel, bullet_speed, air)
 	if time < 0.0:
 		return target_pos
-	return shooter_pos + _muzzle_displacement(shooter_pos, shooter_vel, target_pos, target_vel, time)
+	return shooter_pos + _muzzle_displacement(shooter_pos, shooter_vel, target_pos, target_vel, time, air)
 
 
 ## Time for a bullet fired now to reach the target, or -1.0 if it never can.
@@ -74,7 +92,9 @@ static func intercept_time(
 		shooter_vel: Vector3,
 		target_pos: Vector3,
 		target_vel: Vector3,
-		bullet_speed: float) -> float:
+		bullet_speed: float,
+		air: float = 1.0) -> float:
+	var drag: float = drag_in(air)
 	# Start from the classic no-drag, no-gravity answer...
 	var time: float = _vacuum_intercept_time(shooter_pos, shooter_vel, target_pos, target_vel, bullet_speed)
 	if time < 0.0:
@@ -84,10 +104,10 @@ static func intercept_time(
 	# distance back into a flight time under drag. Bullets are much faster
 	# than planes, so this settles within a few passes.
 	for _pass: int in range(8):
-		var needed: float = _muzzle_displacement(shooter_pos, shooter_vel, target_pos, target_vel, time).length() / maxf(bullet_speed, 0.001)
-		if needed * DRAG >= MAX_REACH_FRACTION:
+		var needed: float = _muzzle_displacement(shooter_pos, shooter_vel, target_pos, target_vel, time, air).length() / maxf(bullet_speed, 0.001)
+		if needed * drag >= MAX_REACH_FRACTION:
 			return -1.0
-		var refined: float = -log(1.0 - DRAG * needed) / DRAG
+		var refined: float = -log(1.0 - drag * needed) / drag
 		var settled: bool = absf(refined - time) < 0.0005
 		time = refined
 		if settled:
@@ -108,8 +128,8 @@ static func angle_off_nose(origin: Vector3, forward: Vector3, point: Vector3) ->
 ## acting on the bullet is moved to the other side of the equation: the share
 ## of the shooter's velocity it inherited, and gravity (hence the upward term).
 ## Its direction is the direction to aim.
-static func _muzzle_displacement(shooter_pos: Vector3, shooter_vel: Vector3, target_pos: Vector3, target_vel: Vector3, time: float) -> Vector3:
-	return target_pos + target_vel * time - shooter_pos - shooter_vel * drag_time(time) + Vector3.UP * drop_after(time)
+static func _muzzle_displacement(shooter_pos: Vector3, shooter_vel: Vector3, target_pos: Vector3, target_vel: Vector3, time: float, air: float = 1.0) -> Vector3:
+	return target_pos + target_vel * time - shooter_pos - shooter_vel * drag_time(time, air) + Vector3.UP * drop_after(time, air)
 
 
 static func _vacuum_intercept_time(shooter_pos: Vector3, shooter_vel: Vector3, target_pos: Vector3, target_vel: Vector3, bullet_speed: float) -> float:

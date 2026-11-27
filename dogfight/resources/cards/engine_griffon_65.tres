@@ -15,3 +15,4 @@ weight = 0.045
 top_speed_bonus = 0.09
 acceleration_bonus = 0.1
 roll_rate_bonus = -0.04
+altitude_bonus = 1000.0

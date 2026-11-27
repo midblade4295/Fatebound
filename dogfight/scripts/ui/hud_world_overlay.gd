@@ -203,9 +203,10 @@ func _draw_gunsight() -> void:
 	# The pipper marks where bullets are at convergence range, including how
 	# far they have dropped by then, so it sits a little below the nose line.
 	var pipper_world: Vector3 = origin + nose * PlaneActor.GUN_CONVERGENCE
-	var flight_time: float = Ballistics.time_to_travel(PlaneActor.GUN_CONVERGENCE, player.stats.bullet_speed)
+	var air: float = player.flight.density_ratio
+	var flight_time: float = Ballistics.time_to_travel(PlaneActor.GUN_CONVERGENCE, player.stats.bullet_speed, air)
 	if flight_time > 0.0:
-		pipper_world += Vector3.DOWN * Ballistics.drop_after(flight_time)
+		pipper_world += Vector3.DOWN * Ballistics.drop_after(flight_time, air)
 	if camera.is_position_behind(pipper_world):
 		return
 	var pipper: Vector2 = camera.unproject_position(pipper_world)

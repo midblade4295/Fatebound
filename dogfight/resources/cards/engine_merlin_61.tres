@@ -14,3 +14,4 @@ model_variant = &"engine_two_stage"
 weight = 0.02
 top_speed_bonus = 0.05
 climb_rate_bonus = 0.05
+altitude_bonus = 1500.0

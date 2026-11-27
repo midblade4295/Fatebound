@@ -101,5 +101,5 @@ func _update_aim_assist() -> void:
 		plane.input.assist_active = false
 		return
 	plane.input.assist_point = Ballistics.lead_point(plane.global_position, plane.velocity,
-			enemy.global_position, enemy.velocity, plane.stats.bullet_speed)
+			enemy.global_position, enemy.velocity, plane.stats.bullet_speed, plane.flight.density_ratio)
 	plane.input.assist_active = true

@@ -339,8 +339,8 @@ func _refresh_plane_panel() -> void:
 	var stats: PlaneStats = data.build_stats(level, Profile.equipped_cards(), Profile.equipped_card_marks())
 	# All of these are measured from the flight model, not stated: change what
 	# is fitted and they move as the real aeroplane's would.
-	_plane_info.text = "%s\n\nTop speed %d km/h    Stalls at %d km/h\nClimb %d m/s    %d kg    %d hp\nToughness %d    Guns %d    %d damage/s" % [
-			data.description, roundi(stats.top_speed * 3.6), roundi(stats.stall_speed * 3.6),
+	_plane_info.text = "%s\n\nTop speed %d km/h (%d at %d m)\nStalls at %d    Climb %d m/s    %d kg    %d hp\nToughness %d    Guns %d    %d damage/s" % [
+			data.description, roundi(stats.top_speed * 3.6), roundi(stats.top_speed_high * 3.6), roundi(PlaneStats.HIGH_ALTITUDE), roundi(stats.stall_speed * 3.6),
 			roundi(stats.climb_rate), roundi(stats.mass), roundi(stats.engine_power / 745.7),
 			roundi(stats.max_hp), stats.gun_count(), roundi(stats.fire_rate * stats.bullet_damage)]
 	if not unlocked:

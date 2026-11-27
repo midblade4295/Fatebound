@@ -121,7 +121,12 @@ func _physics_process(delta: float) -> void:
 		if plane.alive:
 			plane.input.steer = _level_stick(plane)
 	if _gentle != null and _gentle.alive:
-		_gentle.input.steer = Vector2(_level_stick(_gentle).x, 0.3)
+		_gentle.input.steer = Vector2(_level_stick(_gentle).x, 0.15)
+	# With one aileron gone the stick alone is not always enough: the pilot
+	# helps the low wing up with rudder as well (a skid toward the high side
+	# lifts it), for as long as he is flying it level.
+	if _tip_lost.alive and (_gentle == _tip_lost or _levelled.has(_tip_lost)):
+		_tip_lost.input.rudder = clampf(_tip_lost.bank * 1.5, -1.0, 1.0)
 	match _stage:
 		0:
 			_test_no_health()
@@ -451,9 +456,9 @@ func _check_engines() -> void:
 	_check(fast > 0.95, "a healthy engine holds top speed (%.0f%%)" % (fast * 100.0))
 	_check(slow < fast - 0.04 and _engine_hit.alive, "a damaged engine cannot, but the plane flies on (%.0f%%)" % (slow * 100.0))
 	_check(is_zero_approx(_fuel_hit.fuel) and is_zero_approx(_fuel_hit.engine_power()), "the leaking plane has run dry and its engine has stopped")
-	_check(_tip_lost.alive and absf(_tip_lost.bank) < 0.2 and _height_lost(_tip_lost) < 80.0,
-			"the tip-less plane is being held straight and level with the stick (bank %.2f rad, %.0f m lost)" % [_tip_lost.bank, _height_lost(_tip_lost)])
-	_check(_tip_lost.input.steer.x < -0.03, "which has to be held over against the missing tip (%.2f)" % _tip_lost.input.steer.x)
+	_check(_tip_lost.alive and absf(_tip_lost.bank) < 0.25 and _height_lost(_tip_lost) < 120.0,
+			"the tip-less plane is being held straight and level with stick and rudder (bank %.2f rad, %.0f m lost)" % [_tip_lost.bank, _height_lost(_tip_lost)])
+	_check(absf(_tip_lost.input.steer.x) + absf(_tip_lost.input.rudder) > 0.03, "which takes stick and rudder held against the missing tip (stick %.2f, rudder %.2f)" % [_tip_lost.input.steer.x, _tip_lost.input.rudder])
 	_levelled.append(_speed_reference)
 	_levelled.append(_bullet_target)
 

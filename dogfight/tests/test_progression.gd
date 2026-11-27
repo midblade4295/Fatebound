@@ -444,6 +444,27 @@ func _test_ballistics() -> void:
 	_check(miss < 0.3, "a bullet aimed at the lead point hits (miss %.3f m)" % miss)
 	_check(Ballistics.intercept_time(Vector3.ZERO, Vector3.ZERO, Vector3(0.0, 0.0, -100.0), Vector3(0.0, 0.0, -500.0), 420.0) < 0.0,
 			"no intercept on a target that outruns the bullet")
+
+	# Drag is the air's doing: high up, in thinner air, there is less of it.
+	var thin: float = Ballistics.air_at(4000.0)
+	_check(thin > 0.6 and thin < 0.72, "at 4000 m the air is about two thirds as dense (%.2f)" % thin)
+	var high_shot: Vector3 = Vector3(0.0, 0.0, -420.0)
+	for _tick: int in range(60):
+		high_shot = Ballistics.step(high_shot, 1.0 / 60.0, thin)
+	_check(high_shot.length() > level_shot.length() + 15.0, "so a bullet keeps more of its speed up there (%.0f against %.0f m/s after a second)" % [high_shot.length(), level_shot.length()])
+	_check(Ballistics.time_to_travel(400.0, 420.0, thin) < Ballistics.time_to_travel(400.0, 420.0) - 0.02, "and gets to 400 m sooner (%.2f against %.2f s)" % [Ballistics.time_to_travel(400.0, 420.0, thin), Ballistics.time_to_travel(400.0, 420.0)])
+	var high_time: float = Ballistics.intercept_time(shooter, shooter_velocity, target, target_velocity, bullet_speed, thin)
+	var high_lead: Vector3 = Ballistics.lead_point(shooter, shooter_velocity, target, target_velocity, bullet_speed, thin)
+	bullet_position = shooter
+	bullet_velocity = (high_lead - shooter).normalized() * bullet_speed + shooter_velocity
+	flown = 0.0
+	while flown < high_time:
+		var slice: float = minf(tick, high_time - flown)
+		bullet_velocity = Ballistics.step(bullet_velocity, slice, thin)
+		bullet_position += bullet_velocity * slice
+		flown += slice
+	miss = bullet_position.distance_to(target + target_velocity * high_time)
+	_check(miss < 0.3, "the lead worked out for thin air hits in thin air (miss %.3f m)" % miss)
 	_check(Ballistics.intercept_time(Vector3.ZERO, Vector3.ZERO, Vector3(0.0, 0.0, -5000.0), Vector3.ZERO, 420.0) < 0.0,
 			"no intercept on a target beyond the bullet's reach")
 	_near(Ballistics.angle_off_nose(Vector3.ZERO, Vector3.FORWARD, Vector3(0.0, 0.0, -50.0)), 0.0, "dead ahead is 0 angle off")

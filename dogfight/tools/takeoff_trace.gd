@@ -14,8 +14,12 @@ var _run_time: float = 60.0
 var _landing: bool = false
 var _approach_pitch: float = 0.0
 var _approach_throttle: float = 0.3
-var _approach_speed: float = 1.35
+var _approach_speed: float = 1.3
+## Height (m, under the wheels) at which the landing pilot starts to flare; 0 = never.
+var _flare_height: float = 2.5
 var _placed: bool = false
+## tail=0 leaves the stick alone until flying speed (a three-point take-off).
+var _tail_up: bool = true
 
 
 func _ready() -> void:
@@ -24,6 +28,8 @@ func _ready() -> void:
 			_pull = argument.trim_prefix("pull=").to_float()
 		elif argument.begins_with("rudder="):
 			_hold_straight = argument.trim_prefix("rudder=") != "0"
+		elif argument.begins_with("tail="):
+			_tail_up = argument.trim_prefix("tail=") != "0"
 		elif argument.begins_with("time="):
 			_run_time = argument.trim_prefix("time=").to_float()
 	Profile.persistence_enabled = false
@@ -48,13 +54,17 @@ func _ready() -> void:
 			_approach_pitch = deg_to_rad(argument.trim_prefix("land=").to_float())
 		elif argument.begins_with("throttle="):
 			_approach_throttle = argument.trim_prefix("throttle=").to_float()
+		elif argument.begins_with("flare="):
+			_flare_height = argument.trim_prefix("flare=").to_float()
 		elif argument.begins_with("speed="):
 			_approach_speed = argument.trim_prefix("speed=").to_float()
 	if _landing:
 		for slot: PilotSlot in _manager.get_roster():
 			slot.controller.set_physics_process(false)
 		_player.touched_down.connect(func(_plane: PlaneActor, sink: float, wheels: bool) -> void:
-			print("TOUCHDOWN sink %.1f m/s on wheels %s at %.0f m along, speed %.0f" % [sink, wheels, _field.runway_coordinates(_player.global_position).y, _player.speed]))
+			print("TOUCHDOWN sink %.1f m/s on wheels %s at %.0f m along, speed %.0f, pitch %.0f" % [sink, wheels, _field.runway_coordinates(_player.global_position).y, _player.speed, rad_to_deg(_player.pitch)]))
+		_player.lifted_off.connect(func(_plane: PlaneActor) -> void: print("BOUNCED back into the air at %.0f m along" % _field.runway_coordinates(_player.global_position).y))
+		_player.part_state_changed.connect(func(_plane: PlaneActor, part: PlaneActor.Part, state: PlaneActor.PartState) -> void: print("PART %s -> %d" % [PlaneActor.PART_NAMES[part], state]))
 	print("player: top %.0f stall %.0f/%.0f takeoff %.0f m/s, mass %.0f" % [_player.stats.top_speed, _player.stats.stall_speed,
 			_player.stats.landing_stall_speed, _player.takeoff_speed(), _player.stats.mass])
 
@@ -76,8 +86,17 @@ func _physics_process(delta: float) -> void:
 			var runway_yaw: float = atan2(-direction.x, -direction.z)
 			var steer_x: float = 0.0
 			if _hold_straight:
-				steer_x = clampf(-wrapf(runway_yaw + atan(place.x / 70.0) - _player.yaw, -PI, PI) * 5.0, -1.0, 1.0)
-			input.steer = Vector2(steer_x, _pull if _player.speed >= _player.takeoff_speed() else 0.0)
+				steer_x = clampf(-wrapf(runway_yaw + atan(place.x / 70.0) - _player.yaw, -PI, PI) * 3.5 + _player.flight.angular_velocity.y * 1.2, -1.0, 1.0)
+			# The drill: tail up once there is air over the elevators, level
+			# until flying speed, then ease the nose up.
+			var stick_y: float = 0.0
+			var indicated: float = _player.indicated_speed()
+			if _tail_up and indicated > 12.0:
+				var nose: float = deg_to_rad(9.0) if indicated >= _player.takeoff_speed() else deg_to_rad(4.0)
+				stick_y = clampf((nose - _player.pitch) * 3.0 - _player.flight.angular_velocity.x, -1.0, 1.0)
+			elif not _tail_up and indicated >= _player.takeoff_speed():
+				stick_y = _pull
+			input.steer = Vector2(steer_x, stick_y)
 		else:
 			if _player.is_gear_down() and _player.height_above_ground() > 12.0:
 				input.press_gear()
@@ -85,14 +104,11 @@ func _physics_process(delta: float) -> void:
 			var stick_y: float = clampf((target_pitch - _player.pitch) * 2.5 - _player.flight.angular_velocity.x * 0.8, -0.6, 0.6)
 			var stick_x: float = clampf(_player.bank * 2.0 + _player.flight.angular_velocity.z * 0.4, -1.0, 1.0)
 			input.steer = Vector2(stick_x, stick_y)
-	if _landing and _player.alive and _player.is_on_ground() and _player.speed < 0.2 and _clock > 3.0 and _run_time > _clock + 1.0:
-		print("STOPPED at %.0f m along" % _field.runway_coordinates(_player.global_position).y)
-		_run_time = _clock + 0.5
 	if _clock >= _next_print:
 		_next_print += 0.5 if _clock < 30.0 else 2.0
 		var place: Vector2 = _field.runway_coordinates(_player.global_position)
 		print("t=%5.1f %s v=%5.1f h=%6.1f vy=%5.1f pitch=%5.1f bank=%5.1f along=%5.0f off=%5.1f a=%5.1f g=%4.2f stall=%.2f thr=%.2f steer=%.2v trim=%.2v yaw=%.1f beta=%.1f rud=%.2f w=%.3v" % [
-			_clock, "GND" if _player.is_on_ground() else ("AIR" if _player.alive else "DEAD"), _player.speed, _player.height_above_ground(), _player.velocity.y,
+			_clock, ("GND" if _player.is_on_ground() else "AIR") if _player.alive else "DEAD", _player.indicated_speed(), _player.height_above_ground(), _player.velocity.y,
 			rad_to_deg(_player.pitch), rad_to_deg(_player.bank), place.y, place.x, rad_to_deg(_player.flight.alpha), _player.load_factor(),
 			_player.flight.stall, _player.throttle, input.steer, _player.flight.trim, rad_to_deg(_player.yaw), rad_to_deg(_player.flight.beta), _player.flight.rudder, _player.flight.angular_velocity])
 	if _clock >= _run_time:
@@ -118,10 +134,21 @@ func _fly_landing(input: PlaneInput) -> void:
 	if not _player.alive:
 		return
 	if _player.is_on_ground():
-		input.steer = Vector2.ZERO
+		# Down: throttle closed (brakes), feet keeping it straight, stick held back.
+		var direction: Vector3 = _field.takeoff_direction()
+		var runway_yaw: float = atan2(-direction.x, -direction.z)
+		var feet: float = clampf(-wrapf(runway_yaw - _player.yaw, -PI, PI) * 3.5 + _player.flight.angular_velocity.y * 1.2, -1.0, 1.0)
+		input.steer = Vector2(feet, 0.3)
 		input.throttle = 0.0
 		return
+	# The approach is flown at a steady nose angle; over the last few metres
+	# the throttle is closed and the nose held up so that it settles on all
+	# three wheels.
+	var nose: float = _approach_pitch
 	input.throttle = _approach_throttle
-	var stick_y: float = clampf((_approach_pitch - _player.pitch) * 2.5 - _player.flight.angular_velocity.x * 0.8, -0.6, 0.6)
+	if _player.height_above_ground() < _flare_height:
+		nose = deg_to_rad(11.0)
+		input.throttle = 0.0
+	var stick_y: float = clampf((nose - _player.pitch) * 3.0 - _player.flight.angular_velocity.x * 1.0, -1.0, 1.0)
 	var stick_x: float = clampf(_player.bank * 2.0 + _player.flight.angular_velocity.z * 0.4, -1.0, 1.0)
 	input.steer = Vector2(stick_x, stick_y)
