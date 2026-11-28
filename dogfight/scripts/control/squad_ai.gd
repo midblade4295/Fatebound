@@ -78,7 +78,7 @@ const PREFERRED_ALTITUDE_MIN: float = 550.0
 const PREFERRED_ALTITUDE_MAX: float = 1300.0
 ## A shot is taken when the gun line passes within this many metres of the
 ## aim point, even if the angular fire cone says no (close-range snapshots).
-const SNAPSHOT_MISS_DISTANCE: float = 10.0
+const SNAPSHOT_MISS_DISTANCE: float = 9.0
 ## After take-off the bot climbs straight ahead to this height above the
 ## airfield before it thinks about anything else.
 const TAKEOFF_CLIMB_HEIGHT: float = 110.0
@@ -191,7 +191,8 @@ func setup(controlled_plane: PlaneActor, manager: MatchManager5v5, shared_blackb
 	_steer_gain = lerpf(4.5, 8.0, skill)
 	_stick_speed = lerpf(3.5, 8.0, skill)
 	_fight_load = lerpf(3.4, 6.5, skill) + _rng.randf_range(-0.3, 0.3)
-	_wobble_amplitude = deg_to_rad(lerpf(2.4, 0.6, skill))
+	# (A real fighter is a small target: eleven or twelve metres across.)
+	_wobble_amplitude = deg_to_rad(lerpf(2.0, 0.5, skill))
 	_wobble_phase = Vector2(_rng.randf_range(0.0, TAU), _rng.randf_range(0.0, TAU))
 	_wobble_rate = Vector2(_rng.randf_range(1.1, 2.2), _rng.randf_range(1.3, 2.6))
 	_trigger_delay = lerpf(0.30, 0.08, skill)
@@ -231,7 +232,7 @@ func _physics_process(delta: float) -> void:
 	if _lead_bias_timer <= 0.0:
 		# Settle on a new (wrong) idea of how much to lead for a few seconds.
 		_lead_bias_timer = _rng.randf_range(2.0, 4.5)
-		_lead_bias = _rng.randfn(0.0, lerpf(0.35, 0.08, skill))
+		_lead_bias = _rng.randfn(0.0, lerpf(0.3, 0.07, skill))
 	_command = Vector3.ZERO
 	if _abandon_ship(delta):
 		return
@@ -599,7 +600,7 @@ func _fly_engage(input: PlaneInput) -> void:
 	# The trigger follows what the pilot *thinks* is a good shot: the nose near
 	# their own (imperfect) aim point. Whether bullets land is up to physics.
 	var angle_off: float = Ballistics.angle_off_nose(my_position, plane.forward(), aim_point)
-	var fire_cone: float = maxf(deg_to_rad(lerpf(8.0, 4.5, skill)), atan(SNAPSHOT_MISS_DISTANCE / maxf(distance, 1.0)))
+	var fire_cone: float = maxf(deg_to_rad(lerpf(7.0, 4.0, skill)), atan(SNAPSHOT_MISS_DISTANCE / maxf(distance, 1.0)))
 	var looks_good: bool = distance < plane.stats.gun_range and angle_off < fire_cone
 	input.firing = _pull_trigger(looks_good, get_physics_process_delta_time())
 

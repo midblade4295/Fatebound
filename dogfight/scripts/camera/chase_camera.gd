@@ -31,9 +31,9 @@ const SPEED_FEEL_TO: float = 1.1
 
 @export_group("Follow")
 ## Metres from the pivot back to the camera at cruise speed.
-@export var follow_distance: float = 13.5
+@export var follow_distance: float = 11.8
 ## How far above the plane's centre the pivot sits.
-@export var height_offset: float = 2.6
+@export var height_offset: float = 2.3
 ## Degrees the arm is tilted up, so the camera looks slightly down over the tail.
 @export_range(0.0, 30.0) var arm_pitch_deg: float = 8.0
 ## Extra arm length at top/dive speed, as a fraction of follow_distance.

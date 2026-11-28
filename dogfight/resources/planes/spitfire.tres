@@ -1,11 +1,13 @@
-[gd_resource type="Resource" script_class="PlaneData" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="PlaneData" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/data/plane_data.gd" id="1_plane"]
 [ext_resource type="AudioStream" path="res://assets/audio/engine_spitfire.wav" id="2_engine"]
+[ext_resource type="PackedScene" path="res://assets/models/spitfire.glb" id="3_model"]
 
 [resource]
 script = ExtResource("1_plane")
 engine_sound = ExtResource("2_engine")
+model = ExtResource("3_model")
 id = &"spitfire"
 display_name = "Spitfire"
 description = "Light on the stick and deadly in a turning fight."
@@ -24,9 +26,5 @@ body_color = Color(0.3725, 0.6039, 0.3882, 1)
 camo_color = Color(0.4902, 0.5608, 0.5882, 1)
 belly_color = Color(0.8118, 0.9176, 0.9608, 1)
 nose_color = Color(1, 0.8235, 0.2471, 1)
-wing_span = 10.0
-wing_chord = 3.1
-fuselage_length = 7.9
-fuselage_radius = 0.95
 prop_blades = 3
-bubble_canopy = false
+gear_folds_inward = false

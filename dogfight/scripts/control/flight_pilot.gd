@@ -35,6 +35,14 @@ const ATTACK_STICK: float = 8.0
 const BUFFET_LIFT: float = 0.95
 const BUFFET_FORESIGHT: float = 0.18
 const BUFFET_STICK: float = 7.0
+## On the ground: the share of the side load that would lift a wheel that a
+## pilot will turn at, where below it he starts easing the rudder bar, and
+## how light (as a share of an even load) he lets the inside wheel get.
+const LEVEL_STICK: float = 3.0
+const LEVEL_DAMPING: float = 0.3
+const WHEEL_SIDE_SHARE: float = 0.7
+const WHEEL_SIDE_EASE: float = 0.5
+const LIGHT_WHEEL: float = 0.45
 ## Lift across the nose smaller than this (g) says nothing about which way
 ## up to be.
 const ROLL_MEANING: float = 0.35
@@ -70,6 +78,38 @@ static func pull_to_the_buffet(flight: FlightDynamics, stick: float, edge: float
 	var holding: float = flight.elevator_for_load(flight.available_load(speed) * BUFFET_LIFT)
 	var coming: float = flight.alpha + attack_rate * BUFFET_FORESIGHT
 	return clampf(holding + (edge - coming) * BUFFET_STICK, 0.0, stick)
+
+
+## Aileron (+ rolls right) that keeps the wings level, as a pilot's hands do
+## on the take-off and landing run.
+static func hold_wings_level(flight: FlightDynamics) -> float:
+	# Right wing down is positive here; roll rate is positive rolling left.
+	var right_wing_down: float = atan2(-flight.basis.x.y, flight.basis.y.y)
+	return clampf(-right_wing_down * LEVEL_STICK + flight.angular_velocity.z * LEVEL_DAMPING, -1.0, 1.0)
+
+
+## On its wheels: [param feet] (the rudder bar, + swings the nose right) as
+## far as a pilot would push it. He turns as tightly as the undercarriage will
+## take and no tighter: the bar is eased as the swing builds toward the side
+## load that would lift the inside wheel (WHEEL_SIDE_SHARE of it), and when he
+## feels that wheel go light. Rudder against the swing is never held back.
+static func feet_within_the_wheels(flight: FlightDynamics, feet: float) -> float:
+	if is_zero_approx(feet) or flight.weight_on_ground <= 0.0:
+		return feet
+	var ground_speed: float = Vector2(flight.velocity.x, flight.velocity.z).length()
+	# (Yaw rate is positive to the left; the bar is positive to the right.)
+	var swing: float = maxf(-flight.angular_velocity.y * signf(feet), 0.0)
+	var side_load: float = swing * ground_speed / FlightDynamics.GRAVITY
+	var limit: float = flight.wheel_side_limit() * WHEEL_SIDE_SHARE
+	var room: float = 1.0 - smoothstep(limit * WHEEL_SIDE_EASE, limit, side_load)
+	# Turning right leans the plane on its left wheel and lightens the right.
+	var left: float = flight.contact_load[FlightDynamics.Contact.LEFT_WHEEL]
+	var right: float = flight.contact_load[FlightDynamics.Contact.RIGHT_WHEEL]
+	var even: float = (left + right) * 0.5
+	if left > 0.0 and right > 0.0:
+		var inside: float = (right if feet > 0.0 else left) / even
+		room = minf(room, smoothstep(LIGHT_WHEEL * 0.4, LIGHT_WHEEL, inside))
+	return feet * room
 
 
 ## Stick positions that bend the plane's flight path toward [param direction]

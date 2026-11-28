@@ -71,6 +71,7 @@ run sortie             SORTIE_OK      120 res://tests/TestSortie.tscn
 run flight             FLIGHT_OK       90 res://tests/TestFlight.tscn
 run damage_model       DAMAGE_MODEL_OK 150 res://tests/TestDamageModel.tscn
 run collisions         COLLISIONS_OK   60 res://tests/TestCollisions.tscn
+run airframes          AIRFRAMES_OK    90 res://tests/TestAirframes.tscn
 run audio              AUDIO_OK        60 res://tests/TestAudio.tscn
 run ground_ops         GROUND_OPS_OK   240 res://tests/TestGroundOps.tscn
 for seed in 1 7 42; do

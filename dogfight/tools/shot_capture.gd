@@ -62,6 +62,12 @@ func _ready() -> void:
 			_placed = false
 		elif argument.begins_with("gold="):
 			Profile.add_gold(int(argument.trim_prefix("gold=")))
+		elif argument.begins_with("plane="):
+			# plane=spitfire: the player owns that plane and flies it.
+			var plane_id: StringName = StringName(argument.trim_prefix("plane="))
+			Profile.add_gold(100000)
+			Profile.try_buy_plane(plane_id)
+			Profile.select_plane(plane_id)
 		elif argument.begins_with("steer="):
 			_steer_action = {"left": GameSession.ACTION_STEER_LEFT, "right": GameSession.ACTION_STEER_RIGHT,
 					"up": GameSession.ACTION_PITCH_UP}.get(argument.trim_prefix("steer="), &"")

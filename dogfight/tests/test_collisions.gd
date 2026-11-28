@@ -158,7 +158,7 @@ func _check_results() -> void:
 
 
 func _wingspan(plane: PlaneActor) -> float:
-	return plane.plane_data.wing_span * PlaneVisual.VISUAL_SCALE
+	return plane.plane_data.base_span
 
 
 func _damage_on(plane: PlaneActor, part_list: Array[PlaneActor.Part]) -> float:

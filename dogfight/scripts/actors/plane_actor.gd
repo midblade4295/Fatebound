@@ -199,9 +199,8 @@ const MPH: float = 2.236936
 const ON_GROUND_WEIGHT: float = 0.02
 const AIRBORNE_AFTER: float = 0.3
 ## While a wheel is on the ground the stick's sideways travel works the rudder
-## bar as well as this share of the ailerons; the rudder part fades out over
-## this long (s) after the last wheel leaves it.
-const GROUND_AILERON_SHARE: float = 0.5
+## bar, and the pilot's hands hold the wings level; both fade back to plain
+## ailerons over this long (s) after the last wheel leaves the ground.
 const STICK_STEERS_FADE: float = 0.7
 ## Running into a hangar faster than this destroys the plane (m/s).
 const GROUND_CRASH_SPEED: float = 10.0
@@ -431,6 +430,10 @@ var _stranded_time: float = 0.0
 ## Collapsed undercarriage legs (GEAR_LEFT | GEAR_RIGHT) and a smashed propeller.
 var _gear_broken: int = 0
 var _prop_broken: bool = false
+## Where the nose meets the ground: the tip of a propeller blade, or the
+## cowling once the propeller is broken (both in the plane's own axes).
+var _nose_with_prop: Vector3 = Vector3.ZERO
+var _nose_without_prop: Vector3 = Vector3.ZERO
 ## Seconds since anything last touched the ground, and whether it has been
 ## properly in the air since (so that arriving counts as a touchdown).
 var _air_time: float = INF
@@ -1275,6 +1278,7 @@ func _fly(steer: Vector2, delta: float) -> void:
 	flight.ground_effect = _ground_closeness()
 
 	var wanted: Vector3 = _pilot_controls(steer, delta)
+	wanted.z = FlightPilot.feet_within_the_wheels(flight, wanted.z)
 	flight.aileron = move_toward(flight.aileron, wanted.x, CONTROL_SLEW * delta)
 	flight.elevator = move_toward(flight.elevator, wanted.y, CONTROL_SLEW * delta)
 	flight.rudder = move_toward(flight.rudder, wanted.z, CONTROL_SLEW * delta)
@@ -1317,19 +1321,18 @@ func _fly(steer: Vector2, delta: float) -> void:
 ## y = elevator (+ pulls the nose up), z = rudder (+ swings the nose right).
 ## All are measured from the trimmed position (see FlightDynamics.update_trim).
 ##
-## There is one stick for a thumb. Sideways it is always the ailerons; while
-## any wheel is on the ground it works the rudder bar as well (which is also
-## the tail wheel and, with the brakes on, which wheel is braked harder), and
-## the ailerons only partly. So holding the stick against the swing on the
-## take-off run holds the wing down against the engine's torque too, which is
-## what a pilot's hands and feet would be doing. The rudder part fades out
-## over the moment after the wheels leave the ground. The pedals are always
-## the rudder.
+## There is one stick for a thumb. In the air, sideways is the ailerons and
+## the pilot's feet keep the ball in the middle. While any wheel is on the
+## ground it is the other way about: sideways works the rudder bar (which is
+## also the tail wheel and, with the brakes on, which wheel is braked harder)
+## and the pilot's hands hold the wings level, against the engine's torque
+## and against the lean of a turn. That hands back to plain ailerons over the
+## moment after the wheels leave the ground. The pedals are always the rudder.
 func _pilot_controls(steer: Vector2, delta: float) -> Vector3:
 	var touching: float = 1.0 if flight.weight_on_ground > ON_GROUND_WEIGHT else 0.0
 	_stick_steers = move_toward(_stick_steers, touching, delta / (STICK_STEERS_FADE if touching < _stick_steers else 0.1))
 	var on_wheels: float = _stick_steers
-	var roll_stick: float = steer.x * lerpf(1.0, GROUND_AILERON_SHARE, on_wheels)
+	var roll_stick: float = lerpf(steer.x, FlightPilot.hold_wings_level(flight), on_wheels)
 	var pitch_stick: float = steer.y
 	var feet: float = clampf(input.rudder + steer.x * on_wheels, -1.0, 1.0)
 	# Leaving the battle area, the pilot is turned back toward it.
@@ -1419,9 +1422,19 @@ func _measure_undercarriage() -> void:
 	var engine: AABB = _part_bounds(Part.ENGINE)
 	var wingtip: AABB = _part_bounds(Part.LEFT_WINGTIP)
 	var tail: AABB = _part_bounds(Part.TAIL)
-	# The propeller's disc reaches a little below the cowling.
+	# The lowest thing on the nose is the tip of a propeller blade: a little
+	# below the cowling at least, and as far as the model's blades reach.
 	var nose: Vector3 = Vector3(0.0, minf(engine.position.y, -_belly_height) - PROP_BELOW_COWLING, engine.position.z)
+	# (With its blades bent back, what is left to touch is the cowling.)
+	_nose_without_prop = Vector3(0.0, engine.position.y, engine.position.z)
+	if visual.prop_radius() > 0.0:
+		var hub: Vector3 = visual.prop_hub()
+		nose = Vector3(0.0, minf(nose.y, hub.y - visual.prop_radius()), hub.z)
+	_nose_with_prop = nose
 	var tip: Vector3 = Vector3(wingtip.position.x, wingtip.position.y, wingtip.get_center().z)
+	var tip_end: Vector3 = visual.wingtip_contact()
+	if is_finite(tip_end.y):
+		tip = tip_end
 	var tail_bottom: Vector3 = Vector3(0.0, tail.position.y, tail.end.z)
 	flight.set_undercarriage(main_wheel, tail_wheel, _belly_height, nose, tip, tail_bottom)
 	_set_contacts()
@@ -1446,6 +1459,7 @@ func _part_bounds(part: Part) -> AABB:
 func _set_contacts() -> void:
 	if flight.contact_enabled.size() < FlightDynamics.CONTACT_COUNT:
 		return
+	flight.contact_points[FlightDynamics.Contact.NOSE] = _nose_without_prop if _prop_broken else _nose_with_prop
 	# (A plane lying on its belly has no wheels under it until it is jacked up.)
 	var wheels_down: bool = gear_deploy >= 0.98 and not _belly
 	var left_wing: bool = not is_part_gone(Part.LEFT_WING)

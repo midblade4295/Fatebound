@@ -2,7 +2,7 @@ extends Node3D
 ## Development tool: loads a model, prints its node tree / surfaces / bounds,
 ## checks it faces Godot's forward (-Z) and saves beauty shots from a few angles.
 ##
-##   godot --path . res://tools/ModelPreview.tscn -- model=res://assets/models/spitfire_stylized.glb out=/tmp/model
+##   godot --path . res://tools/ModelPreview.tscn -- model=res://assets/models/spitfire.glb out=/tmp/model
 ##
 ## Rendering needs a real display driver (see tools/shot_capture.gd); with
 ## --headless it still prints the report and then quits without images.
@@ -22,7 +22,7 @@ var _explode: bool = false
 
 
 func _ready() -> void:
-	var model_path: String = "res://assets/models/spitfire_stylized.glb"
+	var model_path: String = "res://assets/models/spitfire.glb"
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("model="):
 			model_path = argument.trim_prefix("model=")

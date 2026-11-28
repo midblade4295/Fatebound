@@ -1,11 +1,13 @@
-[gd_resource type="Resource" script_class="PlaneData" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="PlaneData" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/data/plane_data.gd" id="1_plane"]
 [ext_resource type="AudioStream" path="res://assets/audio/engine_mustang.wav" id="2_engine"]
+[ext_resource type="PackedScene" path="res://assets/models/mustang.glb" id="3_model"]
 
 [resource]
 script = ExtResource("1_plane")
 engine_sound = ExtResource("2_engine")
+model = ExtResource("3_model")
 id = &"mustang"
 display_name = "P-51 Mustang"
 description = "Fast, tough and long-legged. Dives on a fight and leaves when it likes."
@@ -24,9 +26,5 @@ body_color = Color(0.8118, 0.8392, 0.8667, 1)
 camo_color = Color(0.6039, 0.6549, 0.702, 1)
 belly_color = Color(0.9098, 0.9333, 0.9529, 1)
 nose_color = Color(0.9412, 0.2627, 0.2275, 1)
-wing_span = 10.4
-wing_chord = 2.8
-fuselage_length = 8.2
-fuselage_radius = 1.0
 prop_blades = 4
-bubble_canopy = true
+gear_folds_inward = true

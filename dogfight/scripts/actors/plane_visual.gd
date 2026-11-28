@@ -1,6 +1,6 @@
 class_name PlaneVisual
 extends Node3D
-## The plane you see: the Blender model (tools/blender/spitfire_stylized.py),
+## The plane you see: its Blender model (tools/blender/warbirds.py),
 ## repainted per plane and team, with every cosmetic effect on it.
 ##
 ## The model is a tree of separate pieces, one per PlaneActor.Part (wing
@@ -24,14 +24,15 @@ extends Node3D
 ##
 ## Local axes: -Z is the nose, +X the right wing, +Y up.
 
-const MODEL: PackedScene = preload("res://assets/models/spitfire_stylized.glb")
-## Wingspan of the model in its own units; PlaneData.wing_span scales it.
-const MODEL_WING_SPAN: float = 7.2
-## The model's propeller radius and spinner length, in model units.
-const MODEL_PROP_RADIUS: float = 1.85
-const MODEL_SPINNER_LENGTH: float = 1.0
-## Everything is scaled up a little so planes stay readable at gun range.
-const VISUAL_SCALE: float = 1.3
+## Used for a plane whose data names no model of its own.
+const FALLBACK_MODEL: PackedScene = preload("res://assets/models/spitfire.glb")
+## The models are the real aeroplanes, in metres, with the origin at the
+## centre of gravity: they are shown at their real size.
+const VISUAL_SCALE: float = 1.0
+## The spinner's radius as a share of the propeller's (for its hit box).
+const SPINNER_SHARE: float = 0.21
+## Points this close to a piece's lowest (m) count as what it stands on.
+const CONTACT_PATCH: float = 0.02
 
 ## Model node for each PlaneActor.Part, in Part order.
 const PART_NODES: Array[StringName] = [
@@ -152,6 +153,7 @@ var _pieces: Array[Node3D] = []
 var _rest_bases: Array[Basis] = []
 var _any_detached: bool = false
 var _propeller: Node3D
+var _prop_radius: float = 0.0
 var _prop_disc: MeshInstance3D
 var _muzzle_flashes: Array[MeshInstance3D] = []
 var _muzzle_timers: Array[float] = []
@@ -232,7 +234,7 @@ func build(data: PlaneData, team: Teams.Id, fittings: Array[ComponentCard] = [])
 	_gear_rest.clear()
 	_ensure_shared_meshes()
 
-	_model = MODEL.instantiate() as Node3D
+	_model = (_data.model if _data.model != null else FALLBACK_MODEL).instantiate() as Node3D
 	_model.name = "Model"
 	_model.scale = Vector3.ONE * model_scale()
 	add_child(_model)
@@ -260,6 +262,7 @@ func build(data: PlaneData, team: Teams.Id, fittings: Array[ComponentCard] = [])
 	_gear_deploy = -1.0
 	_apply_gear(maxf(shown_deploy, 0.0))
 	_propeller = _find_propeller()
+	_prop_radius = _measure_propeller()
 	if _propeller != null and _prop_broken:
 		_propeller.scale = BROKEN_PROP_SCALE
 	if _propeller != null:
@@ -270,7 +273,7 @@ func build(data: PlaneData, team: Teams.Id, fittings: Array[ComponentCard] = [])
 		_prop_disc.mesh = _unit_cylinder
 		_prop_disc.material_override = ToonMaterials.prop_blur()
 		_prop_disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var diameter: float = MODEL_PROP_RADIUS * 2.04
+		var diameter: float = _prop_radius * 2.04
 		_prop_disc.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5).scaled(Vector3(diameter, diameter, 0.04)), _propeller.position)
 		_propeller.get_parent().add_child(_prop_disc)
 
@@ -284,7 +287,7 @@ func build(data: PlaneData, team: Teams.Id, fittings: Array[ComponentCard] = [])
 			flash.mesh = _unit_sphere
 			flash.material_override = ToonMaterials.unlit(Color(1.0, 0.86, 0.3), true)
 			var muzzle_z: float = gun.mesh.get_aabb().position.z
-			flash.transform = Transform3D(Basis.from_scale(Vector3(0.45, 0.45, 1.2)), Vector3(0.0, 0.0, muzzle_z - 0.45))
+			flash.transform = Transform3D(Basis.from_scale(Vector3(0.6, 0.6, 1.6)), Vector3(0.0, 0.0, muzzle_z - 0.6))
 			flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			flash.visible = false
 			gun.add_child(flash)
@@ -296,7 +299,35 @@ func build(data: PlaneData, team: Teams.Id, fittings: Array[ComponentCard] = [])
 
 ## Factor from model units to plane units for this plane.
 func model_scale() -> float:
-	return _data.wing_span * VISUAL_SCALE / MODEL_WING_SPAN
+	return VISUAL_SCALE
+
+
+## Radius of the propeller's disc, in metres (0 with no propeller).
+func prop_radius() -> float:
+	return _prop_radius * model_scale()
+
+
+## Where the propeller's hub is, in PlaneActor space.
+func prop_hub() -> Vector3:
+	return _transform_to_self(_propeller).origin if _propeller != null else Vector3.ZERO
+
+
+## The lowest point of the left wing's very tip, in PlaneActor space: what
+## touches first when the aeroplane leans over (y = INF with no wing).
+func wingtip_contact() -> Vector3:
+	var outermost: float = 0.0
+	var points: PackedVector3Array = PackedVector3Array()
+	for node_name: StringName in [PART_NODES[PlaneActor.Part.LEFT_WINGTIP], &"WingTipExtL"]:
+		points.append_array(_piece_points(node_name))
+	for point: Vector3 in points:
+		outermost = minf(outermost, point.x)
+	var lowest: Vector3 = Vector3(0.0, INF, 0.0)
+	for point: Vector3 in points:
+		if point.x < outermost * 0.94 and point.y < lowest.y:
+			lowest = point
+	if is_finite(lowest.y):
+		lowest.x = outermost
+	return lowest
 
 
 ## Puts back anything that has been shot off (used on respawn).
@@ -357,9 +388,9 @@ func collect_hit_boxes(out_parts: PackedInt32Array, out_boxes: Array[AABB]) -> v
 	# as part of the engine.
 	if _propeller != null:
 		var hub: Vector3 = _transform_to_self(_propeller).origin
-		var reach: float = MODEL_SPINNER_LENGTH * 0.5 * model_scale()
+		var reach: float = prop_radius() * SPINNER_SHARE
 		out_parts.append(PlaneActor.Part.ENGINE)
-		out_boxes.append(AABB(hub - Vector3(reach, reach, reach * 1.4), Vector3(reach * 2.0, reach * 2.0, reach * 2.2)))
+		out_boxes.append(AABB(hub - Vector3(reach, reach, reach * 1.8), Vector3(reach * 2.0, reach * 2.0, reach * 2.6)))
 
 
 func flash_muzzle(index: int) -> void:
@@ -421,8 +452,11 @@ func _apply_gear(deploy: float) -> void:
 		var leg: Node3D = _gear[index]
 		if leg == null or not is_instance_valid(leg) or not _model.is_ancestor_of(leg):
 			continue  # Went with its wing.
-		# The left leg swings out to the left, the right leg to the right.
+		# Outward: the left leg swings out to the left, the right leg to the
+		# right. Inward: each swings toward the fuselage instead.
 		var side: float = -1.0 if index == 0 else 1.0
+		if _data != null and _data.gear_folds_inward:
+			side = -side
 		leg.basis = _gear_rest[index] * Basis(Vector3.BACK, side * angle)
 		leg.visible = deploy > 0.03
 
@@ -748,7 +782,7 @@ func has_piece(part: PlaneActor.Part) -> bool:
 func _apply_fittings() -> void:
 	var wanted: Array[StringName] = []
 	var swaps: Array = []
-	var four_blade: bool = false
+	var four_blade: bool = _data.prop_blades >= 4
 	for card: ComponentCard in _fittings:
 		if card == null or card.is_gun():
 			continue
@@ -801,23 +835,55 @@ func _find_propeller() -> Node3D:
 	return null
 
 
-## The lowest vertex of a piece's mesh, in PlaneActor space (y = INF if the
-## piece is not there).
-func _lowest_point(node_name: StringName) -> Vector3:
-	var lowest: Vector3 = Vector3(0.0, INF, 0.0)
+## The radius of the propeller's disc in model units: how far its furthest
+## blade tip is from the hub's axis.
+func _measure_propeller() -> float:
+	var mesh_instance: MeshInstance3D = _propeller as MeshInstance3D
+	if mesh_instance == null or mesh_instance.mesh == null:
+		return 0.0
+	var furthest: float = 0.0
+	for surface: int in range(mesh_instance.mesh.get_surface_count()):
+		var vertices: PackedVector3Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
+		for vertex: Vector3 in vertices:
+			furthest = maxf(furthest, vertex.x * vertex.x + vertex.y * vertex.y)
+	return sqrt(furthest)
+
+
+## Every vertex of a piece's mesh, in PlaneActor space (empty if the piece
+## is not there).
+func _piece_points(node_name: StringName) -> PackedVector3Array:
+	var points: PackedVector3Array = PackedVector3Array()
 	if _model == null:
-		return lowest
+		return points
 	var mesh_instance: MeshInstance3D = _model.find_child(node_name, true, false) as MeshInstance3D
 	if mesh_instance == null or mesh_instance.mesh == null:
-		return lowest
+		return points
 	var to_self: Transform3D = _transform_to_self(mesh_instance)
 	for surface: int in range(mesh_instance.mesh.get_surface_count()):
 		var vertices: PackedVector3Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
 		for vertex: Vector3 in vertices:
-			var point: Vector3 = to_self * vertex
-			if point.y < lowest.y:
-				lowest = point
-	return lowest
+			points.append(to_self * vertex)
+	return points
+
+
+## The middle of the lowest part of a piece (the patch a wheel stands on), in
+## PlaneActor space (y = INF if the piece is not there).
+func _lowest_point(node_name: StringName) -> Vector3:
+	var points: PackedVector3Array = _piece_points(node_name)
+	var lowest: float = INF
+	for point: Vector3 in points:
+		lowest = minf(lowest, point.y)
+	if not is_finite(lowest):
+		return Vector3(0.0, INF, 0.0)
+	var patch: Vector3 = Vector3.ZERO
+	var count: int = 0
+	for point: Vector3 in points:
+		if point.y <= lowest + CONTACT_PATCH:
+			patch += point
+			count += 1
+	patch /= float(count)
+	patch.y = lowest
+	return patch
 
 
 ## True when a piece that is missing from the model should be on it again.

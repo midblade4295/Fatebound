@@ -170,16 +170,21 @@ const STALL_OFFSET: float = 2.2
 # --- On the ground --------------------------------------------------------------------
 enum Contact { LEFT_WHEEL, RIGHT_WHEEL, TAIL_WHEEL, BELLY, NOSE, LEFT_TIP, RIGHT_TIP, TAIL }
 const CONTACT_COUNT: int = 8
-## How far each main leg and the tail wheel are squashed by the standing
-## plane's weight (m), and how well they are damped (share of critical).
-const MAIN_LEG_SAG: float = 0.2
+## How far each main leg (tyre and oleo together) and the tail wheel are
+## squashed by the standing plane's weight (m), and how well they are damped
+## (share of critical).
+const MAIN_LEG_SAG: float = 0.14
 const TAIL_LEG_SAG: float = 0.08
 const LEG_DAMPING: float = 0.5
+## An oleo is an air spring: squashed past where it stands, it pushes back
+## this many times harder for each further centimetre. That is what keeps an
+## aeroplane from leaning far over on its outside leg in a turn.
+const LEG_GAS_STIFFENING: float = 2.5
 ## An oleo leg lets go far more slowly than it gives: damping on the way back
 ## out is this many times stronger, which is what stops a plane bouncing.
 const LEG_REBOUND: float = 3.0
 ## Past this much more squash a leg is on its stops: it stiffens this many times.
-const LEG_TRAVEL: float = 0.22
+const LEG_TRAVEL: float = 0.2
 const BOTTOMED_STIFFENING: float = 6.0
 ## Hard points (belly, nose, wingtips, tail): how stiff the airframe is on the
 ## ground (natural frequency, rad/s) and how dead it lands (share of critical).
@@ -195,15 +200,18 @@ const TYRE_SLIP_PEAK: float = deg_to_rad(9.0)
 const TYRE_CRAWL_SPEED: float = 0.6
 ## Full braking, as a share of the load on the wheel, and how much of it the
 ## rudder bar moves from one wheel to the other.
-const BRAKE_GRIP: float = 0.32
+const BRAKE_GRIP: float = 0.26
 const BRAKE_STEER: float = 0.7
 ## Below this speed (m/s) rolling and braking forces fade, so a wheel stops
 ## instead of shuddering to and fro.
 const WHEEL_STOP_SPEED: float = 0.35
 ## Metal on the ground: grip as a share of load.
 const SKID_GRIP: float = 0.55
-## The tail wheel turns with the rudder bar, this far.
+## The tail wheel turns with the rudder bar, this far when taxying. It is
+## steered through springs, so the faster the plane rolls the less of that it
+## holds against the ground: half of it at TAIL_WHEEL_STEER_SPEED (m/s).
 const TAIL_WHEEL_STEER: float = deg_to_rad(24.0)
+const TAIL_WHEEL_STEER_SPEED: float = 6.5
 ## A plane standing still under brakes with nothing moving goes to sleep
 ## after this long (s), and stays put until something pushes it.
 const SLEEP_SPEED: float = 0.06
@@ -399,10 +407,12 @@ func configure(plane_mass: float, area: float, span: float, shaft_power: float, 
 	var aspect_ratio: float = span * span / area
 	_induced = 1.0 / (PI * 0.8 * aspect_ratio)
 	if contact_points.is_empty():
-		# Until the model says otherwise: a plain undercarriage of about the right size.
-		set_undercarriage(Vector3(-0.16 * span, -0.3 * span, -0.15 * span), Vector3(0.0, -0.18 * span, 0.38 * span),
-				0.15 * span, Vector3(0.0, -0.14 * span, -0.5 * span), Vector3(0.5 * span, -0.04 * span, -0.1 * span),
-				Vector3(0.0, -0.1 * span, 0.42 * span))
+		# Until the model says otherwise: an undercarriage in the proportions
+		# of a 1940s fighter (wheels a sixth of the span below the centre of
+		# gravity and a little ahead of it, track a fifth of the span).
+		set_undercarriage(Vector3(-0.1 * span, -0.16 * span, -0.06 * span), Vector3(0.0, -0.05 * span, 0.46 * span),
+				0.07 * span, Vector3(0.0, -0.135 * span, -0.215 * span), Vector3(0.5 * span, 0.0, 0.02 * span),
+				Vector3(0.0, -0.02 * span, 0.55 * span))
 	altitude = altitude  # (works out the air for wherever it already is)
 	_measure_performance()
 
@@ -457,6 +467,16 @@ func set_undercarriage(main_wheel: Vector3, tail_wheel: Vector3, belly_depth: fl
 
 
 ## Attitude and height at which the plane stands at rest on its three wheels:
+## The sideways load (in g) the undercarriage will take: the lesser of what
+## would lift the inside wheel (half the track over the height of the centre
+## of gravity) and what the tyres can grip.
+func wheel_side_limit() -> float:
+	if contact_points.size() < CONTACT_COUNT:
+		return TYRE_SIDE_GRIP
+	var wheel: Vector3 = contact_points[Contact.LEFT_WHEEL]
+	return minf(absf(wheel.x) / maxf(-wheel.y - MAIN_LEG_SAG, 0.5), TYRE_SIDE_GRIP)
+
+
 ## x = nose-up angle (radians), y = height of its centre above the ground.
 func standing_attitude() -> Vector2:
 	var main: Vector3 = contact_points[Contact.LEFT_WHEEL] + Vector3(0.0, MAIN_LEG_SAG, 0.0)
@@ -935,9 +955,10 @@ func _ground_loads() -> Vector3:
 		var stiffness: float = _contact_stiffness[index]
 		var load: float = stiffness * dent + _contact_damping[index] * closing
 		if wheel:
-			if closing < 0.0:
-				load = stiffness * dent + _contact_damping[index] * LEG_REBOUND * closing
-			var limit: float = (MAIN_LEG_SAG if index != Contact.TAIL_WHEEL else TAIL_LEG_SAG) + LEG_TRAVEL
+			var sag: float = MAIN_LEG_SAG if index != Contact.TAIL_WHEEL else TAIL_LEG_SAG
+			var spring: float = stiffness * (dent if dent <= sag else sag + (dent - sag) * LEG_GAS_STIFFENING)
+			load = spring + _contact_damping[index] * (closing if closing >= 0.0 else LEG_REBOUND * closing)
+			var limit: float = sag + LEG_TRAVEL
 			if dent > limit:
 				load += stiffness * BOTTOMED_STIFFENING * (dent - limit)
 		load = maxf(load, 0.0)
@@ -950,7 +971,8 @@ func _ground_loads() -> Vector3:
 			var braking: float = clampf(brake * (1.0 + BRAKE_STEER * rudder_bar * (1.0 if index == Contact.RIGHT_WHEEL else -1.0)), 0.0, 1.0)
 			if index == Contact.TAIL_WHEEL:
 				# Rudder right turns the tail wheel to run out to the left.
-				rolling = ahead.rotated(Vector3.UP, rudder_bar * TAIL_WHEEL_STEER)
+				var pace: float = across_ground.length() / TAIL_WHEEL_STEER_SPEED
+				rolling = ahead.rotated(Vector3.UP, rudder_bar * TAIL_WHEEL_STEER / (1.0 + pace * pace))
 				braking = 0.0
 			var sideways: Vector3 = rolling.cross(Vector3.UP)
 			var along: float = across_ground.dot(rolling)
@@ -964,7 +986,9 @@ func _ground_loads() -> Vector3:
 			grip = -across_ground * (SKID_GRIP * load / maxf(across_ground.length(), TYRE_CRAWL_SPEED))
 		var total: Vector3 = Vector3(grip.x, load, grip.z)
 		push += total
-		_torque += place.cross(to_plane * total)
+		# The ground pushes where the ground is: on the squashed tyre, not at
+		# the point the leg would reach if it could stretch right out.
+		_torque += (place + to_plane * Vector3(0.0, dent, 0.0)).cross(to_plane * total)
 	weight_on_ground = clampf(carried / (mass * GRAVITY), 0.0, 3.0)
 	return push
 

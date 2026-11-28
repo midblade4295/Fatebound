@@ -25,14 +25,14 @@ extends Node3D
 ## Where the camera starts: off the nose to one side, looking slightly down.
 const VIEW_YAW: float = deg_to_rad(148.0)
 const VIEW_PITCH: float = deg_to_rad(14.0)
-const VIEW_DISTANCE: float = 41.0
+const VIEW_DISTANCE: float = 33.0
 ## The plane sits left of and above the middle of the screen, clear of the
 ## panels: this far from the middle, as a share of the screen's height.
 const VIEW_OFFSET: Vector2 = Vector2(0.106, -0.113)
 const MIN_PITCH: float = deg_to_rad(-3.0)
 const MAX_PITCH: float = deg_to_rad(78.0)
-const MIN_DISTANCE: float = 13.0
-const MAX_DISTANCE: float = 75.0
+const MIN_DISTANCE: float = 10.0
+const MAX_DISTANCE: float = 62.0
 ## How far the plane can be slid from where it starts, as a share of the
 ## screen's height.
 const MAX_PAN: float = 0.32

@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b48xrf77w2vm3"
-path="res://.godot/imported/spitfire_stylized.glb-cf429d50d87b8b8a5ce83ef79161b383.scn"
+uid="uid://b315blqidiul2"
+path="res://.godot/imported/spitfire.glb-06280b878871938a6697339b3cc4687a.scn"
 
 [deps]
 
-source_file="res://assets/models/spitfire_stylized.glb"
-dest_files=["res://.godot/imported/spitfire_stylized.glb-cf429d50d87b8b8a5ce83ef79161b383.scn"]
+source_file="res://assets/models/spitfire.glb"
+dest_files=["res://.godot/imported/spitfire.glb-06280b878871938a6697339b3cc4687a.scn"]
 
 [params]
 

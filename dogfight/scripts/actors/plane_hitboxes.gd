@@ -12,20 +12,29 @@ extends RefCounted
 ## path that threads between the boxes is a miss, however close it came, and
 ## a part that has been shot off is no longer there to be hit.
 ##
-## Two sets of boxes are kept: `boxes` are padded by BULLET_PADDING so thin
-## surfaces are hittable on a phone, `solid_boxes` are the true size and are
-## what mid-air collisions use, so two planes only touch when they really do.
+## Three sets of boxes are kept. `boxes` are padded by BULLET_PADDING so thin
+## surfaces are hittable on a phone; a bullet that goes through any of them
+## hits exactly what it goes through. `near_boxes` are padded by NEAR_PADDING:
+## a bullet that passes through none of the first set but this close is
+## given to the one part it came nearest to hitting first (the planes are
+## their real size, and a real fighter is a small target for a thumb).
+## `solid_boxes` are the true size and are what mid-air collisions use, so
+## two planes only touch when they really do.
 
 ## Metres added to every side of every box for bullets.
 const BULLET_PADDING: float = 0.3
+## Metres added for a near miss that still counts.
+const NEAR_PADDING: float = 0.55
 
 ## Padded boxes, for bullets.
 var boxes: Array[AABB] = []
+## Wider boxes, for near misses.
+var near_boxes: Array[AABB] = []
 ## True-size boxes, for collisions between aircraft.
 var solid_boxes: Array[AABB] = []
 ## PlaneActor.Part for each entry in `boxes` / `solid_boxes`.
 var parts: PackedInt32Array = PackedInt32Array()
-## Radius of a sphere around the plane's origin that contains every padded
+## Radius of a sphere around the plane's origin that contains every near
 ## box. Used as a cheap first test before tracing the boxes.
 var bounding_radius: float = 0.0
 
@@ -42,12 +51,13 @@ static func from_visual(visual: PlaneVisual) -> PlaneHitboxes:
 
 ## Adds a true-size box for [param part].
 func add_box(part: int, solid: AABB) -> void:
-	var padded: AABB = solid.grow(BULLET_PADDING)
+	var near: AABB = solid.grow(NEAR_PADDING)
 	solid_boxes.append(solid)
-	boxes.append(padded)
+	boxes.append(solid.grow(BULLET_PADDING))
+	near_boxes.append(near)
 	parts.append(part)
 	for corner: int in range(8):
-		bounding_radius = maxf(bounding_radius, padded.get_endpoint(corner).length())
+		bounding_radius = maxf(bounding_radius, near.get_endpoint(corner).length())
 
 
 ## Traces a straight path through the boxes. [param origin] and
@@ -55,16 +65,27 @@ func add_box(part: int, solid: AABB) -> void:
 ## bit set in [param gone_mask] are skipped. Fills the two output arrays with
 ## each part the path enters within [param max_distance], nearest first, and
 ## how far along the path it is entered. A part made of several boxes is
-## listed once, at its first box.
+## listed once, at its first box. A path that enters none of them but passes
+## within NEAR_PADDING is a graze: it lists the one part it reached first.
 func trace(origin: Vector3, direction: Vector3, max_distance: float, gone_mask: int,
+		out_parts: PackedInt32Array, out_distances: PackedFloat32Array) -> void:
+	_trace_through(boxes, origin, direction, max_distance, gone_mask, out_parts, out_distances)
+	if out_parts.is_empty():
+		_trace_through(near_boxes, origin, direction, max_distance, gone_mask, out_parts, out_distances)
+		if out_parts.size() > 1:
+			out_parts.resize(1)
+			out_distances.resize(1)
+
+
+func _trace_through(through: Array[AABB], origin: Vector3, direction: Vector3, max_distance: float, gone_mask: int,
 		out_parts: PackedInt32Array, out_distances: PackedFloat32Array) -> void:
 	out_parts.clear()
 	out_distances.clear()
-	for index: int in range(boxes.size()):
+	for index: int in range(through.size()):
 		var part: int = parts[index]
 		if gone_mask & (1 << part) != 0:
 			continue
-		var entry: float = _ray_box_entry(origin, direction, boxes[index])
+		var entry: float = _ray_box_entry(origin, direction, through[index])
 		if entry < 0.0 or entry > max_distance:
 			continue
 		var known: int = out_parts.find(part)
