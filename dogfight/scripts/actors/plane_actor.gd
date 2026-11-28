@@ -186,6 +186,8 @@ const DEFAULT_BELLY_HEIGHT: float = 1.9
 ## Rolling resistance as a share of the load on a wheel: tarmac and grass.
 const ROLL_RUNWAY: float = 0.03
 const ROLL_GRASS: float = 0.09
+## How much of their grip on tarmac the brakes have on grass.
+const GRASS_BRAKE_SHARE: float = 0.6
 ## Wheel brakes come on by themselves when the throttle is closed.
 const BRAKE_THROTTLE: float = 0.04
 ## The plane counts as on the ground while the ground carries more than this
@@ -325,6 +327,8 @@ const FLAG_PROP_BROKEN: int = 8192
 ])
 ## Fuel left, 1 (full) to 0 (dry). Only a leaking fuselage uses it up.
 @export var fuel: float = 1.0
+## The height of the land everywhere (null where there is only sea).
+var ground_map: GroundMap
 ## Whether flying uses fuel up. Off, a tank only empties through holes. The
 ## match switches it on for human pilots; bots, who cannot yet land to fill
 ## up, fly on a full tank.
@@ -683,11 +687,24 @@ func home_airfield() -> Airfield:
 
 ## Height of the lowest part of the plane that could touch (its wheels if they
 ## are down, otherwise its belly, propeller or a wingtip) above whatever is
-## underneath: the airfield if the plane is over one, otherwise the sea.
+## underneath: the airfield, the land or the sea.
 func height_above_ground() -> float:
-	var field: Airfield = airfield_at(global_position)
-	var floor_y: float = field.surface_y() if field != null else 0.0
-	return flight.clearance(global_position.y - floor_y)
+	return flight.clearance(global_position.y - surface_height_at(global_position))
+
+
+## Height of whatever is under [param world_position]: an airfield's level
+## ground, the land, or the sea (0).
+func surface_height_at(world_position: Vector3) -> float:
+	var field: Airfield = airfield_at(world_position)
+	if field != null:
+		return field.surface_y()
+	return ground_map.height(world_position.x, world_position.z) if ground_map != null else 0.0
+
+
+## How far the plane (its centre) is above the land or sea under it. This,
+## not its altitude, is what matters for not flying into a hillside.
+func height_above_surface() -> float:
+	return global_position.y - surface_height_at(global_position)
 
 
 ## What the airspeed indicator reads, m/s: true airspeed scaled for the
@@ -1252,7 +1269,9 @@ func _fly(steer: Vector2, delta: float) -> void:
 	_over_field = field != null
 	_ground_field = field
 	_set_contacts()
-	flight.brake = 1.0 if input.throttle <= BRAKE_THROTTLE else 0.0
+	# Brakes bite on a hard runway; on grass the wheels have less to grip.
+	var grip: float = 1.0 if field == null or field.is_on_runway(global_position) else GRASS_BRAKE_SHARE
+	flight.brake = grip if input.throttle <= BRAKE_THROTTLE else 0.0
 	flight.ground_effect = _ground_closeness()
 
 	var wanted: Vector3 = _pilot_controls(steer, delta)

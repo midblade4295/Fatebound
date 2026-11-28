@@ -123,8 +123,8 @@ func _physics_process(delta: float) -> void:
 		for slot: PilotSlot in _manager.get_roster():
 			var plane: PlaneActor = slot.plane
 			var bot: SquadAIController = slot.controller as SquadAIController
-			print("  team%d %s alive=%s ground=%s h=%.0f v=%.0f state=%s deaths=%d" % [int(slot.team), plane.plane_id,
-					plane.alive, plane.is_on_ground(), plane.global_position.y, plane.speed, str(bot.state) if bot != null else "-", slot.deaths])
+			print("  team%d %s alive=%s ground=%s h=%.0f v=%.0f state=%s lost=%s" % [int(slot.team), plane.plane_id,
+					plane.alive, plane.is_on_ground(), plane.global_position.y, plane.speed, str(bot.state) if bot != null else "-", str(slot.out)])
 		get_tree().quit()
 
 

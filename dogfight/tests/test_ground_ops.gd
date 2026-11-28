@@ -507,13 +507,13 @@ func _start_landing_cases() -> void:
 		else:
 			red.append(slot.plane)
 	# label, plane, metres right of the centre line, metres along the runway,
-	# nose angle on the approach, wheels down?, flared?, heading across the island?
+	# nose angle on the approach, wheels down?, flared?, heading across the airfield?
 	_add_case("good landing", blue[0], 0.0, -260.0, -3.0, true, true, false)
 	_add_case("steep approach", blue[1], 75.0, -30.0, -9.0, true, true, false)
 	_add_case("dive", blue[2], -75.0, 300.0, -45.0, true, false, false)
-	_add_case("belly landing", blue[3], -130.0, -200.0, -3.0, false, true, false)
+	_add_case("belly landing", blue[3], -90.0, -200.0, -3.0, false, true, false)
 	_add_case("enemy airfield", red[0], 38.0, -260.0, -3.0, true, true, false)
-	_add_case("off the edge", red[1], -200.0, 440.0, -3.0, true, false, true)
+	_add_case("off the edge", red[1], -100.0, 440.0, -3.0, true, false, true)
 
 
 func _add_case(label: String, plane: PlaneActor, across: float, along: float, pitch_deg: float, wheels: bool, flares: bool, sideways: bool) -> void:
@@ -524,7 +524,7 @@ func _add_case(label: String, plane: PlaneActor, across: float, along: float, pi
 	case.flares = flares
 	var direction: Vector3 = _field.takeoff_direction()
 	var right: Vector3 = direction.cross(Vector3.UP).normalized()
-	# The one that is meant to run out of island starts lower, to be down in time.
+	# The one that is meant to run off the airfield starts lower, to be down in time.
 	var origin: Vector3 = _field.runway_start() + direction * along + right * across + Vector3.UP * (APPROACH_HEIGHT * (0.3 if sideways else 1.0))
 	var heading: Vector3 = right if sideways else direction
 	if pitch_deg < -20.0:
@@ -576,6 +576,9 @@ func _fly_case(case: LandingCase) -> void:
 		return
 	# Down. The one that is meant to run out of island keeps some power on.
 	var heading: float = plane.yaw if case.label == "off the edge" else _runway_yaw()
+	if case.label == "good landing":
+		# A tidy pilot keeps it on the centre line as well as straight.
+		heading += clampf(_field.runway_coordinates(plane.global_position).x / 300.0, -0.06, 0.06)
 	var feet: float = clampf(-wrapf(heading - plane.yaw, -PI, PI) * 3.5 + plane.flight.angular_velocity.y * 1.2, -1.0, 1.0)
 	plane.input.steer = Vector2(feet, 0.25)
 	plane.input.throttle = 0.35 if case.label == "off the edge" else 0.0
@@ -587,7 +590,7 @@ func _fly_case(case: LandingCase) -> void:
 		if case.label == "good landing" and not case.damage_done:
 			# Now that it is home and stopped: shoot it up and see it mended.
 			case.damage_done = true
-			_check(not plane.needs_service(), "the good landing bent nothing")
+			_check(not plane.needs_service(), "the good landing bent nothing (damage %s, fuel %.2f, legs %d, propeller broken %s)" % [str(plane.part_damage), plane.fuel, plane.broken_gear_mask(), plane.is_propeller_broken()])
 			plane.apply_damage(1000000.0, null, PlaneActor.Part.RIGHT_WINGTIP)
 			plane.apply_damage(1000000.0, null, PlaneActor.Part.RUDDER)
 			plane.apply_damage(plane.stats.max_hp * PlaneActor.PART_STRENGTH[PlaneActor.Part.ENGINE] * 0.6, null, PlaneActor.Part.ENGINE)
@@ -650,7 +653,7 @@ func _check_cases() -> void:
 				_check(case.bounces >= 1 or case.broken_legs != 0, "and bounces, or folds its undercarriage (%d bounces)" % case.bounces)
 			"dive":
 				_check(case.died and case.touchdowns.is_empty(), "diving straight into the runway does destroy the plane")
-				_check(absf(case.death_height) < 8.0, "on the runway, not in the sea (%.1f m above it)" % case.death_height)
+				_check(absf(case.death_height) < 8.0, "on the runway (%.1f m above it)" % case.death_height)
 			"belly landing":
 				_check(not case.touchdowns.is_empty() and not case.on_wheels and not case.died, "with the wheels up it can still be slid on")
 				_check(case.stop_distance > 20.0 and case.stop_distance < 420.0, "sliding to a stop on its belly (%.0f m)" % case.stop_distance)
@@ -661,8 +664,8 @@ func _check_cases() -> void:
 				_check(not case.touchdowns.is_empty() and case.died, "a plane that stops on the enemy's airfield is lost")
 				_check(case.died_on_ground, "there, after landing")
 			"off the edge":
-				_check(not case.touchdowns.is_empty() and case.died, "running off the edge of the island ends in the sea")
-				_check(not case.died_on_ground and case.death_height < -3.0, "it fell off rather than blowing up on the grass (%.1f m)" % case.death_height)
+				_check(not case.touchdowns.is_empty() and case.died, "running off the airfield's level ground into the rough ends it")
+				_check(not case.died_on_ground and absf(case.death_height) < 8.0, "out there, not on the airfield (%.1f m from its level)" % case.death_height)
 	_check(_manager.team_score(Teams.Id.TEAM_BLUE) >= 2, "planes lost on the ground count as losses (blue has %d)" % _manager.team_score(Teams.Id.TEAM_BLUE))
 
 

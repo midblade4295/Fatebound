@@ -123,7 +123,8 @@ func _on_died(victim: PlaneActor, killer: PlaneActor) -> void:
 	if _first_loss_time.has(victim.get_instance_id()):
 		_fall_times.append(_sim_time - _first_loss_time[victim.get_instance_id()])
 		_first_loss_time.erase(victim.get_instance_id())
-	if _manager.phase != MatchManager5v5.Phase.ACTIVE:
+	# (The last loss of a battle ends it before this is told of it.)
+	if _manager.phase == MatchManager5v5.Phase.COUNTDOWN:
 		return
 	if killer != null:
 		_shot_kills += 1
@@ -197,7 +198,8 @@ func _sample_clumping() -> void:
 
 
 func _on_match_ended(_winning_team: int) -> void:
-	_report()
+	# Not at once: the loss that ended the battle has not been counted here yet.
+	_report.call_deferred()
 
 
 func _report() -> void:

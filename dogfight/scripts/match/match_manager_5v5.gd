@@ -382,6 +382,7 @@ func _spawn_plane(slot: PilotSlot) -> void:
 	plane.bullet_system = bullet_system
 	if arena != null:
 		plane.airfields = arena.airfields
+		plane.ground_map = arena.ground_map
 	planes_root.add_child(plane, true)
 	for field: Airfield in plane.airfields:
 		# Planes stand on the airfield by arithmetic, not by bumping into it.

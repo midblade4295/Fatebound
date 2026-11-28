@@ -22,6 +22,9 @@ var _takeoff_demo: bool = false
 ## roughlanding=<m/s> drops the player's plane onto its own runway at that
 ## rate of descent on frame 30, to show what a rough landing breaks.
 var _rough_landing: float = 0.0
+var _place: Vector3 = Vector3.ZERO
+var _place_heading: float = 0.0
+var _placed: bool = true
 ## look=<x>,<y>,<zoom> drags the camera by that many pixels on frame 20: in
 ## the hangar it also zooms by that factor (below 1 = closer); in a match it
 ## holds the chase camera turned that far.
@@ -50,6 +53,13 @@ func _ready() -> void:
 			GameSession.match_seed = int(argument.trim_prefix("seed="))
 		elif argument.begins_with("fit="):
 			_fit(argument.trim_prefix("fit=").split("+"))
+		elif argument.begins_with("place="):
+			# place=x,y,z,heading: puts the player there in the air, flying
+			# that way (degrees clockwise from north, which is -Z).
+			var numbers: PackedStringArray = argument.trim_prefix("place=").split(",")
+			_place = Vector3(float(numbers[0]), float(numbers[1]), float(numbers[2]))
+			_place_heading = deg_to_rad(float(numbers[3])) if numbers.size() > 3 else 0.0
+			_placed = false
 		elif argument.begins_with("gold="):
 			Profile.add_gold(int(argument.trim_prefix("gold=")))
 		elif argument.begins_with("steer="):
@@ -196,6 +206,17 @@ func _process(_delta: float) -> void:
 		chase.look_by(Vector2(_look.x, _look.y))
 	if _rough_landing > 0.0 and _frame == 30:
 		_drop_player()
+	if not _placed and _frame >= 30:
+		_placed = true
+		var manager: MatchManager5v5 = _scene.get_node_or_null("MatchManager") as MatchManager5v5
+		if manager != null and manager.local_slot() != null:
+			var plane: PlaneActor = manager.local_slot().plane
+			var heading: Vector3 = Vector3(sin(_place_heading), 0.0, -cos(_place_heading))
+			plane.set_engine_running(true)
+			plane.set_gear_down(false)
+			plane.input.throttle = 0.8
+			plane.teleport(Transform3D(Basis.looking_at(heading, Vector3.UP), _place))
+			plane.throw(heading * 85.0)
 	if _steer_action != &"" and _frame > _warp_frames:
 		Input.action_press(_steer_action)
 	var index: int = _frames.find(_frame)

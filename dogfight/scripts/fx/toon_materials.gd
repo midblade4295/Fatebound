@@ -8,7 +8,6 @@ const TOON_SHADER: Shader = preload("res://shaders/toon_plane.gdshader")
 const DAMAGE_SHADER: Shader = preload("res://shaders/toon_plane_damage.gdshader")
 const TRAIL_SHADER: Shader = preload("res://shaders/bullet_trail.gdshader")
 const HOLE_SHADER: Shader = preload("res://shaders/bullet_hole.gdshader")
-const OCEAN_SHADER: Shader = preload("res://shaders/ocean.gdshader")
 const CLOUD_SHADER: Shader = preload("res://shaders/cloud.gdshader")
 
 static var _toon_cache: Dictionary[String, ShaderMaterial] = {}
@@ -133,12 +132,6 @@ static func prop_blur() -> StandardMaterial3D:
 	material.albedo_color = Color(0.85, 0.92, 1.0, 0.07)
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_unlit_cache[key] = material
-	return material
-
-
-static func ocean() -> ShaderMaterial:
-	var material: ShaderMaterial = ShaderMaterial.new()
-	material.shader = OCEAN_SHADER
 	return material
 
 

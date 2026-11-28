@@ -22,8 +22,9 @@ project in `../godot`; open `dogfight/project.godot` directly.
   `MultiplayerSpawner` / `MultiplayerSynchronizer`, but **no online session code
   exists yet and nothing has been tested with a second peer**.
 
-Reference captures (software-rendered at 1280x720): `docs/arena_hud.png`,
-`docs/takeoff.png`, `docs/hangar.png`, `docs/spitfire_model.png`.
+Reference captures (software-rendered at 1280x720): `docs/coast_cliffs.png`,
+`docs/coast_fields.png`, `docs/takeoff.png`, `docs/hangar.png`,
+`docs/spitfire_model.png`.
 
 ## Controls
 
@@ -113,12 +114,12 @@ dogfight/
 │  ├─ camera/    chase_camera.gd
 │  ├─ control/   player_controller.gd, squad_ai.gd, squad_blackboard.gd
 │  ├─ match/     match_manager_5v5.gd, pilot_slot.gd, dogfight_arena.gd
-│  ├─ world/     arena_builder.gd, airfield.gd
+│  ├─ world/     arena_builder.gd, airfield.gd, ground_map.gd
 │  ├─ fx/        toon_materials.gd, explosion_fx.gd, debris.gd
 │  ├─ ui/        hud.gd, hud_world_overlay.gd, radar.gd, touch_flight_stick.gd,
 │  │             throttle_lever.gd, action_button.gd, ui_style.gd
 │  └─ menu/      main_menu.gd, card_view.gd, match_lobby.gd
-├─ shaders/      toon_plane.gdshader, toon_plane_damage.gdshader, bullet_trail.gdshader, bullet_hole.gdshader, ocean.gdshader, cloud.gdshader
+├─ shaders/      toon_plane.gdshader, toon_plane_damage.gdshader, bullet_trail.gdshader, bullet_hole.gdshader, coast_terrain.gdshader, coast_water.gdshader, coast_foliage.gdshader, cloud.gdshader
 ├─ tests/        headless test scenes (see "Tests")
 └─ tools/        run_tests.sh, screenshot + model preview scenes, blender/
 ```
@@ -149,8 +150,8 @@ DogfightArena5v5 (Node3D)                 dogfight_arena.gd (wires camera + HUD)
 ├─ WorldEnvironment                       resources/env/arena_environment.tres
 ├─ Sun (DirectionalLight3D)               warm key light, 2-split shadows
 ├─ RimLight (DirectionalLight3D)          cool back light, no shadows
-├─ World                                  arena_builder.gd: ocean, islands, clouds, and an
-│  │                                      Airfield (airfield.gd) for each team
+├─ World                                  arena_builder.gd: the coast (land, sea, trees, villages,
+│  │                                      clouds) and an Airfield (airfield.gd) for each team
 │  └─ Sea (StaticBody3D, WorldBoundary)
 ├─ SpawnPoints ─ Blue/Spawn1..5, Red/Spawn1..5   air starts, only used with GameSession.ground_start off
 ├─ Planes                                 every PlaneActor (the spawner's spawn path)
@@ -334,7 +335,7 @@ HUD (CanvasLayer)                         hud.gd
   about 20 seconds (3.5 g at 237 mph), the Hurricane's 22 and the Mustang's
   19; the real ones took roughly 19, 20 and 22. The flaps are landing flaps
   and move only with the undercarriage: they do not drop in turns.
-- **A plane is only lost when it hits something:** the sea, an island,
+- **A plane is only lost when it hits something:** the sea, the land,
   or another aircraft hard enough. (A bot whose plane can no longer fly does
   not ride it down: after 4 to 9 seconds, sooner if it is burning, the pilot
   bails out and the plane is lost there and then. A human pilot is never
@@ -401,12 +402,20 @@ HUD (CanvasLayer)                         hud.gd
     (`Profile.pay_insurance`). A pilot who cannot pay it flies uninsured.
   - A battle with no human in it ends when one side has nobody left, or
     after ten minutes.
-- **Ground handling** (`PlaneActor`, `Airfield`). Each team has an island
-  airfield with a 900 m runway pointing at the middle of the arena, 2.3 km
-  from it. The battle area is 3.2 km in radius with a 9 km ceiling (no one gets
-  near it in a five-minute match: it is ten minutes' climb to where these
-  planes are fastest). Everyone starts parked on their own runway: engine
-  off, wheels down, throttle closed.
+- **Ground handling** (`PlaneActor`, `Airfield`). Each team has an airfield
+  on a levelled stretch of the countryside, 2.3 km from the middle of the
+  arena, laid out as a wartime RAF fighter station to real scale: a main
+  runway of 1,600 yards (1,463 m) pointing at the middle, and two of 1,100
+  yards (1,006 m) crossing it to make the classic triangle, all 50 yards
+  (45.7 m) wide. The ground is dead level for 130 m either side of every
+  runway and for 400 m off each end of the main one (grass, for landing
+  short or running long), and kept level along that line for a kilometre
+  more, so no approach is into a hillside. Beyond the level ground the land
+  is solid and unforgiving. The battle area is 3.2 km in radius with a 9 km
+  ceiling (no one gets near it in a short sortie: it is ten minutes' climb to
+  where these planes are fastest). Everyone starts parked on their own
+  runway: engine off, wheels down, throttle closed. Brakes have less to
+  grip on grass than on the runway (`GRASS_BRAKE_SHARE`).
   - *Starting up.* The starter takes about two seconds before the engine
     answers the throttle. A dead engine will not start.
   - *On the ground it is the same rigid body*, standing on what touches
@@ -427,7 +436,7 @@ HUD (CanvasLayer)                         hud.gd
     wheels. Eased back at flying speed it leaves when the wings carry it. A
     Spitfire is off in about 11 seconds and 230 m. Left tail-down it leaves
     earlier, slower and right on the stall. Too much forward stick puts the
-    propeller into the runway. Running out of island ends in the sea.
+    propeller into the runway.
   - *There is no moment of "lift-off"* in the code: the wheels just carry
     less and less. `TestGroundOps` measures the largest tick-to-tick change
     in pitch, climb rate, acceleration and height through a take-off.
@@ -464,7 +473,7 @@ HUD (CanvasLayer)                         hud.gd
     a new propeller and replacement parts; a wreck lying on its belly is
     jacked back onto its wheels first. The player pays for this (see The
     sortie); a fire is put out for nothing. Stopped on the enemy's airfield, or
-    run off the island, it is lost.
+    run off the airfield's level ground into the rough, it is lost.
   - *Bots* start up in turn from the front of the line and fly the same
     take-off a player has to: steer down their own lane with rudder, stick
     forward to get the tail up, ease back at flying speed, then raise the
@@ -489,7 +498,8 @@ HUD (CanvasLayer)                         hud.gd
   angle off the nose, coming up behind rather than meeting head-on, damage)
   with a penalty for targets team-mates already claimed, approach in personal
   lanes, push apart when close, will not dive lower than the room under them
-  allows, pull up for the sea, turn for islands, turn back at the edge, and
+  allows, pull up for the ground (measured from the land under and ahead of
+  them, not from the sea), turn for cliffs and hangars, turn back at the edge, and
   break when shot from behind.
 
 ## Progression
@@ -558,7 +568,7 @@ it is bolted to a particular place on the aeroplane, and it shows there.
   coins as gold and any plane its experience had unlocked. Local only:
   there is no store and no real money yet. A new pilot starts with 500
   gold, a Hurricane, two .303s and the standard parts.
-- Bots keep above the islands, look along the curve of their turn for
+- Bots keep clear of the hills, look along the curve of their turn for
   obstacles, and are given two to four guns of one kind and, more often in the
   better planes, better components. They fly the player's plane or the one
   either side of it in the line-up. They burn no fuel and do not land, so
@@ -574,12 +584,60 @@ All tuning numbers (costs, XP, damage, turn rates) are first-pass values.
   rim plus a small ambient rim. `ToonMaterials.standard_toon()` is the
   StandardMaterial3D equivalent (toon diffuse/specular + built-in rim) for
   meshes that need textures.
-- `shaders/ocean.gdshader` and `cloud.gdshader` are fragment-only and read no
-  screen or depth textures.
-- Lighting: warm `Sun` with shadows, cool unshadowed `RimLight` from the
-  opposite side, sky ambient, light fog, mild glow, +20% saturation.
-- Islands, the airfields and clouds are primitive meshes built in code
-  (`arena_builder.gd`, `airfield.gd`). Planes are the Blender model described below.
+- `shaders/cloud.gdshader` is fragment-only and reads no screen or depth
+  textures; nor does anything else here.
+- Lighting: warm golden `Sun` with shadows, cool unshadowed `RimLight` from
+  the opposite side, an azure sky for ambient, light-blue distance fog, mild
+  glow, +20% saturation.
+- Clouds are primitive meshes built in code (`arena_builder.gd`). Planes are
+  the Blender model described below.
+
+### The countryside
+
+The battlefield is a stretch of chalk coast: rolling green hills, a
+patchwork of fields, sheer white cliffs and a turquoise sea, with woods,
+boulders and villages. `docs/coast_cliffs.png`, `docs/coast_fields.png`.
+
+- **It is made in Blender by a script** (`tools/blender/coast_world.py`,
+  Blender 4.x; run it and it rewrites `assets/models/coast/`). The land is
+  one grid, 21 km across so that it has no edge to see, meshed at 25 m
+  through the middle 8 km and more coarsely beyond. One column of the grid
+  is laid along the wandering coast and the next 4 m out from it at sea
+  level, which is what makes the cliffs sheer. The airfields are levelled
+  into it and their runways laid on top. It also makes the tree, the
+  boulder and the cottage, and writes the land's heights out as numbers.
+- **Vertex colours say what the ground is:** R grass, G wheat, B chalk, and
+  A farmland (where fields may be). `shaders/coast_terrain.gdshader` blends
+  them and adds what vertex colours cannot: it draws every field itself,
+  from the same grid and the same hash the Blender script used, so each has
+  a crisp outline and a hedge whatever the mesh's resolution; wheat, plough
+  and pasture in different fields; furrows; two-tone turf; beds and streaks
+  in the chalk, which it finds from the slope of the surface itself. No
+  textures.
+- **The sea knows its own depth.** `ArenaBuilder._build_sea` builds the sea
+  as a mesh that follows the coast and stores at each vertex how deep the
+  water is there and how far it is from the cliffs.
+  `shaders/coast_water.gdshader` colours it from that (turquoise shallows
+  over the pale sea bed, deepening to blue) and breaks foam at the foot of
+  the cliffs and in lines rolling in. The usual way, reading the depth
+  buffer, would make the whole sea a transparent surface, which is costly
+  on a phone; this one stays opaque.
+- **Trees, boulders and cottages** are scattered at load from one seed
+  (`ArenaBuilder._scatter_countryside`): about 2,500 trees, thick in the
+  woods and thin elsewhere, never in a field, on steep ground, at the
+  cliff's edge, near a runway or under an approach; boulders on the rough
+  ground and the cliff tops; villages of a few cottages on level ground.
+  They are drawn as MultiMeshes cut into 1.2 km squares, so squares out of
+  view or too far off are not drawn. `shaders/coast_foliage.gdshader` shades
+  the trees softly and lets the sun glow warmly through the canopy when it
+  is behind them. **They are scenery: nothing collides with them.**
+- **`GroundMap`** (`scripts/world/ground_map.gd`) is how the game asks how
+  high the land is: the bots keep their height above the ground under and
+  ahead of them, the HUD's approach guidance measures from it, and the
+  scatter stands things on it. It reads the numbers the Blender script
+  wrote, so it agrees with the mesh. The land and the airfields' level
+  ground have triangle-mesh colliders; a plane that touches the land
+  anywhere but its airfield's level ground is lost.
 
 ### What bullets leave behind
 
@@ -607,7 +665,7 @@ All of it is cosmetic and none of it uses a texture.
   children of the piece, so they move with a control surface and leave with
   a wing that is shot off. Each piece keeps its latest 18. A repair on the
   airfield takes them away.
-- **Marks in the ground.** A bullet into an island or an airfield leaves a
+- **Marks in the ground.** A bullet into the land or an airfield leaves a
   scorched pock (the latest 160 are kept) and throws up dust; into the sea,
   a splash; into an aeroplane, a puff of paint and smoke.
 

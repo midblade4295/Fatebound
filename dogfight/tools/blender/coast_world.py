@@ -7,9 +7,11 @@ every run: Coast_World (terrain, runways, markers), Coast_Assets (tree,
 boulder, cottage, each at the world origin) and Coast_Preview (sea, sun and
 camera for a look in the viewport: not exported).
 
-It then writes four files into EXPORT_DIR:
-    coast_terrain.glb   terrain + runways + runway paint + airfield markers
+It then writes five files into EXPORT_DIR:
+    coast_terrain.glb   terrain + airfield ground + runways + paint + markers
     coast_tree.glb      coast_boulder.glb      coast_cottage.glb
+    coast_ground.json   the height of the land, for the game to look up
+                        (see scripts/world/ground_map.gd)
 
 Units are metres, 1:1. Blender is Z-up; glTF/Godot are Y-up, and Blender's
 +Y becomes Godot's -Z, which the exporter takes care of.
@@ -18,10 +20,14 @@ Terrain vertex colours (attribute "Col", exported as COLOR_0):
     R  lush grass on flat and gently rolling ground
     G  farmland: patchwork fields of wheat
     B  chalk: the cliff faces, and the pale sea bed at their feet
-    A  a random 0.25-1 per field, to tint one field differently from the next
+    A  farmland: 1 wherever fields may be (gentle ground, clear of the cliffs
+       and the airfields), 0 elsewhere. The game's terrain shader draws the
+       fields themselves from this, each with its hedge, using the same grid
+       and the same hash as here (FIELD_* below), so their edges are crisp.
 R + G + B is always 1.
 """
 
+import json
 import math
 import os
 import random
@@ -35,8 +41,12 @@ from mathutils import Matrix, Vector
 # Settings
 # --------------------------------------------------------------------------
 SEED = 7
-TERRAIN_SIZE = 8000.0      # the terrain is this many metres square, centred on the origin
-GRID = 320                 # cells per side: 25 m apart
+TERRAIN_SIZE = 8000.0      # the middle of the map, this many metres square, is finely meshed
+GRID = 320                 # cells per side there: 25 m apart
+# Round that the land carries on for several kilometres in cells that grow
+# as they go, so that from the air it has no edge to speak of.
+OUTER_CELLS = 30           # extra cells on every side
+OUTER_GROWTH = 1.12        # each one this much bigger than the last
 SEA_LEVEL = 0.0
 COAST_X = 1500.0           # the cliffs run north-south about here; the sea is east (+X)
 COAST_WANDER = 420.0       # how far headlands and bays stray from that line
@@ -60,6 +70,25 @@ RUNWAY_LIFT = 0.12                    # the surface sits this far proud of the g
 AIRFIELDS = [("Blue", (-700.0, -2250.0), 0.0), ("Red", (-700.0, 2250.0), 180.0)]
 FLAT_INNER = 140.0         # ground within this of a runway is dead level
 FLAT_OUTER = 560.0         # and has blended back into the hills by here
+# The level ground round the runways is cut out as a mesh of its own
+# (AirfieldGround_<team>): the game stands aeroplanes on it by arithmetic and
+# has them ignore its collider. It reaches this far from the runways, which
+# must stay inside Airfield.LEVEL_REACH in the game.
+PATCH_REACH = 128.0
+# The grass off each end of the main runway is part of the airfield too, this
+# far out (Airfield.OVERRUN in the game), for landing short or running long.
+# And the ground is kept level further out still along that line, so that an
+# approach or a climb-out is not into a hillside.
+OVERRUN = 400.0
+APPROACH_LEVEL = 1100.0
+
+# The patchwork of fields: cells this many metres by this many, turned this
+# many degrees off north. A cell is wheat if its hash is under the share.
+# shaders/coast_terrain.gdshader has the same numbers.
+FIELD_SIZE = (190.0, 150.0)
+FIELD_TURN = 24.0
+FIELD_SEED = SEED + 5
+FIELD_WHEAT_SHARE = 0.36
 
 EXPORT = True
 _here = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() and os.path.isfile(__file__) else ""
@@ -190,6 +219,13 @@ def finish(bm, name, smooth_angle=None):
 # --------------------------------------------------------------------------
 # Airfields and runways
 # --------------------------------------------------------------------------
+def airfield_ground(centre, heading_deg, beyond):
+    """The runways of one airfield, with the main one carried on `beyond`
+    metres past each end: the lines its level ground is measured from."""
+    runways = runway_layout(centre, heading_deg)
+    return runways + [("Overrun", runways[0][1], heading_deg, RUNWAY_MAIN + 2.0 * beyond)]
+
+
 def runway_layout(centre, heading_deg):
     """The three runways of one airfield as (name, centre, heading, length)."""
     turn = math.radians(heading_deg)
@@ -280,22 +316,58 @@ def build_airfield(team, centre, heading, elevation, collection, tarmac, paint):
 # --------------------------------------------------------------------------
 # Terrain
 # --------------------------------------------------------------------------
-def build_terrain(collection):
-    count = GRID + 1
-    half = TERRAIN_SIZE * 0.5
-    line = np.linspace(-half, half, count)
-    y = np.repeat(line[:, None], count, axis=1)          # y[row, column]; rows run south to north
+def terrain_axis():
+    """Where the grid lines fall along one side of the map: evenly through the
+    middle, then further and further apart out to the edge."""
+    core = np.linspace(-TERRAIN_SIZE * 0.5, TERRAIN_SIZE * 0.5, GRID + 1)
+    step = TERRAIN_SIZE / GRID
+    beyond = np.cumsum(step * OUTER_GROWTH ** np.arange(1, OUTER_CELLS + 1))
+    return np.concatenate((core[0] - beyond[::-1], core, core[-1] + beyond))
 
+
+def mesh_from(name, verts, faces, colours):
+    """A mesh from some of the terrain's faces, with their vertex colours."""
+    used = np.unique(faces)
+    remap = np.zeros(len(verts), dtype=np.int64)
+    remap[used] = np.arange(len(used))
+    faces = remap[faces]
+    mesh = bpy.data.meshes.new(name)
+    mesh.vertices.add(len(used))
+    mesh.vertices.foreach_set("co", verts[used].ravel())
+    mesh.loops.add(faces.size)
+    mesh.loops.foreach_set("vertex_index", faces.ravel())
+    mesh.polygons.add(len(faces))
+    mesh.polygons.foreach_set("loop_start", np.arange(0, faces.size, 4))
+    mesh.polygons.foreach_set("loop_total", np.full(len(faces), 4))
+    mesh.polygons.foreach_set("use_smooth", np.ones(len(faces), dtype=bool))
+    mesh.update(calc_edges=True)
+    mesh.validate()
+    if colours is not None:
+        paint = mesh.color_attributes.new(name="Col", type='BYTE_COLOR', domain='CORNER')
+        paint.data.foreach_set("color", colours.ravel())
+        mesh.color_attributes.active_color = paint
+        mesh.color_attributes.render_color_index = 0
+    return mesh
+
+
+def build_terrain(collection):
+    line = terrain_axis()
+    count = len(line)
+    cells = count - 1
+    half = float(line[-1])
+    y = np.repeat(line[:, None], count, axis=1)          # y[row, column]; rows run south to north
     # The coast: a wandering line, with the sea to the east of it. One column
     # of the grid is laid along that line for the whole length of the map and
     # the next column CLIFF_LEAN further out, so the drop between the two is
     # sheer. Every row is stretched a little to fit: land columns from the
     # west edge to the cliff, sea columns from the cliff to the east edge.
     coast = COAST_X + COAST_WANDER * fbm(line * 0.0, line, 2300.0, 3, SEED + 7) + 90.0 * fbm(line * 0.0, line, 520.0, 2, SEED + 19)
-    lip = int(round((COAST_X + half) / TERRAIN_SIZE * GRID))
+    lip = int(np.argmin(np.abs(line - COAST_X)))
+    land_share = (line[:lip + 1] - line[0]) / (line[lip] - line[0])
+    sea_share = (line[lip + 1:] - line[lip + 1]) / (line[-1] - line[lip + 1])
     x = np.empty_like(y)
-    x[:, :lip + 1] = -half + (coast[:, None] + half) * np.linspace(0.0, 1.0, lip + 1)[None, :]
-    x[:, lip + 1:] = coast[:, None] + CLIFF_LEAN + (half - coast[:, None] - CLIFF_LEAN) * np.linspace(0.0, 1.0, GRID - lip)[None, :]
+    x[:, :lip + 1] = -half + (coast[:, None] + half) * land_share[None, :]
+    x[:, lip + 1:] = coast[:, None] + CLIFF_LEAN + (half - coast[:, None] - CLIFF_LEAN) * sea_share[None, :]
     from_coast = x - coast[:, None]                      # negative on land
 
     # Rolling country: big soft hills, smaller folds on top, rising inland.
@@ -305,10 +377,10 @@ def build_terrain(collection):
 
     # Each airfield is levelled: dead flat by the runways, easing back into the hills.
     airfield_distance = np.full(x.shape, np.inf)
-    elevations = {}
+    elevations, team_distance = {}, {}
     for team, centre, heading in AIRFIELDS:
-        runways = runway_layout(centre, heading)
-        distance = distance_to_runways(x, y, runways)
+        team_distance[team] = distance_to_runways(x, y, airfield_ground(centre, heading, OVERRUN)).ravel()
+        distance = distance_to_runways(x, y, airfield_ground(centre, heading, APPROACH_LEVEL))
         elevations[team] = round(float(land[distance < FLAT_INNER].mean()), 1)
         level = 1.0 - smoothstep(FLAT_INNER, FLAT_OUTER, distance)
         land = land + (elevations[team] - land) * level
@@ -317,22 +389,12 @@ def build_terrain(collection):
     # East of the cliff: the sea bed, shelving away from its foot.
     height = np.where(from_coast > 0.0, np.maximum(-5.0 - 0.035 * from_coast, -70.0), land)
 
-    # Build the mesh.
+    # Build the mesh (whole, to measure its slopes; it is cut up further down).
     verts = np.stack((x.ravel(), y.ravel(), height.ravel()), axis=1)
-    cell = np.arange(GRID * GRID)
-    corner = cell + cell // GRID            # index of each cell's south-west vertex
+    cell = np.arange(cells * cells)
+    corner = cell + cell // cells           # index of each cell's south-west vertex
     faces = np.stack((corner, corner + 1, corner + count + 1, corner + count), axis=1)
-    mesh = bpy.data.meshes.new("Terrain")
-    mesh.vertices.add(len(verts))
-    mesh.vertices.foreach_set("co", verts.ravel())
-    mesh.loops.add(faces.size)
-    mesh.loops.foreach_set("vertex_index", faces.ravel())
-    mesh.polygons.add(len(faces))
-    mesh.polygons.foreach_set("loop_start", np.arange(0, faces.size, 4))
-    mesh.polygons.foreach_set("loop_total", np.full(len(faces), 4))
-    mesh.polygons.foreach_set("use_smooth", np.ones(len(faces), dtype=bool))
-    mesh.update(calc_edges=True)
-    mesh.validate()
+    mesh = mesh_from("TerrainWhole", verts, faces, None)
 
     # ---- Vertex colours, from height and slope -----------------------------
     vertex_normals = np.empty(len(verts) * 3)
@@ -344,15 +406,15 @@ def build_terrain(collection):
 
     # Farmland: a patchwork of fields, turned a little off north. About a
     # third are wheat. They keep to gentle ground, clear of cliff and airfield.
-    turn = math.radians(24.0)
-    u = (x * math.cos(turn) + y * math.sin(turn)) / 190.0
-    v = (-x * math.sin(turn) + y * math.cos(turn)) / 150.0
-    field_id = _lattice(np.floor(u), np.floor(v), SEED + 5)
-    hedge = np.minimum(np.minimum(u % 1.0, 1.0 - u % 1.0) * 190.0, np.minimum(v % 1.0, 1.0 - v % 1.0) * 150.0)
-    farmed = fbm(x, y, 1500.0, 2, SEED + 55) > -0.15
-    wheat = (field_id < 0.36) & farmed & (hedge > 9.0) & (from_coast < -160.0) & (airfield_distance > 300.0)
-    wheat = wheat.ravel() & (vertex_slope < 9.0) & (height.ravel() > 22.0)
-    tint = np.where(wheat, 0.25 + 0.75 * _lattice(np.floor(u), np.floor(v), SEED + 6).ravel(), 1.0)
+    turn = math.radians(FIELD_TURN)
+    u = (x * math.cos(turn) + y * math.sin(turn)) / FIELD_SIZE[0]
+    v = (-x * math.sin(turn) + y * math.cos(turn)) / FIELD_SIZE[1]
+    field_id = _lattice(np.floor(u), np.floor(v), FIELD_SEED)
+    hedge = np.minimum(np.minimum(u % 1.0, 1.0 - u % 1.0) * FIELD_SIZE[0], np.minimum(v % 1.0, 1.0 - v % 1.0) * FIELD_SIZE[1])
+    farmland = (fbm(x, y, 1500.0, 2, SEED + 55) > -0.15) & (from_coast < -160.0) & (airfield_distance > 300.0)
+    farmland = farmland.ravel() & (vertex_slope < 9.0) & (height.ravel() > 22.0)
+    wheat = farmland & ((field_id < FIELD_WHEAT_SHARE) & (hedge > 9.0)).ravel()
+    tint = farmland.astype(float)
 
     loop_vertex = faces.ravel()
     loop_face = np.repeat(np.arange(len(faces)), 4)
@@ -362,17 +424,31 @@ def build_terrain(collection):
     chalk = np.maximum(chalk, (verts[loop_vertex, 2] < SEA_LEVEL - 1.0).astype(float))
     green = wheat[loop_vertex].astype(float) * (1.0 - chalk)
     colours = np.stack((1.0 - chalk - green, green, chalk, tint[loop_vertex]), axis=1)
-    paint = mesh.color_attributes.new(name="Col", type='BYTE_COLOR', domain='CORNER')
-    paint.data.foreach_set("color", colours.ravel())
-    mesh.color_attributes.active_color = paint
-    mesh.color_attributes.render_color_index = 0
+    bpy.data.meshes.remove(mesh)
 
-    terrain = new_object("Terrain", mesh, collection, (terrain_material(),))
-    share = [float(colours[:, channel].mean()) for channel in range(3)]
+    # Cut the level ground round each airfield out as a mesh of its own.
+    colours = colours.reshape(-1, 4, 4)
+    rest = np.ones(len(faces), dtype=bool)
+    shade = terrain_material()
+    for team, _centre, _heading in AIRFIELDS:
+        patch = (team_distance[team][faces] < PATCH_REACH).all(axis=1)
+        new_object("AirfieldGround_%s" % team, mesh_from("AirfieldGround_%s" % team, verts, faces[patch], colours[patch]), collection, (shade,))
+        rest &= ~patch
+    terrain = new_object("Terrain", mesh_from("Terrain", verts, faces[rest], colours[rest]), collection, (shade,))
+
+    # The same ground as numbers, for the game: the land's height at every
+    # grid point west of the cliff, and what it takes to find a point's place
+    # in the grid (the axis, and where the coast is on each row).
+    ground = {"axis": [round(float(value), 3) for value in line],
+              "coast": [round(float(value), 3) for value in coast],
+              "lip": lip, "cliff_lean": CLIFF_LEAN,
+              "heights": [round(float(value), 2) for value in height[:, :lip + 1].ravel()]}
+
+    share = [float(colours[..., channel].mean()) for channel in range(3)]
     land_heights = height[from_coast <= 0.0]
-    print("Terrain: %d vertices, %d faces; land %.0f to %.0f m; grass %.0f%%, wheat %.0f%%, chalk %.0f%%" % (
-        len(verts), len(faces), land_heights.min(), land_heights.max(), share[0] * 100, share[1] * 100, share[2] * 100))
-    return terrain, elevations
+    print("Terrain: %d vertices, %d faces, %.1f km square; land %.0f to %.0f m; grass %.0f%%, wheat %.0f%%, chalk %.0f%%" % (
+        len(verts), len(faces), half * 0.002, land_heights.min(), land_heights.max(), share[0] * 100, share[1] * 100, share[2] * 100))
+    return terrain, elevations, ground
 
 
 # --------------------------------------------------------------------------
@@ -393,7 +469,7 @@ def build_tree(collection):
              ((0.3, -1.5, 4.5), 1.6), ((-0.5, 1.3, 5.9), 1.5), ((0.9, -0.3, 6.4), 1.4)]
     for centre, radius in blobs:
         shape = Matrix.Translation(centre) @ Matrix.Diagonal((radius, radius, radius * 0.86, 1.0))
-        puff = bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0, matrix=shape)
+        puff = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=1.0, matrix=shape)   # 20 faces: there are thousands of trees
         shade = rng.uniform(0.0, 1.0)
         for vert in puff["verts"]:
             for face in vert.link_faces:
@@ -484,7 +560,7 @@ def export_glb(objects, filename):
 def build_preview(collection, render_to):
     """A sea, a sun and a camera on the headland, to look at the result in Blender."""
     sea = bpy.data.meshes.new("PreviewSea")
-    reach = TERRAIN_SIZE * 2.0
+    reach = TERRAIN_SIZE * 4.0
     sea.from_pydata([(-reach, -reach, SEA_LEVEL), (reach, -reach, SEA_LEVEL), (reach, reach, SEA_LEVEL), (-reach, reach, SEA_LEVEL)], [], [(0, 1, 2, 3)])
     new_object("PreviewSea", sea, collection, (material("PreviewSea", (0.05, 0.50, 0.66), 0.25),))
     sun = bpy.data.objects.new("PreviewSun", bpy.data.lights.new("PreviewSun", 'SUN'))
@@ -492,7 +568,7 @@ def build_preview(collection, render_to):
     sun.rotation_euler = (math.radians(52.0), 0.0, math.radians(-125.0))
     collection.objects.link(sun)
     camera = bpy.data.objects.new("PreviewCamera", bpy.data.cameras.new("PreviewCamera"))
-    camera.data.lens, camera.data.clip_end = 24.0, 30000.0
+    camera.data.lens, camera.data.clip_end = 24.0, 60000.0
     camera.location = (2500.0, -3300.0, 330.0)
     camera.rotation_euler = (Vector((300.0, 300.0, 40.0)) - camera.location).to_track_quat('-Z', 'Y').to_euler()
     collection.objects.link(camera)
@@ -516,7 +592,7 @@ def build_preview(collection, render_to):
 def main():
     made = reset_collections()
     world, assets = made["Coast_World"], made["Coast_Assets"]
-    terrain, elevations = build_terrain(world)
+    terrain, elevations, ground = build_terrain(world)
     tarmac, paint = material("Runway", (0.33, 0.35, 0.38), 0.85), material("RunwayPaint", (0.93, 0.93, 0.88), 0.7)
     for team, centre, heading in AIRFIELDS:
         build_airfield(team, centre, heading, elevations[team], world, tarmac, paint)
@@ -529,6 +605,9 @@ def main():
         export_glb([tree], "coast_tree.glb")
         export_glb([boulder], "coast_boulder.glb")
         export_glb([cottage], "coast_cottage.glb")
+        ground["airfields"] = {team: elevations[team] for team in elevations}
+        with open(os.path.join(EXPORT_DIR, "coast_ground.json"), "w") as out:
+            json.dump(ground, out, separators=(",", ":"))
     build_preview(made["Coast_Preview"], PREVIEW_IMAGE)
 
 

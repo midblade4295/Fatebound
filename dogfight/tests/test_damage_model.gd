@@ -335,7 +335,7 @@ func _run_live_fire() -> void:
 				var field: Airfield = _reference.home_airfield()
 				var runway: Vector3 = field.runway_start() + field.takeoff_direction() * 200.0
 				bullets.spawn(runway + Vector3.UP * 60.0, Vector3.DOWN * 420.0, _reference, 2.0, 60.0, 420.0)
-				bullets.spawn(Vector3(600.0, 60.0, 0.0), Vector3.DOWN * 420.0, _reference, 2.0, 60.0, 420.0)
+				bullets.spawn(Vector3(3200.0, 60.0, 0.0), Vector3.DOWN * 420.0, _reference, 2.0, 60.0, 420.0)
 				_live_stage = 5
 		5:
 			if _clock >= 4.6:

@@ -64,14 +64,16 @@ const STEEPEST_DIVE: float = 0.75
 const EDGE_START: float = 0.88
 ## Straight steps used to follow the curve of a turn when looking ahead.
 const PATH_STEPS: int = 3
+## A surface whose normal points up more than this is ground to climb over,
+## not a wall to turn away from.
+const GROUND_LIKE: float = 0.55
 ## A look-ahead ray that ends this close to sea level has found the sea.
 const SEA_LEVEL_MARGIN: float = 3.0
 ## Number of physics ticks of target history kept for the reaction delay.
 const TRACK_SAMPLES: int = 40
 const LANE_OFFSET: float = 130.0
-## Bots drift back into this height band: above the tallest island, which a
-## plane cannot turn away from in the room it has once it is among them, and
-## below the ceiling so the fight does not creep ever higher.
+## Bots drift back into this band of height above the ground: well clear of
+## the hills, and below the ceiling so the fight does not creep ever higher.
 const PREFERRED_ALTITUDE_MIN: float = 550.0
 const PREFERRED_ALTITUDE_MAX: float = 1300.0
 ## A shot is taken when the gun line passes within this many metres of the
@@ -387,9 +389,9 @@ func _fly() -> void:
 ## than [param load] g.
 func _head(direction: Vector3, load: float, aim_nose: bool = false) -> void:
 	# However good the reason, the nose goes no further down than the room
-	# underneath allows: none at all near the sea, anything from DIVE_HEIGHT up.
+	# underneath allows: none at all near the ground, anything from DIVE_HEIGHT up.
 	var wanted: Vector3 = direction.normalized()
-	var room: float = clampf((plane.global_position.y - MIN_SAFE_ALTITUDE * 1.5) / DIVE_HEIGHT, 0.0, 1.0)
+	var room: float = clampf((plane.height_above_surface() - MIN_SAFE_ALTITUDE * 1.5) / DIVE_HEIGHT, 0.0, 1.0)
 	wanted.y = maxf(wanted.y, -STEEPEST_DIVE * room)
 	# Nor does it wander off the edge of the battle: nearing it, whatever the
 	# bot was after matters less and less than turning back.
@@ -544,7 +546,7 @@ func _fly_avoid(hazard: PlaneActor) -> void:
 	var offset: Vector3 = hazard.global_position - plane.global_position
 	var right: Vector3 = Vector3(cos(plane.yaw), 0.0, -sin(plane.yaw))
 	var turn: float = -1.0 if offset.dot(right) > 0.0 else 1.0
-	var rise: float = -0.6 if offset.y > 0.0 and plane.global_position.y > MIN_SAFE_ALTITUDE * 2.0 else 0.6
+	var rise: float = -0.6 if offset.y > 0.0 and plane.height_above_surface() > MIN_SAFE_ALTITUDE * 2.0 else 0.6
 	_head(plane.forward() * 0.4 + right * turn + Vector3.UP * rise, _fight_load + 1.0)
 
 
@@ -667,7 +669,7 @@ func _pull_trigger(looks_good: bool, delta: float) -> bool:
 func _fly_patrol() -> void:
 	# Lazy orbit around the arena centre at a personal height.
 	_patrol_phase += 0.0025
-	# Inside the ring of islands, and above the tallest of them.
+	# Well above the hills.
 	var radius: float = plane.arena_radius * 0.26
 	var point: Vector3 = plane.arena_center + Vector3(cos(_patrol_phase) * radius, 0.0, sin(_patrol_phase) * radius)
 	point.y = (PREFERRED_ALTITUDE_MIN + PREFERRED_ALTITUDE_MAX) * 0.5 + _lane.y * 180.0
@@ -695,12 +697,12 @@ func _separation() -> Vector3:
 ## so escapes use the whole height of the arena instead of always climbing.
 func _vertical_escape() -> float:
 	var middle: float = (PREFERRED_ALTITUDE_MIN + PREFERRED_ALTITUDE_MAX) * 0.5
-	return 0.3 if plane.global_position.y < middle else -0.3
+	return 0.3 if plane.height_above_surface() < middle else -0.3
 
 
 ## Gentle vertical nudge back toward the preferred height band.
 func _altitude_bias() -> float:
-	var height: float = plane.global_position.y
+	var height: float = plane.height_above_surface()
 	if height > PREFERRED_ALTITUDE_MAX:
 		return -clampf((height - PREFERRED_ALTITUDE_MAX) / 400.0, 0.0, 0.5)
 	if height < PREFERRED_ALTITUDE_MIN:
@@ -718,9 +720,12 @@ func _is_altitude_unsafe() -> bool:
 
 ## Low, or about to be: where the plane will be in a few seconds if it keeps
 ## coming down like this.
+## Measured from the ground, not the sea, and from the higher of the ground
+## here and the ground it is heading for: a hill coming, or a cliff.
 func _is_too_low() -> bool:
-	var sink_rate: float = -plane.velocity.y
-	return plane.global_position.y - sink_rate * TERRAIN_LOOKAHEAD < MIN_SAFE_ALTITUDE
+	var ahead: Vector3 = plane.global_position + plane.velocity * TERRAIN_LOOKAHEAD
+	var ground: float = maxf(plane.surface_height_at(plane.global_position), plane.surface_height_at(ahead))
+	return minf(ahead.y, plane.global_position.y) - ground < MIN_SAFE_ALTITUDE
 
 
 ## Looks ahead for something solid, both straight off the nose and round the
@@ -761,15 +766,17 @@ func _check_obstacle_ahead() -> bool:
 	return true
 
 
-## Something solid in the way that has to be flown round: an island, a hangar.
-## The sea does not count. Nobody flies round the sea; see _is_too_low().
+## Something solid in the way that has to be flown round: a cliff face, a
+## hangar. The sea and the lie of the land do not count. Nobody flies round
+## the ground; they pull up from it: see _is_too_low().
 func _ray_blocked(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> bool:
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, PlaneActor.COLLISION_LAYER_WORLD)
 	var hit: Dictionary = space.intersect_ray(query)
 	if hit.is_empty():
 		return false
 	var where: Vector3 = hit[&"position"]
-	return where.y > SEA_LEVEL_MARGIN
+	var facing: Vector3 = hit[&"normal"]
+	return where.y > SEA_LEVEL_MARGIN and facing.y < GROUND_LIKE
 
 
 # ---------------------------------------------------------------------------

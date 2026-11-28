@@ -1,29 +1,40 @@
 class_name Airfield
 extends Node3D
-## One team's home base: a low island with a hard runway, where that team's
-## planes start the battle, come back to after being shot down, and can land to
-## be repaired.
+## One team's home base: three hard runways laid out as a triangle on a level
+## stretch of the countryside, where that team's planes start the battle and
+## where they come back to, to be repaired and refuelled or to cash out.
 ##
-## The node sits at sea level in the middle of the island. Its local -Z is the
-## take-off direction, so ArenaBuilder only has to turn the node to point the
-## runway at the middle of the arena.
+## The ground, the runways and their paint are part of the terrain model
+## (tools/blender/coast_world.py makes them, to real scale: a wartime RAF
+## fighter station). This node is what the game knows about them. It sits at
+## the middle of the main runway, on its surface, and its local -Z is the
+## take-off direction; ArenaBuilder puts it on the marker the model carries.
+## The numbers below have to match the ones in that script.
 ##
-## The top of the island is flat, and planes do not find it through the
-## physics engine: PlaneActor asks contains() / surface_y() directly. That
-## keeps wheels-on-the-ground exact and the same on every peer. The island
-## still has a collider on the world layer for bullets, the camera and the
-## bots' look-ahead rays; planes are told to ignore it (see ground_body).
-## Hangars and the tower are ordinary obstacles.
+## Planes do not find the airfield through the physics engine: PlaneActor
+## asks contains() / surface_y() directly. That keeps wheels-on-the-ground
+## exact and the same on every peer. The level ground still has a collider
+## on the world layer for bullets, the camera and the bots' look-ahead rays;
+## planes are told to ignore it (see ground_body). Everywhere else the land
+## is an ordinary obstacle, and so are the hangars and the tower.
 
-const ISLAND_HALF_WIDTH: float = 230.0
-const ISLAND_HALF_LENGTH: float = 560.0
-## Height of the flat top above the sea.
-const SURFACE_HEIGHT: float = 14.0
-## Planes are on the island while inside this share of its outline; the rim
-## beyond it is the sloping edge.
-const USABLE_SHARE: float = 0.94
-const RUNWAY_LENGTH: float = 900.0
-const RUNWAY_WIDTH: float = 56.0
+const YARD: float = 0.9144
+## Main runway 1,600 yards, the two others 1,100, all 50 yards wide.
+const RUNWAY_LENGTH: float = 1600.0 * YARD
+const RUNWAY_WIDTH: float = 50.0 * YARD
+const SECONDARY_LENGTH: float = 1100.0 * YARD
+## The middle of each of the other two is this far to the left of the main
+## runway's centre line and this far up or down it from its middle, and they
+## cross it at this angle.
+const SECONDARY_SIDE: float = 260.0
+const SECONDARY_ALONG: float = 250.0
+const SECONDARY_ANGLE: float = PI / 3.0
+## The ground is dead level, and planes are "on the airfield", within this
+## many metres of any runway's centre line.
+const LEVEL_REACH: float = 130.0
+## The grass off each end of the main runway is airfield too, this far out:
+## for landing short, or running long.
+const OVERRUN: float = 400.0
 ## Where planes line up at the start end of the runway, one entry per seat:
 ## x = metres right of the centre line, y = metres from the start end. Seat 0
 ## (the player's) is alone on the centre line at the front. The last two are
@@ -33,78 +44,77 @@ const PARKING_SPOTS: Array[Vector2] = [
 	Vector2(-16.0, 20.0), Vector2(16.0, 20.0),
 ]
 
-const SAND_COLOR: Color = Color("f2dc9b")
-const CLIFF_COLOR: Color = Color("c9a878")
-const GRASS_COLOR: Color = Color("5fc24a")
-const GRASS_DARK_COLOR: Color = Color("4aa83f")
-const RUNWAY_COLOR: Color = Color("5b6470")
 const APRON_COLOR: Color = Color("6c7480")
-const MARKING_COLOR: Color = Color("f4f1e4")
 const STEEL_COLOR: Color = Color("8e9aa8")
-const OUTLINE_SIDES: int = 20
 
 var team: Teams.Id = Teams.Id.TEAM_BLUE
-## The island's collider. Planes add a collision exception for it.
+## The collider of the level ground. Planes add a collision exception for it.
 var ground_body: StaticBody3D
 
+## Each runway's centre line as [start, end] in this node's own x and z.
+var _runways: Array[PackedVector2Array] = []
+## The same, with the main runway's overruns: the lines the level ground is
+## measured from.
+var _ground_lines: Array[PackedVector2Array] = []
 var _box: BoxMesh = BoxMesh.new()
 
 
-## Builds the island. Call once, after the node has been placed and turned.
-func build(owner_team: Teams.Id) -> void:
+## Sets the airfield up. Call once, after the node has been placed and
+## turned. [param ground] is the collider of its level ground.
+func build(owner_team: Teams.Id, ground: StaticBody3D) -> void:
 	team = owner_team
+	ground_body = ground
 	add_to_group(&"airfields")
-	ground_body = StaticBody3D.new()
-	ground_body.name = "Ground"
-	ground_body.collision_layer = PlaneActor.COLLISION_LAYER_WORLD
-	ground_body.collision_mask = 0
-	add_child(ground_body)
-	_add_slab("Sand", SAND_COLOR, 1.12, 1.2, -1.0, 3.0)
-	_add_slab("Cliff", CLIFF_COLOR, 1.0, 1.06, 2.0, SURFACE_HEIGHT - 2.5)
-	_add_slab("Grass", GRASS_COLOR, 0.985, 1.0, SURFACE_HEIGHT - 2.5, SURFACE_HEIGHT)
-	var points: PackedVector3Array = PackedVector3Array()
-	for index: int in range(OUTLINE_SIDES):
-		var angle: float = TAU * float(index) / float(OUTLINE_SIDES)
-		var rim: Vector3 = Vector3(cos(angle) * ISLAND_HALF_WIDTH, 0.0, sin(angle) * ISLAND_HALF_LENGTH)
-		points.append(rim * 1.1 + Vector3(0.0, -3.0, 0.0))
-		points.append(rim + Vector3(0.0, SURFACE_HEIGHT - 0.4, 0.0))
-	var shape: ConvexPolygonShape3D = ConvexPolygonShape3D.new()
-	shape.points = points
-	var collider: CollisionShape3D = CollisionShape3D.new()
-	collider.name = "CollisionShape3D"
-	collider.shape = shape
-	ground_body.add_child(collider)
-	_build_runway()
+	var half: float = RUNWAY_LENGTH * 0.5
+	_runways = [PackedVector2Array([Vector2(0.0, half), Vector2(0.0, -half)])]
+	for side: float in [1.0, -1.0]:
+		var middle: Vector2 = Vector2(-SECONDARY_SIDE, -SECONDARY_ALONG * side)
+		var along: Vector2 = Vector2(sin(SECONDARY_ANGLE * side), -cos(SECONDARY_ANGLE * side)) * SECONDARY_LENGTH * 0.5
+		_runways.append(PackedVector2Array([middle - along, middle + along]))
+	_ground_lines = _runways.duplicate()
+	_ground_lines.append(PackedVector2Array([Vector2(0.0, half + OVERRUN), Vector2(0.0, -half - OVERRUN)]))
 	_build_buildings()
 
 
-## Height of the flat top in the world.
+## Height of the runways and the level ground round them, in the world.
 func surface_y() -> float:
-	return global_position.y + SURFACE_HEIGHT
+	return global_position.y
 
 
-## True when [param world_position] is above (or below) the flat top.
+## How far [param world_position] is, over the ground, from the nearest
+## runway's centre line.
+func distance_to_runways(world_position: Vector3) -> float:
+	return _distance_to(_runways, world_position)
+
+
+## True when [param world_position] is above (or below) the level ground:
+## round the runways, and off the ends of the main one.
 func contains(world_position: Vector3) -> bool:
-	var local: Vector3 = to_local(world_position)
-	var across: float = local.x / (ISLAND_HALF_WIDTH * USABLE_SHARE)
-	var along: float = local.z / (ISLAND_HALF_LENGTH * USABLE_SHARE)
-	return across * across + along * along <= 1.0
+	return _distance_to(_ground_lines, world_position) <= LEVEL_REACH
 
 
-## True on the hard runway; everywhere else on the island is rough grass.
+## True on a hard runway; everywhere else on the airfield is rough grass.
 func is_on_runway(world_position: Vector3) -> bool:
+	return distance_to_runways(world_position) <= RUNWAY_WIDTH * 0.5
+
+
+func _distance_to(lines: Array[PackedVector2Array], world_position: Vector3) -> float:
 	var local: Vector3 = to_local(world_position)
-	return absf(local.x) <= RUNWAY_WIDTH * 0.5 and absf(local.z) <= RUNWAY_LENGTH * 0.5
+	var place: Vector2 = Vector2(local.x, local.z)
+	var nearest: float = INF
+	for line: PackedVector2Array in lines:
+		nearest = minf(nearest, place.distance_to(Geometry2D.get_closest_point_to_segment(place, line[0], line[1])))
+	return nearest
 
 
-## Unit vector along the runway in the take-off direction.
+## Unit vector along the main runway in the take-off direction.
 func takeoff_direction() -> Vector3:
 	return -global_transform.basis.z.normalized()
 
 
-## Middle of the runway, on the surface.
+## Middle of the main runway, on the surface.
 func runway_center() -> Vector3:
-	return global_position + Vector3(0.0, SURFACE_HEIGHT, 0.0)
+	return global_position
 
 
 ## The end planes start their take-off run from.
@@ -117,8 +127,9 @@ func runway_end() -> Vector3:
 	return runway_center() + takeoff_direction() * RUNWAY_LENGTH * 0.5
 
 
-## How far along the runway [param world_position] is, in metres from the
-## start end, and how far to the right of the centre line (x = right, y = along).
+## How far along the main runway [param world_position] is, in metres from
+## the start end, and how far to the right of the centre line (x = right,
+## y = along).
 func runway_coordinates(world_position: Vector3) -> Vector2:
 	var local: Vector3 = to_local(world_position)
 	return Vector2(local.x, RUNWAY_LENGTH * 0.5 - local.z)
@@ -142,23 +153,6 @@ func parking_transform(spot: int) -> Transform3D:
 # Construction
 # ---------------------------------------------------------------------------
 
-## One elliptical layer of the island. Radii are shares of the island outline.
-func _add_slab(slab_name: String, color: Color, top_share: float, bottom_share: float, bottom_y: float, top_y: float) -> void:
-	var mesh: CylinderMesh = CylinderMesh.new()
-	mesh.top_radius = top_share
-	mesh.bottom_radius = bottom_share
-	mesh.height = 1.0
-	mesh.radial_segments = OUTLINE_SIDES
-	mesh.rings = 1
-	var instance: MeshInstance3D = MeshInstance3D.new()
-	instance.name = slab_name
-	instance.mesh = mesh
-	instance.material_override = ToonMaterials.toon(color, 0.0, 0.0, 0.0)
-	instance.scale = Vector3(ISLAND_HALF_WIDTH, top_y - bottom_y, ISLAND_HALF_LENGTH)
-	instance.position.y = (top_y + bottom_y) * 0.5
-	ground_body.add_child(instance)
-
-
 ## [param flat] is for paint and tarmac lying on the ground (no rim light).
 func _add_box(parent: Node3D, box_name: String, color: Color, size: Vector3, center: Vector3, flat: bool = true) -> void:
 	var instance: MeshInstance3D = MeshInstance3D.new()
@@ -170,35 +164,14 @@ func _add_box(parent: Node3D, box_name: String, color: Color, size: Vector3, cen
 	parent.add_child(instance)
 
 
-## Paint lies a few centimetres proud of the grass, each layer above the last,
-## so nothing flickers.
-func _build_runway() -> void:
-	var top: float = SURFACE_HEIGHT
-	_add_box(self, "Runway", RUNWAY_COLOR, Vector3(RUNWAY_WIDTH, 0.3, RUNWAY_LENGTH), Vector3(0.0, top - 0.1, 0.0))
-	var half: float = RUNWAY_LENGTH * 0.5
-	for side: float in [-1.0, 1.0]:
-		_add_box(self, "Edge", MARKING_COLOR, Vector3(1.0, 0.3, RUNWAY_LENGTH - 8.0), Vector3(side * (RUNWAY_WIDTH * 0.5 - 2.0), top - 0.04, 0.0))
-		# Threshold bars at both ends.
-		for bar: int in range(6):
-			var x: float = (float(bar) - 2.5) * 7.0
-			_add_box(self, "Threshold", MARKING_COLOR, Vector3(3.2, 0.3, 26.0), Vector3(x, top - 0.04, side * (half - 22.0)))
-	var dashes: int = 16
-	for dash: int in range(dashes):
-		var z: float = lerpf(-half + 70.0, half - 70.0, float(dash) / float(dashes - 1))
-		_add_box(self, "CentreLine", MARKING_COLOR, Vector3(1.4, 0.3, 24.0), Vector3(0.0, top - 0.04, z))
-	# Darker grass strips either side so the runway reads from the air.
-	for side: float in [-1.0, 1.0]:
-		_add_box(self, "Verge", GRASS_DARK_COLOR, Vector3(14.0, 0.3, RUNWAY_LENGTH + 30.0), Vector3(side * (RUNWAY_WIDTH * 0.5 + 7.0), top - 0.14, 0.0))
-
-
-## Hangars in the team colour and a control tower, well clear of the runway.
+## Hangars in the team colour and a control tower by the start end of the
+## main runway, well clear of it, with an apron in front of the hangars.
 func _build_buildings() -> void:
-	var top: float = SURFACE_HEIGHT
 	var start_z: float = RUNWAY_LENGTH * 0.5
-	_add_box(self, "Apron", APRON_COLOR, Vector3(70.0, 0.3, 150.0), Vector3(96.0, top - 0.12, start_z - 150.0))
+	_add_box(self, "Apron", APRON_COLOR, Vector3(70.0, 0.3, 150.0), Vector3(96.0, -0.1, start_z - 150.0))
 	for index: int in range(2):
-		_add_building("Hangar%d" % index, Teams.color_of(team), Vector3(34.0, 17.0, 44.0), Vector3(118.0, top, start_z - 110.0 - float(index) * 78.0))
-	_add_building("Tower", STEEL_COLOR, Vector3(13.0, 30.0, 13.0), Vector3(-104.0, top, start_z - 190.0))
+		_add_building("Hangar%d" % index, Teams.color_of(team), Vector3(34.0, 17.0, 44.0), Vector3(118.0, 0.0, start_z - 110.0 - float(index) * 78.0))
+	_add_building("Tower", STEEL_COLOR, Vector3(13.0, 30.0, 13.0), Vector3(-104.0, 0.0, start_z - 190.0))
 	var tower: Node3D = get_node("Tower") as Node3D
 	_add_box(tower, "Cab", Teams.color_of(team), Vector3(18.0, 7.0, 18.0), Vector3(0.0, 33.0, 0.0), false)
 
