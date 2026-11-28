@@ -114,10 +114,34 @@ const RUDDER_MAX: float = deg_to_rad(28.0)
 const FLAP_MAX: float = deg_to_rad(32.0)
 ## How quickly the surfaces follow the stick (1/s).
 const CONTROL_RESPONSE: float = 14.0
+## Bullet holes. Each piece of the model keeps this many; after that the
+## oldest is painted over by the newest.
+const HOLES_PER_PIECE: int = 18
+## A hole's width in metres: this, plus this much per point of the round's
+## damage (a rifle-calibre round about 20 cm of torn metal and soot, a cannon
+## shell 36). Where a round comes out it leaves a bigger one.
+const HOLE_SIZE: float = 0.1
+const HOLE_SIZE_PER_DAMAGE: float = 0.0005
+const EXIT_HOLE_SCALE: float = 1.35
+## How far a hole is held off the skin it lies on, metres.
+const HOLE_LIFT: float = 0.012
+## A bullet marks no more than this many of the pieces it passes through.
+const HOLED_PIECES_PER_BULLET: int = 3
+## Parts that are solid all the way through: hit, they are holed where the
+## bullet goes in but it does not come out the other side, and their damage
+## shows as burnt and chipped paint, never as holes torn right through.
+const SOLID_PARTS: Array[PlaneActor.Part] = [PlaneActor.Part.FUSELAGE, PlaneActor.Part.ENGINE]
+## Smoke from a damaged part: thin and grey at first, thick and black once it
+## is critical. [colour, size].
+const LIGHT_SMOKE: Color = Color(0.72, 0.72, 0.74, 0.5)
+const HEAVY_SMOKE: Color = Color(0.1, 0.1, 0.11, 0.85)
 
 static var _unit_sphere: SphereMesh
 static var _unit_cylinder: CylinderMesh
 static var _particle_mesh: SphereMesh
+static var _hole_mesh: QuadMesh
+## Every triangle of a mesh (three corners each), read once and kept.
+static var _triangles: Dictionary[Mesh, PackedVector3Array] = {}
 
 var _data: PlaneData
 var _team: Teams.Id = Teams.Id.TEAM_BLUE
@@ -152,6 +176,17 @@ var _gear_deploy: float = -1.0
 var _gear_broken: int = 0
 var _prop_broken: bool = false
 var _last_damage: PackedFloat32Array = PackedFloat32Array()
+## The damage each part is drawn with (negative: not drawn yet).
+var _shown_damage: PackedFloat32Array = PackedFloat32Array()
+## For each Part, the model pieces that are its skin (what a bullet can hole)
+## and every piece that wears its damage.
+var _part_skin: Array[Array] = []
+var _part_wearers: Array[Array] = []
+## The bullet holes on each piece, and how many it has had.
+var _holes: Dictionary[MeshInstance3D, MultiMesh] = {}
+var _hole_counts: Dictionary[MeshInstance3D, int] = {}
+## Makes this plane's damage patterns its own.
+var _damage_seed: float = 0.0
 
 
 func _process(delta: float) -> void:
@@ -184,6 +219,12 @@ func build(data: PlaneData, team: Teams.Id, fittings: Array[ComponentCard] = [])
 	_muzzle_timers.clear()
 	_gun_nodes.clear()
 	_part_smoke.clear()
+	_holes.clear()
+	_hole_counts.clear()
+	_shown_damage.clear()
+	_shown_damage.resize(PlaneActor.PART_COUNT)
+	_shown_damage.fill(-1.0)
+	_damage_seed = randf()
 	_any_detached = false
 	_control_shown = Vector3.ZERO
 	_rudder_shown = 0.0
@@ -202,6 +243,8 @@ func build(data: PlaneData, team: Teams.Id, fittings: Array[ComponentCard] = [])
 		var piece: Node3D = _model.find_child(node_name, true, false) as Node3D
 		_pieces.append(piece)
 		_rest_bases.append(piece.basis if piece != null else Basis.IDENTITY)
+
+	_sort_pieces_by_part()
 
 	for node_name: StringName in GEAR_NODES:
 		var leg: Node3D = _model.find_child(node_name, true, false) as Node3D
@@ -260,6 +303,9 @@ func model_scale() -> float:
 func restore() -> void:
 	if _any_detached and _data != null:
 		build(_data, _team, _fittings)
+	# A new aeroplane has no holes in it.
+	for part: int in range(_part_skin.size()):
+		_patch_holes(part)
 	stop_effects()
 
 
@@ -426,14 +472,245 @@ func set_part_damage(damage: PackedFloat32Array, plane_velocity: Vector3, burnin
 			continue
 		if damage[index] >= 1.0 and PlaneActor.PART_DETACHES[index]:
 			_detach(index, plane_velocity)
+	_show_damage(damage)
 	for part: PlaneActor.Part in SMOKING_PARTS:
 		var smoke: CPUParticles3D = _part_smoke[part]
 		if smoke != null:
-			smoke.emitting = damage[part] >= 0.4
+			smoke.emitting = damage[part] >= PlaneActor.PART_DAMAGED_AT
+			# Thin grey smoke from a damaged part, thick and black once it is critical.
+			var heavy: bool = damage[part] >= PlaneActor.PART_CRITICAL_AT
+			smoke.color = HEAVY_SMOKE if heavy else LIGHT_SMOKE
+			smoke.scale_amount_min = 0.9 if heavy else 0.5
+			smoke.scale_amount_max = 1.3 if heavy else 0.75
 	if _engine_fire != null:
 		_engine_fire.emitting = damage[PlaneActor.Part.ENGINE] >= 1.0
 	if _fuel_fire != null:
 		_fuel_fire.emitting = burning and damage[PlaneActor.Part.ENGINE] < 1.0
+
+
+## How badly [param part] is drawn damaged, 0..1 (what its pieces' paint is
+## being told), or -1 if it has not been drawn yet.
+func shown_damage(part: PlaneActor.Part) -> float:
+	return _shown_damage[part] if part < _shown_damage.size() else -1.0
+
+
+## How many bullet holes are showing on [param part].
+func bullet_hole_count(part: PlaneActor.Part) -> int:
+	var total: int = 0
+	if part >= _part_skin.size():
+		return 0
+	for piece: MeshInstance3D in _still_there(_part_skin[part]):
+		if _holes.has(piece):
+			total += _holes[piece].visible_instance_count
+	return total
+
+
+## Where the bullet holes on [param part] are, in this node's space.
+func bullet_hole_positions(part: PlaneActor.Part) -> Array[Vector3]:
+	var result: Array[Vector3] = []
+	if part >= _part_skin.size():
+		return result
+	for piece: MeshInstance3D in _still_there(_part_skin[part]):
+		if not _holes.has(piece):
+			continue
+		var to_self: Transform3D = _transform_to_self(piece)
+		var holes: MultiMesh = _holes[piece]
+		for index: int in range(holes.visible_instance_count):
+			result.append(to_self * holes.get_instance_transform(index).origin)
+	return result
+
+
+## Puts bullet holes where a bullet's path meets the skin of the pieces it
+## went through. [param origin] and [param direction] are the path in this
+## node's space; [param parts] the Parts it passed through, nearest first.
+## It goes in through the first skin it meets on each piece and, on thin
+## pieces, out through the last.
+func add_bullet_holes(origin: Vector3, direction: Vector3, parts: PackedInt32Array, damage: float) -> void:
+	if _model == null or _part_skin.is_empty() or direction.length_squared() < 0.0001:
+		return
+	var size: float = HOLE_SIZE + HOLE_SIZE_PER_DAMAGE * damage
+	var heading: Vector3 = direction.normalized()
+	var marked: int = 0
+	for index: int in range(parts.size()):
+		if marked >= HOLED_PIECES_PER_BULLET:
+			return
+		var part: int = parts[index]
+		if part < 0 or part >= _part_skin.size() or _pieces[part] == null:
+			continue
+		if _hole_part(part, origin, heading, size):
+			marked += 1
+		elif index == 0:
+			# It hit, but only in the margin round the piece: put the hole
+			# where it would have gone in had it been aimed at the middle.
+			var piece: MeshInstance3D = _pieces[part] as MeshInstance3D
+			if piece != null and piece.mesh != null:
+				var middle: Vector3 = _transform_to_self(piece) * piece.mesh.get_aabb().get_center()
+				if _hole_part(part, origin, (middle - origin).normalized(), size):
+					marked += 1
+
+
+## Holes one part along a path. False if the path misses its skin altogether.
+func _hole_part(part: int, origin: Vector3, heading: Vector3, size: float) -> bool:
+	var entry_piece: MeshInstance3D = null
+	var entry_distance: float = INF
+	var entry_point: Vector3 = Vector3.ZERO
+	var entry_normal: Vector3 = Vector3.ZERO
+	var exit_piece: MeshInstance3D = null
+	var exit_distance: float = -INF
+	var exit_point: Vector3 = Vector3.ZERO
+	var exit_normal: Vector3 = Vector3.ZERO
+	for piece: MeshInstance3D in _still_there(_part_skin[part]):
+		if piece.mesh == null:
+			continue
+		# The path in the piece's own space. The heading is left its full
+		# (scaled) length, so distances along it are still metres.
+		var to_piece: Transform3D = _transform_to_self(piece).affine_inverse()
+		var from: Vector3 = to_piece * origin
+		var along: Vector3 = to_piece.basis * heading
+		if piece.mesh.get_aabb().grow(0.01).intersects_ray(from, along) == null:
+			continue
+		var per_metre: float = along.length_squared()
+		var corners: PackedVector3Array = _triangles_of(piece.mesh)
+		for corner: int in range(0, corners.size(), 3):
+			var hit: Variant = Geometry3D.ray_intersects_triangle(from, along, corners[corner], corners[corner + 1], corners[corner + 2])
+			if hit == null:
+				continue
+			var point: Vector3 = hit
+			var distance: float = (point - from).dot(along) / per_metre
+			if distance < entry_distance or distance > exit_distance:
+				var normal: Vector3 = (corners[corner + 1] - corners[corner]).cross(corners[corner + 2] - corners[corner]).normalized()
+				if distance < entry_distance:
+					entry_distance = distance
+					entry_piece = piece
+					entry_point = point
+					# Facing back up the path, whichever way the triangle is wound.
+					entry_normal = -normal if normal.dot(along) > 0.0 else normal
+				if distance > exit_distance:
+					exit_distance = distance
+					exit_piece = piece
+					exit_point = point
+					exit_normal = normal if normal.dot(along) > 0.0 else -normal
+	if entry_piece == null:
+		return false
+	_put_hole(entry_piece, entry_point, entry_normal, size)
+	if not SOLID_PARTS.has(part as PlaneActor.Part) and exit_piece != null and exit_distance - entry_distance > 0.03:
+		_put_hole(exit_piece, exit_point, exit_normal, size * EXIT_HOLE_SCALE)
+	return true
+
+
+## Lays one hole on a piece, at [param point] facing [param normal], both in
+## the piece's own space.
+func _put_hole(piece: MeshInstance3D, point: Vector3, normal: Vector3, size: float) -> void:
+	var holes: MultiMesh = _holes.get(piece) as MultiMesh
+	if holes == null:
+		holes = MultiMesh.new()
+		holes.transform_format = MultiMesh.TRANSFORM_3D
+		holes.use_custom_data = true
+		holes.mesh = _hole_mesh
+		holes.instance_count = HOLES_PER_PIECE
+		holes.visible_instance_count = 0
+		var instance: MultiMeshInstance3D = MultiMeshInstance3D.new()
+		instance.name = "BulletHoles"
+		instance.multimesh = holes
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		piece.add_child(instance)
+		_holes[piece] = holes
+		_hole_counts[piece] = 0
+	# Sizes are in metres; the piece is in model units.
+	var unit: float = 1.0 / maxf(model_scale(), 0.001)
+	var across: Vector3 = normal.cross(Vector3.FORWARD if absf(normal.z) < 0.9 else Vector3.RIGHT).normalized()
+	across = across.rotated(normal, randf() * TAU)
+	var width: float = size * unit
+	var hole_basis: Basis = Basis(across * width, normal.cross(across) * width, normal)
+	var count: int = _hole_counts[piece]
+	var slot: int = count % HOLES_PER_PIECE
+	holes.set_instance_transform(slot, Transform3D(hole_basis, point + normal * HOLE_LIFT * unit))
+	holes.set_instance_custom_data(slot, Color(randf(), 1.0, 0.8, 0.0))
+	_hole_counts[piece] = count + 1
+	holes.visible_instance_count = mini(count + 1, HOLES_PER_PIECE)
+
+
+## Removes the bullet holes from a part's skin (it has been patched).
+func _patch_holes(part: int) -> void:
+	for piece: MeshInstance3D in _still_there(_part_skin[part]):
+		if _holes.has(piece):
+			_holes[piece].visible_instance_count = 0
+			_hole_counts[piece] = 0
+
+
+## Tells every piece of the model how hurt its part is, so that its paint
+## shows it (see shaders/toon_plane_damage.gdshader). A part that is better
+## than it was has been repaired: its bullet holes go too.
+func _show_damage(damage: PackedFloat32Array) -> void:
+	if _part_wearers.size() < PlaneActor.PART_COUNT:
+		return
+	for part: int in range(PlaneActor.PART_COUNT):
+		var level: float = clampf(damage[part], 0.0, 1.0)
+		if is_equal_approx(level, _shown_damage[part]):
+			continue
+		if level < _shown_damage[part] - 0.001:
+			_patch_holes(part)
+		_shown_damage[part] = level
+		for piece: MeshInstance3D in _still_there(_part_wearers[part]):
+			piece.set_instance_shader_parameter(&"damage", level)
+
+
+## Works out which pieces of the model belong to which Part: its skin (the
+## part's own piece and any others that are hit as part of it), and
+## everything bolted to it that should look as battered as it does (guns,
+## wheels, armour), which is every piece below it in the model down to the
+## next Part.
+func _sort_pieces_by_part() -> void:
+	_part_skin.clear()
+	_part_wearers.clear()
+	for part: int in range(PlaneActor.PART_COUNT):
+		var skin: Array[MeshInstance3D] = []
+		var wearers: Array[MeshInstance3D] = []
+		var piece: MeshInstance3D = _pieces[part] as MeshInstance3D
+		if piece != null:
+			skin.append(piece)
+			_collect_wearers(piece, wearers)
+		_part_skin.append(skin)
+		_part_wearers.append(wearers)
+	for node_name: StringName in EXTRA_HIT_NODES:
+		var extra: MeshInstance3D = _model.find_child(node_name, true, false) as MeshInstance3D
+		if extra != null:
+			_part_skin[EXTRA_HIT_NODES[node_name]].append(extra)
+	for part: int in range(PlaneActor.PART_COUNT):
+		var thin: float = 0.0 if SOLID_PARTS.has(part as PlaneActor.Part) else 1.0
+		for wearer: MeshInstance3D in _part_wearers[part]:
+			wearer.set_instance_shader_parameter(&"damage", 0.0)
+			wearer.set_instance_shader_parameter(&"damage_seed", _damage_seed + float(part) * 0.37)
+			# Only the skin itself tears open; what is bolted to it does not.
+			wearer.set_instance_shader_parameter(&"skin", thin if _part_skin[part].has(wearer) else 0.0)
+
+
+## The pieces in [param pieces] that are still on the model: a piece that has
+## been shot off, or taken off for what is fitted, is gone for good.
+func _still_there(pieces: Array) -> Array[MeshInstance3D]:
+	var result: Array[MeshInstance3D] = []
+	for entry: Variant in pieces:
+		if is_instance_valid(entry):
+			var piece: MeshInstance3D = entry as MeshInstance3D
+			if piece != null and not piece.is_queued_for_deletion():
+				result.append(piece)
+	return result
+
+
+func _collect_wearers(node: Node, out: Array[MeshInstance3D]) -> void:
+	var mesh_instance: MeshInstance3D = node as MeshInstance3D
+	if mesh_instance != null and mesh_instance.mesh != null and not PROPELLER_NODES.has(StringName(node.name)):
+		out.append(mesh_instance)
+	for child: Node in node.get_children():
+		# Another Part's piece, and everything under it, is that Part's business.
+		if not PART_NODES.has(StringName(child.name)):
+			_collect_wearers(child, out)
+
+
+static func _triangles_of(mesh: Mesh) -> PackedVector3Array:
+	if not _triangles.has(mesh):
+		_triangles[mesh] = mesh.get_faces()
+	return _triangles[mesh]
 
 
 ## Where the pilot has the controls: x = roll/yaw (-1 left .. +1 right),
@@ -631,9 +908,9 @@ func _paint(node: Node) -> void:
 func _material_for(material_name: String) -> Material:
 	match material_name:
 		"BodyPrimary":
-			return ToonMaterials.toon(_data.body_color)
+			return ToonMaterials.toon_damageable(_data.body_color)
 		"WingAccent_TeamColor":
-			return ToonMaterials.toon(Teams.color_of(_team))
+			return ToonMaterials.toon_damageable(Teams.color_of(_team))
 		"CanopyGlass":
 			return ToonMaterials.glass()
 		"PropellerWood":
@@ -643,7 +920,7 @@ func _material_for(material_name: String) -> Material:
 		"PilotLeather":
 			return ToonMaterials.toon(LEATHER_COLOR)
 	# MetalDark, and anything a future model adds without telling us.
-	return ToonMaterials.toon(GUNMETAL_COLOR, 0.0, 0.7)
+	return ToonMaterials.toon_damageable(GUNMETAL_COLOR, 0.7)
 
 
 ## A node's transform relative to this PlaneVisual, found by walking up the
@@ -819,6 +1096,8 @@ static func _ensure_shared_meshes() -> void:
 	_unit_cylinder.height = 1.0
 	_unit_cylinder.radial_segments = 24
 	_unit_cylinder.rings = 1
+	_hole_mesh = QuadMesh.new()
+	_hole_mesh.material = ToonMaterials.bullet_hole()
 	_particle_mesh = SphereMesh.new()
 	_particle_mesh.radius = 0.5
 	_particle_mesh.height = 1.0

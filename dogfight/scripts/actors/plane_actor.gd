@@ -784,6 +784,17 @@ func trace_parts(world_origin: Vector3, world_direction: Vector3, max_distance: 
 			max_distance, _gone_mask, out_parts, out_distances)
 
 
+## Shows where a bullet went in (cosmetic). The bullet came from
+## [param world_origin] along [param world_direction], as this plane saw it,
+## and passed through [param parts_in_path] in that order. [param damage] is
+## the round's, and sets how big a hole it makes.
+func show_bullet_strike(world_origin: Vector3, world_direction: Vector3, parts_in_path: PackedInt32Array, damage: float) -> void:
+	if visual == null:
+		return
+	var world_to_plane: Basis = hit_basis().transposed()
+	visual.add_bullet_holes(world_to_plane * (world_origin - global_position), world_to_plane * world_direction, parts_in_path, damage)
+
+
 ## Orientation of the hit boxes in the world: the body's basis (which has no
 ## scale).
 func hit_basis() -> Basis:

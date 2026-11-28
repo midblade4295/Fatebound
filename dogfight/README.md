@@ -113,7 +113,7 @@ dogfight/
 │  ├─ ui/        hud.gd, hud_world_overlay.gd, radar.gd, touch_flight_stick.gd,
 │  │             throttle_lever.gd, action_button.gd, ui_style.gd
 │  └─ menu/      main_menu.gd, card_view.gd, match_lobby.gd
-├─ shaders/      toon_plane.gdshader, ocean.gdshader, cloud.gdshader
+├─ shaders/      toon_plane.gdshader, toon_plane_damage.gdshader, bullet_trail.gdshader, bullet_hole.gdshader, ocean.gdshader, cloud.gdshader
 ├─ tests/        headless test scenes (see "Tests")
 └─ tools/        run_tests.sh, screenshot + model preview scenes, blender/
 ```
@@ -543,6 +543,56 @@ All tuning numbers (costs, XP, damage, turn rates) are first-pass values.
 - Islands, the airfields and clouds are primitive meshes built in code
   (`arena_builder.gd`, `airfield.gd`). Planes are the Blender model described below.
 
+### What bullets leave behind
+
+All of it is cosmetic and none of it uses a texture.
+
+- **Smoke trails.** Every bullet draws a ribbon of grey smoke out behind it,
+  from the muzzle to wherever it has got to. The ribbon stays where it is in
+  the air when the bullet has gone, spreading (from 0.2 m to a couple of
+  metres) and thinning for 1.6 s, the gun end first because it is the
+  oldest. One stretched instance per bullet in a second MultiMesh
+  (`BulletSystem._write_trails`, `shaders/bullet_trail.gdshader`); the
+  shader makes it uneven along its length and fades it out close to the
+  camera, so your own gun smoke streams past as haze rather than as bars
+  across the screen.
+- **Bullet holes.** A bullet that hits an aeroplane leaves a hole on the
+  piece it hit, at the spot it went in. `BulletSystem` already knows the
+  bullet's path as the plane saw it; `PlaneVisual.add_bullet_holes` follows
+  that path through the actual triangles of the piece's mesh (the hit boxes
+  are only boxes) and lays a small ragged-edged patch on the surface there:
+  black hole, a ring of bare metal, a smudge of soot
+  (`shaders/bullet_hole.gdshader`). Thin pieces (wings, tail, control
+  surfaces) also get a larger hole where it came out; the fuselage and
+  engine do not. A bullet that goes on through several pieces holes each.
+  Cannon shells make bigger holes than rifle-calibre rounds. The holes are
+  children of the piece, so they move with a control surface and leave with
+  a wing that is shot off. Each piece keeps its latest 18. A repair on the
+  airfield takes them away.
+- **Marks in the ground.** A bullet into an island or an airfield leaves a
+  scorched pock (the latest 160 are kept) and throws up dust; into the sea,
+  a splash; into an aeroplane, a puff of paint and smoke.
+
+### Damage you can see
+
+`PlaneVisual._show_damage` tells every piece of the model how hurt its part
+is, and the paint shows it (`shaders/toon_plane_damage.gdshader`, the toon
+shader with damage added; planes still share materials, the damage is a
+per-instance number):
+
+- as a part is damaged, streaks of soot and oil spread back along it, with
+  specks of bare metal where the paint has chipped off round them: a few
+  streaks at first, about half the piece by the time it is done for;
+- past about a third, thin skin starts to tear open in ragged holes you can
+  see through, to the dark inside of the far skin;
+- guns, wheels and armour bolted to a part get as dirty as it is;
+- a part that has broken off leaves an open, dark stub, and the piece that
+  falls away is as battered as it was;
+- a damaged part trails thin grey smoke; a critical one, thick black smoke;
+  a dead engine burns.
+
+A repair cleans all of it off.
+
 ## Sound
 
 - **Per-plane engines, per-gun guns.** Each `PlaneData` names its own engine
@@ -627,7 +677,7 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 | `TestHangar` | the hangar plane's propeller is stopped and stays stopped after a refit; touch gestures fed to the menu: one-finger drag orbits at the same distance and cannot go under the floor, spreading and pinching zoom between limits while the plane stays put on screen, two fingers slide it but not off the screen, a double tap resets; taking a gun off shows on the plane |
 | `TestProgression` | item tables (units, spares, Marks, costs), what each item does to the stats, weight and stalling speed, one gun fitted is one gun, mixed guns, locked mounts, the upgrade flow, loadout rules, **the model shows exactly what is fitted** (gun pieces counted, propeller, intake, armour, wingtips changing the hit boxes, bigger wheels), save/load including a save from before items were fittings, Commander Level thresholds, bullet drop and drag, less drag in thin air, lead solution checked against a simulated bullet at sea level and at 4,000 m |
 | `TestFlight` | ten Spitfires each flown through one situation by a scripted hand: top speed, stalling speed and climb come out as real figures; hands off, a trimmed plane holds height at 1 g; flat out it holds the top speed for its height, which is faster than at sea level while the airspeed indicator reads lower; the air's density and the speed of sound follow the standard atmosphere; the engine holds full power to its critical altitude and loses it above, so there is a fastest height; the stalling speed is the same indicated and faster true; stick back takes it right round a loop; stick over rolls it right round at a fighter's rate; with the throttle closed and the stick held right back the wing is taken to the buffet and held there without letting go, the plane runs out of speed and its nose comes down by itself, and power flies it away; stick back with full rudder held on stalls it and it spins, going round and coming down fast, and stick forward with opposite rudder stops it; slamming the throttle open at low speed rolls and swings it left until trimmed out; a 60-degree bank held level is 2 g and turns at g x tan(bank) / speed without skidding; engine stopped, it glides; pushed to zero g it falls at 9.8 m/s^2 |
-| `TestDamageModel` | every part has a hit box from the model; bullet paths through them; live bullets with drop, drag and pass-through; no health value exists; shot-off parts leave the model as debris and take their attachments; a lost wingtip rolls the plane toward it and can be held level with stick and rudder; a lost wing rolls it over and over whatever the pilot does; a lost tail leaves nothing holding the nose into the air; a plane flies and turns without its rudder; less wing pulls less g for the same speed and angle of attack; a damaged engine cannot hold top speed; with one flap gone, lowering the flaps rolls the plane; planes are only lost by hitting the surface, credited to whoever crippled them |
+| `TestDamageModel` | every part has a hit box from the model; bullet paths through them; live bullets with drop, drag and pass-through; **each hit leaves its hole on the piece it struck** (one in a solid engine, in and out of thin skin, one on every piece a bullet passes through, none from a miss), the part is drawn as damaged as it is and a repair removes holes and damage; a round into the runway leaves a mark and one into the sea does not; every bullet draws a smoke trail that outlasts it and then clears; no health value exists; shot-off parts leave the model as debris and take their attachments; a lost wingtip rolls the plane toward it and can be held level with stick and rudder; a lost wing rolls it over and over whatever the pilot does; a lost tail leaves nothing holding the nose into the air; a plane flies and turns without its rudder; less wing pulls less g for the same speed and angle of attack; a damaged engine cannot hold top speed; with one flap gone, lowering the flaps rolls the plane; planes are only lost by hitting the surface, credited to whoever crippled them |
 | `TestAudio` | every plane has its own engine loop and every kind of gun its own samples; the player's engine plays from the cockpit and the other nine in 3D; firing plays one of the fitted gun's samples; a bullet passing 6 m away is heard once and one 60 m away is not; the engine note rises in a dive; a dead engine falls silent and the fire is heard. It checks wiring, not how anything sounds |
 | `TestGroundOps` | everyone starts parked on their own runway, standing on three wheels at rest; the guns and an open throttle do nothing with the engine off; the ENGINE and throttle keys work; left to itself the plane swings left under power; steered, with the tail lifted and the stick eased back at flying speed, it flies off after a believable length of runway and not before flying speed; nothing jumps as the wheels leave (pitch, climb rate, acceleration and height are measured tick by tick); wheels-down drag; throttling back slows it; landings flown by a pilot who flares: gentle, firm, wheels-up, and what they break; fourteen arrivals dropped onto the runway at set sink rates, nose angles and banks, judged by what the contact did (nothing, strained wings, one leg, both legs, propeller, wingtip scraped or torn off, destroyed); braking to a stop; repairs at home including new parts, legs and propeller, a wreck jacked back onto its wheels; a plane stopped on the enemy's airfield or run off the island is lost; bots left alone take off undamaged and raise their wheels |
 | `TestCollisions` | box-overlap maths; a wingtip clip damages only the wingtips; a head-on destroys both; a pass three metres apart does nothing; team-mates can collide |

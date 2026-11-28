@@ -81,9 +81,27 @@ func _apply_demo_damage() -> void:
 	if manager == null or manager.local_slot() == null:
 		return
 	var plane: PlaneActor = manager.local_slot().plane
+	# A plane just put on the runway cannot be hurt yet; this one can.
+	plane._spawn_shield = 0.0
 	for part: PlaneActor.Part in [PlaneActor.Part.RIGHT_WINGTIP, PlaneActor.Part.RUDDER]:
 		plane.apply_damage(100000.0, null, part)
 	plane.apply_damage(plane.stats.max_hp * PlaneActor.PART_STRENGTH[PlaneActor.Part.ENGINE] * 0.5, null, PlaneActor.Part.ENGINE)
+	# A shot-up left wing, a badly hurt tail, and a burst of hits from above
+	# and behind, each one leaving its hole where it lands.
+	for hurt: Array in [[PlaneActor.Part.LEFT_WING, 0.55], [PlaneActor.Part.LEFT_WINGTIP, 0.8], [PlaneActor.Part.TAIL, 0.7], [PlaneActor.Part.FUSELAGE, 0.45]]:
+		var hurt_part: PlaneActor.Part = hurt[0]
+		var share: float = hurt[1]
+		plane.apply_damage(plane.stats.max_hp * PlaneActor.PART_STRENGTH[hurt_part] * share, null, hurt_part)
+	var parts: PackedInt32Array = PackedInt32Array()
+	var distances: PackedFloat32Array = PackedFloat32Array()
+	var across: Basis = plane.global_transform.basis
+	for shot: int in range(60):
+		var from: Vector3 = plane.global_position + across * Vector3(randf_range(-7.0, 7.0), 9.0, randf_range(2.0, 12.0))
+		var at: Vector3 = plane.global_position + across * Vector3(randf_range(-6.5, 6.5), 0.0, randf_range(-3.5, 5.0))
+		var heading: Vector3 = (at - from).normalized()
+		plane.trace_parts(from, heading, 40.0, parts, distances)
+		if not parts.is_empty():
+			plane.show_bullet_strike(from, heading, parts, [190.0, 300.0, 520.0][shot % 3])
 
 
 ## fit=<item id>+<item id>+... gives the player every item (at Commander

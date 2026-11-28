@@ -5,11 +5,15 @@ extends RefCounted
 ## handful of materials (fewer state changes, which matters on mobile).
 
 const TOON_SHADER: Shader = preload("res://shaders/toon_plane.gdshader")
+const DAMAGE_SHADER: Shader = preload("res://shaders/toon_plane_damage.gdshader")
+const TRAIL_SHADER: Shader = preload("res://shaders/bullet_trail.gdshader")
+const HOLE_SHADER: Shader = preload("res://shaders/bullet_hole.gdshader")
 const OCEAN_SHADER: Shader = preload("res://shaders/ocean.gdshader")
 const CLOUD_SHADER: Shader = preload("res://shaders/cloud.gdshader")
 
 static var _toon_cache: Dictionary[String, ShaderMaterial] = {}
 static var _unlit_cache: Dictionary[String, StandardMaterial3D] = {}
+static var _effect_cache: Dictionary[String, ShaderMaterial] = {}
 
 
 ## Cel-shaded material using shaders/toon_plane.gdshader. [param rim] scales
@@ -28,6 +32,42 @@ static func toon(color: Color, emission_strength: float = 0.0, spec_strength: fl
 		material.set_shader_parameter(&"rim_strength", 0.7 * rim)
 		material.set_shader_parameter(&"ambient_rim", 0.12 * rim)
 	_toon_cache[key] = material
+	return material
+
+
+## The same toon surface for the pieces of an aeroplane, which also shows how
+## badly each piece is damaged (shaders/toon_plane_damage.gdshader). The
+## damage is set per piece with set_instance_shader_parameter(), so planes
+## still share these materials.
+static func toon_damageable(color: Color, spec_strength: float = 0.45) -> ShaderMaterial:
+	var key: String = "damageable|%s|%.2f" % [color.to_html(), spec_strength]
+	if _toon_cache.has(key):
+		return _toon_cache[key]
+	var material: ShaderMaterial = ShaderMaterial.new()
+	material.shader = DAMAGE_SHADER
+	material.set_shader_parameter(&"albedo", color)
+	material.set_shader_parameter(&"spec_strength", spec_strength)
+	_toon_cache[key] = material
+	return material
+
+
+## Smoke ribbons behind bullets (shaders/bullet_trail.gdshader).
+static func bullet_trail() -> ShaderMaterial:
+	return _effect("trail", TRAIL_SHADER)
+
+
+## Bullet holes and strike marks (shaders/bullet_hole.gdshader). Drawn just
+## in front of the surface they lie on.
+static func bullet_hole() -> ShaderMaterial:
+	return _effect("hole", HOLE_SHADER)
+
+
+static func _effect(key: String, shader: Shader) -> ShaderMaterial:
+	if _effect_cache.has(key):
+		return _effect_cache[key]
+	var material: ShaderMaterial = ShaderMaterial.new()
+	material.shader = shader
+	_effect_cache[key] = material
 	return material
 
 

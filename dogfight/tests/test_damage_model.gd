@@ -53,6 +53,11 @@ var _gentle: PlaneActor
 ## Planes that touched another aircraft at any point (none should).
 var _collided: Array[PlaneActor] = []
 var _live_stage: int = 0
+## The most smoke trails seen at once, and whether any outlived its bullet.
+var _most_trails: int = 0
+var _smoke_outlasted: bool = false
+var _holes_before_miss: int = 0
+var _marks_before: int = 0
 var _live_before: PackedFloat32Array = PackedFloat32Array()
 
 
@@ -272,6 +277,17 @@ func _run_live_fire() -> void:
 		1:
 			if _clock >= 1.0:
 				_check(_gain(victim, P.FIN) > 0.0, "a bullet from the front, over the nose, damages the fin")
+				# Where it went in, there is a hole: on that piece, at that spot.
+				var fin_holes: Array[Vector3] = victim.visual.bullet_hole_positions(P.FIN)
+				_check(fin_holes.size() >= 1 and fin_holes.size() <= 2, "and leaves its hole in the fin (%d: in, and out the far side of thin skin)" % fin_holes.size())
+				var fin_box: AABB = _box(victim.hitboxes, P.FIN).grow(0.05)
+				_check(not fin_holes.is_empty() and fin_box.has_point(fin_holes[0]), "which is on the fin itself (%s)" % str(fin_holes))
+				_check(victim.visual.bullet_hole_count(P.ENGINE) + victim.visual.bullet_hole_count(P.FUSELAGE) == 0, "and nowhere else")
+				_near(victim.visual.shown_damage(P.FIN), victim.part_damage[P.FIN], "the fin is drawn as damaged as it is")
+				var fin_piece: MeshInstance3D = victim.visual.find_child("Fin", true, false) as MeshInstance3D
+				var painted: float = fin_piece.get_instance_shader_parameter(&"damage")
+				_near(painted, victim.part_damage[P.FIN], "its paint has been told so")
+				_check(victim.visual.shown_damage(P.ENGINE) <= 0.0, "and the untouched engine is drawn untouched")
 				_check(is_zero_approx(_gain(victim, P.ENGINE)) and is_zero_approx(_gain(victim, P.FUSELAGE)), "and does not touch the engine or fuselage it flew over")
 				_live_before = victim.part_damage.duplicate()
 				_fire_at(victim, victim.global_position + ahead * 150.0, Vector3.ZERO)  # Level, from dead ahead.
@@ -279,6 +295,7 @@ func _run_live_fire() -> void:
 		2:
 			if _clock >= 1.8:
 				_check(_gain(victim, P.ENGINE) > 0.0, "a head-on bullet hits the engine")
+				_check(victim.visual.bullet_hole_count(P.ENGINE) == 1, "and makes one hole in it: going in, not coming out of something solid (%d)" % victim.visual.bullet_hole_count(P.ENGINE))
 				_check(is_zero_approx(_gain(victim, P.TAIL)) and is_zero_approx(_gain(victim, P.FUSELAGE)), "and stops there: nothing behind it is touched")
 				var head_on_engine: float = _gain(victim, P.ENGINE)
 				_live_before = victim.part_damage.duplicate()
@@ -291,12 +308,15 @@ func _run_live_fire() -> void:
 				var engine_gain: float = _gain(victim, P.ENGINE)
 				_check(tail_gain > 0.0, "a bullet from astern hits the tail first")
 				_check(_gain(victim, P.FUSELAGE) > 0.0, "carries on through the fuselage")
+				_check(victim.visual.bullet_hole_count(P.TAIL) >= 1 and victim.visual.bullet_hole_count(P.FUSELAGE) >= 1,
+						"holing each as it goes (tail %d, fuselage %d)" % [victim.visual.bullet_hole_count(P.TAIL), victim.visual.bullet_hole_count(P.FUSELAGE)])
 				_check(engine_gain > 0.0 and engine_gain < tail_gain * 0.4, "and reaches the engine with much less energy (tail +%.3f, engine +%.3f)" % [tail_gain, engine_gain])
 				# Same bullet, same engine: the tail-chase one arrived after two
 				# other parts and at a lower closing speed.
 				var head_on_engine: float = get_meta(&"head_on_engine")
 				_check(engine_gain < head_on_engine * 0.3, "a head-on hit lands far harder than one that came the long way round")
 				_live_before = victim.part_damage.duplicate()
+				_holes_before_miss = _holes_on(victim)
 				var over: float = _box(victim.hitboxes, P.FIN).end.y + 1.5
 				_fire_at(victim, victim.global_position - ahead * 150.0, Vector3.UP * over)
 				_live_stage = 4
@@ -306,7 +326,44 @@ func _run_live_fire() -> void:
 				for index: int in range(PlaneActor.PART_COUNT):
 					touched += victim.part_damage[index] - _live_before[index]
 				_check(is_zero_approx(touched), "a bullet that passes over the plane does no damage")
+				_check(_holes_on(victim) == _holes_before_miss, "and leaves no mark on it")
+				# The ground crew patch it up: the holes go and the paint is made good.
+				victim.repair_parts(1.0)
+				# Meanwhile, one round into the sea and one into the runway.
+				var bullets: BulletSystem = _manager.bullet_system
+				_marks_before = bullets.mark_count()
+				var field: Airfield = _reference.home_airfield()
+				var runway: Vector3 = field.runway_start() + field.takeoff_direction() * 200.0
+				bullets.spawn(runway + Vector3.UP * 60.0, Vector3.DOWN * 420.0, _reference, 2.0, 60.0, 420.0)
+				bullets.spawn(Vector3(600.0, 60.0, 0.0), Vector3.DOWN * 420.0, _reference, 2.0, 60.0, 420.0)
 				_live_stage = 5
+		5:
+			if _clock >= 4.6:
+				_check(_holes_on(victim) == 0, "repaired, the plane has no holes in it")
+				_check(is_zero_approx(victim.visual.shown_damage(P.FIN)) and is_zero_approx(victim.visual.shown_damage(P.ENGINE)), "and is drawn as good as new")
+				var marks: int = _manager.bullet_system.mark_count() - _marks_before
+				_check(marks == 1, "a round into the runway leaves a mark in it; one into the sea leaves only a splash (%d marks)" % marks)
+				_live_stage = 6
+		6:
+			# Long after the last bullet has gone, so has its smoke.
+			if _clock >= 8.0:
+				var bullets: BulletSystem = _manager.bullet_system
+				_check(_most_trails >= 1, "every bullet draws a trail of smoke out behind it (%d seen at once)" % _most_trails)
+				_check(_smoke_outlasted, "which hangs in the air after the bullet has gone")
+				_check(bullets.trail_count() == 0 or bullets.active_bullet_count() > 0, "and then clears (%d left)" % bullets.trail_count())
+				_live_stage = 7
+	var system: BulletSystem = _manager.bullet_system
+	_most_trails = maxi(_most_trails, system.trail_count())
+	if system.active_bullet_count() == 0 and system.trail_count() > 0:
+		_smoke_outlasted = true
+
+
+## Every bullet hole showing on a plane.
+func _holes_on(plane: PlaneActor) -> int:
+	var total: int = 0
+	for part: int in range(PlaneActor.PART_COUNT):
+		total += plane.visual.bullet_hole_count(part as PlaneActor.Part)
+	return total
 
 
 func _gain(plane: PlaneActor, part: PlaneActor.Part) -> float:
@@ -496,7 +553,7 @@ func _check_flaps() -> void:
 
 
 func _final_checks() -> void:
-	_check(_live_stage == 5, "the live-fire sequence ran to the end (stage %d)" % _live_stage)
+	_check(_live_stage == 7, "the live-fire sequence ran to the end (stage %d)" % _live_stage)
 	# Every plane that was lost was lost by hitting the sea.
 	for plane: PlaneActor in [_wing_lost, _tail_lost, _engine_lost, _fuel_hit]:
 		var key: int = plane.get_instance_id()
