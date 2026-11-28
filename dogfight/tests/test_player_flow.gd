@@ -181,27 +181,19 @@ func _physics_process(delta: float) -> void:
 				Input.action_release(GameSession.ACTION_PITCH_DOWN)
 			if not _player.alive:
 				Input.action_release(GameSession.ACTION_PITCH_DOWN)
-				_check(_manager.team_score(Teams.Id.TEAM_RED) >= _red_before_crash + 1, "crashing gives RED a ticket")
-				_check(_manager.local_slot().deaths == 1, "the crash counts as a loss for the player")
 				_check(_max_fov > _camera.base_fov + 6.0, "camera FOV widened in the dive (max %.1f)" % _max_fov)
 				_next(Step.WAIT_RESPAWN)
 			elif _step_time > 30.0:
 				_check(false, "plane never hit the sea")
 				_finish()
 		Step.WAIT_RESPAWN:
-			if _player.alive:
-				var waited: float = _clock - _death_time
-				_check(absf(waited - GameSession.respawn_delay) < 0.1, "respawned after %.2fs (expected %.1f)" % [waited, GameSession.respawn_delay])
-				var worst: float = 0.0
-				for part_index: int in range(PlaneActor.PART_COUNT):
-					worst = maxf(worst, _player.part_damage_of(part_index as PlaneActor.Part))
-				_check(is_zero_approx(worst) and is_equal_approx(_player.fuel, 1.0), "respawned with every part intact and a full tank")
-				_check(_player.visual.has_piece(PlaneActor.Part.LEFT_WING) and _player.visual.has_piece(PlaneActor.Part.RUDDER), "the model is whole again")
-				_check(_player.global_position.z > 1000.0, "respawned over the BLUE base")
-				_check(_player.has_flag(PlaneActor.FLAG_SHIELDED), "spawn protection is active")
-				_finish()
-			elif _step_time > 8.0:
-				_check(false, "player never respawned")
+			# One life: there is no other plane, and the sortie is over.
+			if _step_time >= 6.0:
+				_check(_death_time > 0.0 and not _player.alive, "killed, the player stays killed: no new plane is wheeled out")
+				_check(_manager.local_slot().out and _manager.pilots_left(Teams.Id.TEAM_BLUE) == 4, "BLUE is a pilot short (%d left)" % _manager.pilots_left(Teams.Id.TEAM_BLUE))
+				_check(_manager.team_score(Teams.Id.TEAM_RED) >= _red_before_crash + 1, "and the loss is RED's gain")
+				_check(_manager.outcome == MatchManager5v5.Outcome.LOST and _manager.phase == MatchManager5v5.Phase.FINISHED, "the sortie has ended, lost")
+				_check((_hud.get_node("%Results") as Control).visible and (_hud.get_node("%ResultTitle") as Label).text == "KILLED", "and the screen says so")
 				_finish()
 
 

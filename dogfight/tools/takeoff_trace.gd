@@ -55,7 +55,7 @@ func _ready() -> void:
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("plane="):
 			var data: PlaneData = GameCatalog.find_plane(StringName(argument.trim_prefix("plane=")))
-			_player.stats = data.build_stock_stats(1)
+			_player.stats = data.build_stock_stats()
 	for argument: String in OS.get_cmdline_user_args():
 		if argument.begins_with("land="):
 			_landing = true

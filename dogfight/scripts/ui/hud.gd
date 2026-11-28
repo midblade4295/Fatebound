@@ -54,13 +54,19 @@ var _alert_text: String = ""
 var _alert_time: float = 0.0
 var _repair_hint_time: float = 0.0
 var _home: Airfield
+## The landing menu: repair, refuel, both, or cash out. Built in code.
+var _service_panel: PanelContainer
+var _service_title: Label
+var _repair_button: Button
+var _refuel_button: Button
+var _both_button: Button
+var _cash_button: Button
+var _sky_clear: bool = false
 
 @onready var _overlay: HudWorldOverlay = %WorldOverlay
 @onready var _radar: Radar = %Radar
 @onready var _damage_diagram: DamageDiagram = %DamageDiagram
-@onready var _level_label: Label = %LevelLabel
 @onready var _title_label: Label = %TitleLabel
-@onready var _xp_bar: ProgressBar = %XpBar
 @onready var _flight_label: Label = %FlightLabel
 @onready var _blue_score: Label = %BlueScore
 @onready var _red_score: Label = %RedScore
@@ -89,6 +95,7 @@ func _ready() -> void:
 	_center_message.text = ""
 	_sub_message.text = ""
 	_hangar_button.pressed.connect(_on_hangar_pressed)
+	_build_service_panel()
 
 
 ## Connects the HUD to a running match. [param local_plane] may be null when
@@ -110,8 +117,9 @@ func bind(manager: MatchManager5v5, chase_camera: ChaseCamera, local_plane: Plan
 	manager.score_changed.connect(_on_score_changed)
 	manager.takedown.connect(_on_takedown)
 	manager.match_ended.connect(_on_match_ended)
+	manager.sky_cleared.connect(_on_sky_cleared)
 	manager.bullet_system.bullet_hit.connect(_on_bullet_hit)
-	_on_score_changed(manager.team_score(Teams.Id.TEAM_BLUE), manager.team_score(Teams.Id.TEAM_RED))
+	_on_score_changed(manager.pilots_left(Teams.Id.TEAM_BLUE), manager.pilots_left(Teams.Id.TEAM_RED))
 	_mode_label.text = "%dv%d" % [manager.team_size(), manager.team_size()]
 
 	var has_player: bool = player != null
@@ -134,10 +142,8 @@ func bind(manager: MatchManager5v5, chase_camera: ChaseCamera, local_plane: Plan
 		player.damaged.connect(_on_player_damaged)
 		player.touched_down.connect(_on_player_touched_down)
 		player.serviced.connect(_on_player_serviced)
-	var level: int = Profile.commander_level()
-	_level_label.text = str(level)
-	_title_label.text = "COMMANDER LEVEL"
-	_xp_bar.value = CommanderProgression.level_progress(Profile.commander_xp) * 100.0
+	# The corner panel shows what the sortie is worth so far.
+	_title_label.visible = has_player
 
 
 func _process(delta: float) -> void:
@@ -146,6 +152,7 @@ func _process(delta: float) -> void:
 	_update_clock()
 	_update_flight_panel()
 	_update_buttons()
+	_update_sortie()
 	_alert_time = maxf(_alert_time - delta, 0.0)
 	_repair_hint_time = maxf(_repair_hint_time - delta, 0.0)
 	_update_messages()
@@ -157,12 +164,43 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------------------
 
 func _update_clock() -> void:
-	var seconds: int = ceili(match_manager.time_left)
-	var minutes: int = floori(float(seconds) / 60.0)
-	_timer_label.text = "%02d:%02d" % [minutes, seconds % 60]
-	# Last 30 seconds: the clock turns red.
-	var urgent: bool = seconds <= 30 and match_manager.phase == MatchManager5v5.Phase.ACTIVE
-	_timer_label.add_theme_color_override(&"font_color", Color(1.0, 0.45, 0.4) if urgent else UiStyle.WHITE)
+	# A sortie has no clock to beat: this is how long it has been going.
+	var seconds: int = floori(match_manager.elapsed)
+	_timer_label.text = "%02d:%02d" % [floori(float(seconds) / 60.0), seconds % 60]
+
+
+## The bounty read-out and the landing menu.
+func _update_sortie() -> void:
+	if player == null:
+		_service_panel.visible = false
+		return
+	var manager: MatchManager5v5 = match_manager
+	_title_label.text = "BOUNTY %d    next kill +%d" % [manager.bounty, manager.next_kill_value()]
+	_title_label.add_theme_color_override(&"font_color", UiStyle.GOLD if manager.bounty > 0 else UiStyle.WHITE)
+	var open: bool = manager.can_service()
+	_service_panel.visible = open
+	if not open:
+		return
+	var ordered: int = player.service_orders
+	var repair: int = manager.service_cost(true, false) if ordered & PlaneActor.SERVICE_REPAIR == 0 else 0
+	var refuel: int = manager.service_cost(false, true) if ordered & PlaneActor.SERVICE_REFUEL == 0 else 0
+	var funds: int = manager.funds()
+	_service_title.text = "HOME    carrying %d gold    you have %d" % [manager.bounty, Profile.gold]
+	_repair_button.text = _service_caption("REPAIR", repair, player.needs_repair(), ordered & PlaneActor.SERVICE_REPAIR != 0)
+	_repair_button.disabled = repair <= 0 or repair > funds
+	_refuel_button.text = _service_caption("REFUEL", refuel, player.needs_fuel(), ordered & PlaneActor.SERVICE_REFUEL != 0)
+	_refuel_button.disabled = refuel <= 0 or refuel > funds
+	_both_button.text = "BOTH\n%d gold" % (repair + refuel) if repair > 0 and refuel > 0 else "BOTH\n-"
+	_both_button.disabled = repair <= 0 or refuel <= 0 or repair + refuel > funds
+	_cash_button.text = "CASH OUT\nbank %d gold" % manager.bounty
+
+
+func _service_caption(job: String, cost: int, needed: bool, ordered: bool) -> String:
+	if ordered:
+		return "%s\nin hand" % job
+	if not needed:
+		return "%s\nnot needed" % job
+	return "%s\n%d gold" % [job, cost]
 
 
 func _update_flight_panel() -> void:
@@ -194,8 +232,8 @@ func _update_flight_panel() -> void:
 		readout += "   GEAR %s" % ("DOWN" if shown.gear_deploy >= 0.98 else "...")
 	if shown.is_propeller_broken():
 		readout += "   NO PROP"
-	# Fuel only matters once the tank is holed, so it only shows then.
-	if shown.fuel < 0.995:
+	# The player's engine burns fuel; anyone's leaks once the tank is holed.
+	if shown.burns_fuel or shown.fuel < 0.995:
 		readout += "   FUEL %d%%" % roundi(shown.fuel * 100.0)
 	_flight_label.text = readout
 
@@ -227,15 +265,11 @@ func _update_messages() -> void:
 	match match_manager.phase:
 		MatchManager5v5.Phase.COUNTDOWN:
 			headline = str(ceili(match_manager.countdown_left))
-			detail = "First to %d takedowns" % match_manager.score_limit()
+			detail = "One life. Land to keep what you earn."
 			if player != null and player.alive and player.is_on_ground():
 				detail = "Start your engine and take off"
 		MatchManager5v5.Phase.ACTIVE:
-			var slot: PilotSlot = match_manager.local_slot()
-			if slot != null and slot.respawn_timer > 0.0:
-				headline = "SHOT DOWN"
-				detail = "A new plane is being wheeled out: %d" % ceili(slot.respawn_timer)
-			elif player != null and player.alive and player.is_out_of_bounds():
+			if player != null and player.alive and player.is_out_of_bounds():
 				headline = "RETURN TO BATTLE"
 				detail = "Autopilot is turning you around"
 			elif _alert_time > 0.0:
@@ -255,13 +289,15 @@ func _flight_guidance() -> String:
 	var takeoff_mph: int = roundi(player.takeoff_speed() * PlaneActor.MPH)
 	if player.is_on_ground():
 		if player.is_servicing():
-			return "Repairing and refuelling... %d%%" % roundi(player.service_progress() * 100.0)
+			return "Ground crew at work... %d%%" % roundi(player.service_progress() * 100.0)
 		var at_home: bool = _home != null and _home.contains(player.global_position)
 		var wants_repair: bool = at_home and player.needs_service()
-		if wants_repair and player.speed < PlaneActor.SERVICE_MAX_SPEED:
-			return "Hold still - ground crew are on their way"
+		if match_manager.can_service():
+			if player.service_orders != 0:
+				return "Hold still - ground crew are on their way"
+			return "Repair, refuel, or cash out and keep the bounty"
 		if wants_repair and player.input.throttle <= PlaneActor.BRAKE_THROTTLE:
-			return "Braking - stop to be repaired"
+			return "Braking - stop to repair, refuel or cash out"
 		if player.broken_gear_mask() != 0 or player.is_propeller_broken():
 			return "Wrecked away from home - this one is not flying again" if not at_home else "Sliding to a stop..."
 		if not player.is_engine_running():
@@ -307,8 +343,12 @@ func _flight_guidance() -> String:
 			return "Approach: %d mph (stalls at %d)   descent %.0f m/s - %s" % [roundi(player.speed_mph()), roundi(player.stats.landing_stall_speed * PlaneActor.MPH), sink, verdict]
 		if player.indicated_speed() > player.stats.top_speed * 0.6:
 			return "Wheels are down - press GEAR to raise them"
-	if _repair_hint_time > 0.0 and player.needs_service():
-		return "Damaged - land at your airfield and stop to be repaired"
+	if _repair_hint_time > 0.0 and player.needs_repair():
+		return "Damaged - land at your airfield and stop: repairs cost gold"
+	if _sky_clear and match_manager.bounty > 0:
+		return "The sky is clear - land at your airfield to claim %d gold" % match_manager.bounty
+	if player.fuel < 0.25 and player.fuel > 0.0:
+		return "Fuel is low - get home while the engine still runs"
 	if not player.is_engine_running() and player.engine_power() > 0.0:
 		return "Engine off - press ENGINE to restart"
 	return ""
@@ -413,26 +453,37 @@ func _on_player_touched_down(_plane: PlaneActor, sink_speed: float, on_wheels: b
 
 
 func _on_player_serviced(_plane: PlaneActor) -> void:
-	_alert_text = "Repaired and refuelled - cleared for take-off"
+	_alert_text = "Ground crew are done - cleared for take-off"
 	_alert_time = ALERT_TIME
 	_repair_hint_time = 0.0
 
 
+func _on_sky_cleared(winning_team: int) -> void:
+	if player == null or winning_team != int(player.team):
+		return
+	_sky_clear = true
+	_alert_text = "The sky is clear - now get it home to claim the bounty"
+	_alert_time = ALERT_TIME * 2.0
+
+
 func _on_match_ended(winning_team: int) -> void:
-	var view_team: Teams.Id = player.team if player != null else Teams.Id.TEAM_BLUE
-	if winning_team == MatchManager5v5.DRAW:
-		_result_title.text = "DRAW"
-		_result_title.add_theme_color_override(&"font_color", UiStyle.WHITE)
-	elif winning_team == int(view_team):
-		_result_title.text = "VICTORY"
-		_result_title.add_theme_color_override(&"font_color", UiStyle.GOLD)
-	else:
-		_result_title.text = "DEFEAT"
-		_result_title.add_theme_color_override(&"font_color", Color(1.0, 0.5, 0.45))
-	_result_score.text = "BLUE %d  -  %d RED" % [
-			match_manager.team_score(Teams.Id.TEAM_BLUE), match_manager.team_score(Teams.Id.TEAM_RED)]
+	var manager: MatchManager5v5 = match_manager
+	match manager.outcome:
+		MatchManager5v5.Outcome.HOME:
+			_result_title.text = "HOME SAFE"
+			_result_title.add_theme_color_override(&"font_color", UiStyle.GOLD)
+		MatchManager5v5.Outcome.LOST:
+			_result_title.text = "KILLED"
+			_result_title.add_theme_color_override(&"font_color", Color(1.0, 0.5, 0.45))
+		_:
+			# Nobody was flying: a battle between bots.
+			_result_title.text = "DRAW" if winning_team == MatchManager5v5.DRAW else "%s WINS" % Teams.name_of(winning_team as Teams.Id).to_upper()
+			_result_title.add_theme_color_override(&"font_color", UiStyle.WHITE)
+	_result_score.text = "Pilots left:  BLUE %d  -  %d RED" % [
+			manager.pilots_left(Teams.Id.TEAM_BLUE), manager.pilots_left(Teams.Id.TEAM_RED)]
 	_reward_label.text = _describe_rewards()
 	_results.visible = true
+	_service_panel.visible = false
 	_joystick.visible = false
 	_fire_button.visible = false
 	_rudder_left.visible = false
@@ -443,18 +494,87 @@ func _on_match_ended(winning_team: int) -> void:
 
 
 func _describe_rewards() -> String:
-	var rewards: MatchRewards = match_manager.last_rewards
-	var slot: PilotSlot = match_manager.local_slot()
-	if rewards == null or slot == null:
+	var manager: MatchManager5v5 = match_manager
+	var slot: PilotSlot = manager.local_slot()
+	if slot == null:
 		return ""
 	var lines: PackedStringArray = PackedStringArray()
-	lines.append("Takedowns %d    Losses %d" % [slot.kills, slot.deaths])
-	lines.append("+%d coins" % rewards.coins)
-	for index: int in range(rewards.card_ids.size()):
-		var card: ComponentCard = GameCatalog.find_card(rewards.card_ids[index])
-		if card != null:
-			lines.append("%s x%d  (%s)" % [card.display_name, rewards.card_counts[index], card.rarity_name()])
+	lines.append("Kills %d" % slot.kills)
+	if manager.service_spent > 0:
+		lines.append("Repairs and fuel: %d gold" % manager.service_spent)
+	if manager.outcome == MatchManager5v5.Outcome.HOME:
+		lines.append("Bounty banked: +%d gold" % manager.final_bounty)
+	else:
+		lines.append("Bounty lost: %d gold" % manager.final_bounty)
+		var plane: PlaneData = slot.plane_data
+		if manager.plane_lost:
+			lines.append("%s lost - a new one is %d gold" % [plane.display_name, plane.price])
+		elif manager.insured:
+			lines.append("%s lost - the insurance has replaced it" % plane.display_name)
+		else:
+			lines.append("%s lost - another has been issued to you" % plane.display_name)
+		lines.append("Everything fitted to it is still yours")
+	lines.append("You have %d gold" % Profile.gold)
 	return "\n".join(lines)
+
+
+func _on_repair_pressed() -> void:
+	match_manager.buy_service(true, false)
+
+
+func _on_refuel_pressed() -> void:
+	match_manager.buy_service(false, true)
+
+
+func _on_both_pressed() -> void:
+	match_manager.buy_service(true, true)
+
+
+func _on_cash_out_pressed() -> void:
+	match_manager.cash_out()
+
+
+## The menu a pilot gets when they have stopped on their own airfield: four
+## big buttons along the bottom of the screen, between the stick and the
+## flight controls.
+func _build_service_panel() -> void:
+	_service_panel = PanelContainer.new()
+	_service_panel.name = "ServicePanel"
+	_service_panel.add_theme_stylebox_override(&"panel", UiStyle.panel(Color(UiStyle.NAVY, 0.94), 26, UiStyle.OUTLINE, 5, 18))
+	_service_panel.anchor_left = 0.5
+	_service_panel.anchor_right = 0.5
+	_service_panel.anchor_top = 0.5
+	_service_panel.anchor_bottom = 0.5
+	_service_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_service_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_service_panel.offset_top = 40.0
+	_service_panel.offset_bottom = 40.0
+	_service_panel.visible = false
+	var column: VBoxContainer = VBoxContainer.new()
+	column.add_theme_constant_override(&"separation", 14)
+	_service_panel.add_child(column)
+	_service_title = Label.new()
+	_service_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UiStyle.style_label(_service_title, 30, UiStyle.GOLD, 7)
+	column.add_child(_service_title)
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 14)
+	column.add_child(row)
+	_repair_button = _service_button(row, "RepairButton", Teams.COLOR_BLUE, _on_repair_pressed)
+	_refuel_button = _service_button(row, "RefuelButton", Teams.COLOR_BLUE, _on_refuel_pressed)
+	_both_button = _service_button(row, "BothButton", Teams.COLOR_BLUE, _on_both_pressed)
+	_cash_button = _service_button(row, "CashOutButton", UiStyle.GOLD, _on_cash_out_pressed)
+	(get_node("Root") as Control).add_child(_service_panel)
+
+
+func _service_button(row: HBoxContainer, button_name: String, color: Color, action: Callable) -> Button:
+	var button: Button = Button.new()
+	button.name = button_name
+	button.custom_minimum_size = Vector2(250.0, 130.0)
+	UiStyle.style_button(button, color, 30)
+	button.pressed.connect(action)
+	row.add_child(button)
+	return button
 
 
 func _on_hangar_pressed() -> void:
@@ -467,11 +587,8 @@ func _on_hangar_pressed() -> void:
 
 func _apply_style() -> void:
 	(%TopLeft as PanelContainer).add_theme_stylebox_override(&"panel", UiStyle.panel(Color(UiStyle.NAVY, 0.82), 22))
-	(%LevelBadge as PanelContainer).add_theme_stylebox_override(&"panel", UiStyle.panel(Teams.COLOR_BLUE, 20, UiStyle.WHITE, 4, 6))
-	UiStyle.style_label(_level_label, 54)
 	UiStyle.style_label(_title_label, 24)
 	UiStyle.style_label(_flight_label, 22, Color(0.82, 0.93, 1.0), 6)
-	UiStyle.style_bar(_xp_bar, UiStyle.XP_CYAN, 18.0)
 
 	(%BluePanel as PanelContainer).add_theme_stylebox_override(&"panel", UiStyle.panel(Teams.COLOR_BLUE, 18))
 	(%RedPanel as PanelContainer).add_theme_stylebox_override(&"panel", UiStyle.panel(Teams.COLOR_RED, 18))

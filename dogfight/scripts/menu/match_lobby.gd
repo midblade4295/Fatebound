@@ -40,7 +40,7 @@ func _ready() -> void:
 	UiStyle.style_label(_vs_label, 80, UiStyle.WHITE, 14)
 	UiStyle.style_label(_status, 36)
 	UiStyle.style_button(_cancel, Color("7b8698"), 30)
-	_title.text = "AIR SUPREMACY  %dv%d" % [GameSession.team_size, GameSession.team_size]
+	_title.text = "SORTIE  %dv%d  -  ONE LIFE" % [GameSession.team_size, GameSession.team_size]
 	_cancel.pressed.connect(GameSession.goto_hangar)
 
 	for slot: PilotSlot in _roster:
@@ -73,8 +73,7 @@ func _process(delta: float) -> void:
 func _reveal_next() -> void:
 	var slot: PilotSlot = _roster[_revealed]
 	var row: Label = _rows[_revealed]
-	var plane: PlaneData = Profile.selected_plane() if slot.is_local else GameCatalog.best_plane_for_level(slot.commander_level)
 	var tag: String = "YOU" if slot.is_local else "BOT"
-	row.text = "Lv %d   %s   [%s]   %s" % [slot.commander_level, slot.display_name, tag, plane.display_name]
+	row.text = "%s   [%s]   %s" % [slot.display_name, tag, slot.plane_data.display_name]
 	UiStyle.style_label(row, 30, UiStyle.GOLD if slot.is_local else UiStyle.WHITE, 6)
 	_revealed += 1

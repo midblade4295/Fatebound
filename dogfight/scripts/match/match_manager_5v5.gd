@@ -1,19 +1,28 @@
 class_name MatchManager5v5
 extends Node
-## Runs one 5v5 Air Supremacy match: roster, spawning, score, timer, respawns.
+## Runs one 5v5 sortie: roster, spawning, who is still alive, the bounty the
+## player is carrying, and how it ends.
 ##
-## Rules (all read from GameSession so the lobby can change them):
+## Rules:
 ##  - Two teams of five. Every seat is always filled; seats without a human
 ##    get a SquadAIController, so 1 player + 9 bots works out of the box.
-##  - Ticket drain: every plane lost gives the *other* team one point. Planes
-##    have no health: one is lost when it hits the sea, the ground, a ship, or
-##    another aircraft too hard to survive. Whoever crippled it gets the credit.
-##  - First team to the score limit wins, otherwise the higher score when the
-##    clock runs out. Equal scores are a draw.
-##  - Everyone starts parked on their own airfield with the engine off, and
-##    has to start up and take off. A downed pilot gets a new plane on the
-##    same airfield after a delay, protected until it leaves the ground.
-##  - A damaged plane that lands at its own airfield and stops is repaired.
+##  - One life. Everyone starts parked on their own airfield with the engine
+##    off, and has to start up and take off. A plane that is lost is gone,
+##    and so is its pilot: nobody comes back. Planes have no health: one is
+##    lost when it hits the sea, the ground or another aircraft too hard to
+##    survive. Whoever crippled it gets the credit.
+##  - Every kill the player makes adds to the bounty they are carrying, and
+##    each is worth more than the last (KILL_VALUE x KILL_MULTIPLIERS). The
+##    bounty is not theirs yet.
+##  - To keep it they have to land on their own airfield and stop. There
+##    they can pay to have the plane repaired, refuelled or both and go up
+##    again (buy_service), or cash out (cash_out): the bounty is banked and
+##    the sortie is over.
+##  - Killed, the player leaves with nothing: the bounty is lost, and unless
+##    the sortie was insured, so is the plane, which has to be bought again.
+##    What was fitted to it is not at risk.
+##  - A battle with no human in it (attract mode, tests) ends when one side
+##    has nobody left, or at GameSession.match_duration.
 ##
 ## Networking: this node only does work on the server (or offline, where the
 ## local instance is the server). Planes are added under `planes_root`, which
@@ -22,12 +31,24 @@ extends Node
 ## and a bot without touching the plane itself.
 
 signal phase_changed(new_phase: Phase)
-signal score_changed(blue_score: int, red_score: int)
+## How many pilots each side has left.
+signal score_changed(blue_left: int, red_left: int)
 ## [param killer] is null when the victim crashed on their own.
 signal takedown(victim: PilotSlot, killer: PilotSlot)
 signal match_ended(winning_team: int)
+## The local player's bounty changed (a kill, or a bill for repairs or fuel).
+signal bounty_changed(bounty: int)
+## The other side has nobody left in the air.
+signal sky_cleared(winning_team: int)
 
 enum Phase { COUNTDOWN, ACTIVE, FINISHED }
+## How the local player's sortie stands.
+enum Outcome { FLYING, HOME, LOST }
+
+## Gold for a first kill, and what each kill after it is worth as a multiple
+## of that: every one is worth more than the last. (Beyond the list, the last.)
+const KILL_VALUE: int = 100
+const KILL_MULTIPLIERS: Array[float] = [1.0, 1.2, 1.5, 2.0, 3.0]
 
 ## `winning_team` value for a tied match.
 const DRAW: int = -1
@@ -57,11 +78,25 @@ const BOT_NAMES: Array[String] = [
 @export var arena_ceiling: float = 9000.0
 
 var phase: Phase = Phase.COUNTDOWN
-var time_left: float = 300.0
+## Seconds the battle has been running.
+var elapsed: float = 0.0
+## Seconds left before a battle with no human in it is called off.
+var time_left: float = 600.0
 var countdown_left: float = COUNTDOWN_TIME
 var winning_team: int = DRAW
-## Payout for the local player, filled in when the match ends (null for bots-only).
-var last_rewards: MatchRewards
+# --- The local player's sortie ---------------------------------------------------
+var outcome: Outcome = Outcome.FLYING
+## Gold from kills that the player is carrying and has not banked.
+var bounty: int = 0
+## What they were carrying when the sortie ended (banked or lost).
+var final_bounty: int = 0
+## Whether the premium was paid at take-off.
+var insured: bool = false
+## Set when the sortie ended with the plane gone for good.
+var plane_lost: bool = false
+## What repairs and fuel have cost them this sortie.
+var service_spent: int = 0
+var _has_flown: bool = false
 
 var _scores: Array[int] = [0, 0]
 var _roster: Array[PilotSlot] = []
@@ -85,9 +120,15 @@ func _ready() -> void:
 			slot.peer_id = multiplayer.get_unique_id()
 	for slot: PilotSlot in _roster:
 		_spawn_plane(slot)
+	var player: PilotSlot = local_slot()
+	if player != null:
+		# The premium is paid as the sortie starts, whatever happens next.
+		insured = Profile.pay_insurance()
+		player.plane.burns_fuel = true
+		player.plane.service_on_order = true
 	_set_weapons_locked(true)
 	phase_changed.emit(phase)
-	score_changed.emit(_scores[0], _scores[1])
+	score_changed.emit(pilots_left(Teams.Id.TEAM_BLUE), pilots_left(Teams.Id.TEAM_RED))
 
 
 func _physics_process(delta: float) -> void:
@@ -99,10 +140,15 @@ func _physics_process(delta: float) -> void:
 				_set_phase(Phase.ACTIVE)
 				_set_weapons_locked(false)
 		Phase.ACTIVE:
-			time_left = maxf(time_left - delta, 0.0)
-			_tick_respawns(delta)
-			if time_left <= 0.0:
-				_finish_match()
+			elapsed += delta
+			var player: PilotSlot = local_slot()
+			if player != null and not _has_flown and player.plane.alive and not player.plane.is_on_ground():
+				_has_flown = true
+			if player == null:
+				# Nobody to wait for: a battle between bots is called off in the end.
+				time_left = maxf(time_left - delta, 0.0)
+				if time_left <= 0.0:
+					_finish_match()
 		Phase.FINISHED:
 			pass
 
@@ -120,12 +166,107 @@ func get_roster() -> Array[PilotSlot]:
 	return _roster
 
 
+## Enemy planes this team has accounted for.
 func team_score(team: Teams.Id) -> int:
 	return _scores[team]
 
 
-func score_limit() -> int:
-	return GameSession.score_limit
+## How many of a team's pilots are still in the battle.
+func pilots_left(team: Teams.Id) -> int:
+	var left: int = 0
+	for slot: PilotSlot in _roster:
+		if slot.team == team and not slot.out:
+			left += 1
+	return left
+
+
+## What the player's next kill would add to the bounty.
+func next_kill_value() -> int:
+	var player: PilotSlot = local_slot()
+	return kill_value((player.kills if player != null else 0) + 1)
+
+
+## Gold for a pilot's [param number]th kill of the sortie (1 = the first).
+static func kill_value(number: int) -> int:
+	var index: int = clampi(number - 1, 0, KILL_MULTIPLIERS.size() - 1)
+	return roundi(float(KILL_VALUE) * KILL_MULTIPLIERS[index])
+
+
+## True while the player is stopped on their own airfield with the sortie
+## still open, having been up: the moment to repair, refuel or cash out.
+func can_service() -> bool:
+	var player: PilotSlot = local_slot()
+	if player == null or phase != Phase.ACTIVE or outcome != Outcome.FLYING or not _has_flown:
+		return false
+	return player.plane.is_parked_at_home()
+
+
+## What repairing and/or refuelling the player's plane would cost right now.
+func service_cost(repair: bool, refuel: bool) -> int:
+	var player: PilotSlot = local_slot()
+	if player == null:
+		return 0
+	return (player.plane.repair_cost() if repair else 0) + (player.plane.refuel_cost() if refuel else 0)
+
+
+## What the player can put toward a bill: the bounty they are carrying, then
+## their own gold.
+func funds() -> int:
+	return bounty + Profile.gold
+
+
+## Pays the ground crew to repair, refuel or both. The bill comes out of the
+## bounty first and the player's gold after that. Returns false (and nothing
+## is done or charged) if there is nothing to do or it cannot be afforded.
+func buy_service(repair: bool, refuel: bool) -> bool:
+	if not can_service():
+		return false
+	var plane: PlaneActor = local_slot().plane
+	var orders: int = 0
+	if repair and plane.needs_repair():
+		orders |= PlaneActor.SERVICE_REPAIR
+	if refuel and plane.needs_fuel():
+		orders |= PlaneActor.SERVICE_REFUEL
+	# Work already ordered is already paid for.
+	orders &= ~plane.service_orders
+	if orders == 0:
+		return false
+	var cost: int = service_cost(orders & PlaneActor.SERVICE_REPAIR != 0, orders & PlaneActor.SERVICE_REFUEL != 0)
+	if cost > funds():
+		return false
+	var from_bounty: int = mini(cost, bounty)
+	bounty -= from_bounty
+	if cost > from_bounty:
+		Profile.spend_gold(cost - from_bounty)
+	service_spent += cost
+	plane.order_service(orders)
+	bounty_changed.emit(bounty)
+	return true
+
+
+## Banks the bounty and ends the sortie. Only from the player's own airfield,
+## stopped. Returns false anywhere else.
+func cash_out() -> bool:
+	if not can_service():
+		return false
+	final_bounty = bounty
+	Profile.bank_bounty(bounty)
+	bounty = 0
+	outcome = Outcome.HOME
+	bounty_changed.emit(bounty)
+	_finish_match()
+	return true
+
+
+## Puts a seat's pilot back in the battle with a new plane on their own
+## runway. The game never does this (one life); it is for practice set-ups
+## and tests. Returns false if every parking spot is busy.
+func replace_plane(slot: PilotSlot) -> bool:
+	if slot == null or not _place_plane(slot, false):
+		return false
+	slot.out = false
+	score_changed.emit(pilots_left(Teams.Id.TEAM_BLUE), pilots_left(Teams.Id.TEAM_RED))
+	return true
 
 
 func team_size() -> int:
@@ -203,7 +344,7 @@ static func build_roster(roster_seed: int) -> Array[PilotSlot]:
 		names[index] = names[swap]
 		names[swap] = held
 	var roster: Array[PilotSlot] = []
-	var player_level: int = Profile.commander_level()
+	var player_plane: PlaneData = Profile.selected_plane()
 	for team_index: int in range(Teams.COUNT):
 		for seat: int in range(GameSession.team_size):
 			var slot: PilotSlot = PilotSlot.new()
@@ -214,11 +355,13 @@ static func build_roster(roster_seed: int) -> Array[PilotSlot]:
 				slot.is_human = true
 				slot.is_local = true
 				slot.display_name = Profile.pilot_name
-				slot.commander_level = player_level
+				slot.plane_data = player_plane
 			else:
 				slot.display_name = names[slot.index % names.size()]
-				# Bots sit within a level of the player so matches stay fair.
-				slot.commander_level = clampi(player_level + rng.randi_range(-1, 1), 1, CommanderProgression.MAX_LEVEL)
+				# Bots fly what the player flies, or the plane either side of
+				# it, so the two sides are a match for each other.
+				slot.plane_data = GameCatalog.plane_near(player_plane, rng.randi_range(-1, 1))
+				slot.grade = GameCatalog.plane_rank(slot.plane_data) * 3 + rng.randi_range(0, 2)
 				slot.bot_skill = clampf(GameSession.bot_skill + rng.randf_range(-0.2, 0.2), 0.05, 1.0)
 			roster.append(slot)
 	return roster
@@ -230,8 +373,7 @@ func _spawn_plane(slot: PilotSlot) -> void:
 	if slot.is_local:
 		plane.setup(Profile.selected_plane(), Profile.build_player_stats(), slot.team, slot.display_name, slot.peer_id)
 	else:
-		var data: PlaneData = GameCatalog.best_plane_for_level(slot.commander_level)
-		plane.setup(data, _build_bot_stats(data, slot.commander_level), slot.team, slot.display_name, 1)
+		plane.setup(slot.plane_data, _build_bot_stats(slot.plane_data, slot.grade), slot.team, slot.display_name, 1)
 	plane.is_human = slot.is_human
 	plane.seed_random(int(_rng.randi()))
 	plane.arena_center = arena_center
@@ -278,34 +420,34 @@ func _attach_controller(slot: PilotSlot) -> void:
 	slot.controller = bot
 
 
-## Bots fly a believable loadout for their level: two to four guns of one
+## Bots fly a believable loadout for their grade: two to four guns of one
 ## kind, and for each other mount either the standard item or something
-## better, more often as the level rises. Nothing Legendary.
-func _build_bot_stats(data: PlaneData, commander_level: int) -> PlaneStats:
+## better, more often as the grade rises. Nothing Legendary.
+func _build_bot_stats(data: PlaneData, grade: int) -> PlaneStats:
 	var fittings: Array[ComponentCard] = GameCatalog.stock_fittings()
 	var marks: Array[int] = GameCatalog.stock_marks()
-	var mark: int = clampi(1 + floori(float(commander_level) / 3.0), 1, ComponentCard.MAX_MARK)
-	var upgrade_chance: float = clampf(0.15 + 0.06 * float(commander_level), 0.0, 0.8)
+	var mark: int = clampi(1 + floori(float(grade) / 3.0), 1, ComponentCard.MAX_MARK)
+	var upgrade_chance: float = clampf(0.15 + 0.06 * float(grade), 0.0, 0.8)
 	var guns: Array[ComponentCard] = GameCatalog.cards_in_slot(ComponentCard.Slot.GUN)
 	var gun: ComponentCard = guns[0]
 	if _rng.randf() < upgrade_chance:
 		gun = guns[_rng.randi_range(0, guns.size() - 1)]
 	var gun_count: int = 2 + (_rng.randi_range(0, 2) if _rng.randf() < upgrade_chance else 0)
-	for mount: int in range(CommanderProgression.MOUNT_COUNT):
-		if CommanderProgression.is_gun_station(mount):
+	for mount: int in range(PlaneMounts.MOUNT_COUNT):
+		if PlaneMounts.is_gun_station(mount):
 			fittings[mount] = gun if mount < gun_count else null
 			marks[mount] = mark
 			continue
 		if _rng.randf() >= upgrade_chance:
 			continue
 		var options: Array[ComponentCard] = []
-		for option: ComponentCard in GameCatalog.cards_in_slot(CommanderProgression.MOUNT_SLOTS[mount]):
+		for option: ComponentCard in GameCatalog.cards_in_slot(PlaneMounts.MOUNT_SLOTS[mount]):
 			if option.rarity != ComponentCard.Rarity.LEGENDARY:
 				options.append(option)
 		if not options.is_empty():
 			fittings[mount] = options[_rng.randi_range(0, options.size() - 1)]
 			marks[mount] = mark
-	return data.build_stats(commander_level, fittings, marks)
+	return data.build_stats(fittings, marks)
 
 
 ## Puts a seat's plane into the match, factory fresh: parked on its own
@@ -372,46 +514,56 @@ func _air_spawn_transform(slot: PilotSlot) -> Transform3D:
 
 
 # ---------------------------------------------------------------------------
-# Scoring, respawns, end of match
+# Losses, the bounty, and how it ends
 # ---------------------------------------------------------------------------
 
 func _on_plane_died(victim: PlaneActor, killer: PlaneActor) -> void:
 	var victim_slot: PilotSlot = slot_for_plane(victim)
-	if victim_slot == null:
+	if victim_slot == null or victim_slot.out:
 		return
-	victim_slot.respawn_timer = GameSession.respawn_delay
+	# One life: there is no other plane.
+	victim_slot.out = true
 	if phase != Phase.ACTIVE:
 		return
-	victim_slot.deaths += 1
 	var killer_slot: PilotSlot = null
 	if killer != null and is_instance_valid(killer) and killer.is_hostile_to(victim):
 		killer_slot = slot_for_plane(killer)
 		if killer_slot != null:
 			killer_slot.kills += 1
-	# Ticket drain: the loss counts for the other team no matter how it happened.
-	var scoring_team: Teams.Id = Teams.opponent_of(victim.team)
-	_scores[scoring_team] += 1
+			if killer_slot.is_local and outcome == Outcome.FLYING:
+				bounty += kill_value(killer_slot.kills)
+				bounty_changed.emit(bounty)
+	_scores[Teams.opponent_of(victim.team)] += 1
 	takedown.emit(victim_slot, killer_slot)
-	score_changed.emit(_scores[0], _scores[1])
-	if _scores[scoring_team] >= GameSession.score_limit:
-		_finish_match()
+	score_changed.emit(pilots_left(Teams.Id.TEAM_BLUE), pilots_left(Teams.Id.TEAM_RED))
+	if victim_slot.is_local:
+		_lose_sortie(victim_slot)
+		return
+	if pilots_left(victim.team) == 0:
+		var winners: Teams.Id = Teams.opponent_of(victim.team)
+		sky_cleared.emit(winners)
+		# With a human still up there it is not over: they have to get home.
+		if local_slot() == null or local_slot().out:
+			_finish_match()
 
 
-func _tick_respawns(delta: float) -> void:
-	for slot: PilotSlot in _roster:
-		if slot.respawn_timer <= 0.0:
-			continue
-		slot.respawn_timer -= delta
-		if slot.respawn_timer <= 0.0:
-			# If the airfield is crowded the new plane waits a moment longer.
-			slot.respawn_timer = 0.0 if _place_plane(slot, false) else PARKING_RETRY_TIME
+## The player has been killed: the bounty is gone and, without insurance,
+## so is the plane.
+func _lose_sortie(player: PilotSlot) -> void:
+	final_bounty = bounty
+	bounty = 0
+	outcome = Outcome.LOST
+	if not insured:
+		plane_lost = Profile.lose_plane(player.plane_data.id)
+	bounty_changed.emit(bounty)
+	_finish_match()
 
 
 func _finish_match() -> void:
 	if phase == Phase.FINISHED:
 		return
-	var blue: int = _scores[Teams.Id.TEAM_BLUE]
-	var red: int = _scores[Teams.Id.TEAM_RED]
+	var blue: int = pilots_left(Teams.Id.TEAM_BLUE)
+	var red: int = pilots_left(Teams.Id.TEAM_RED)
 	if blue > red:
 		winning_team = Teams.Id.TEAM_BLUE
 	elif red > blue:
@@ -419,9 +571,6 @@ func _finish_match() -> void:
 	else:
 		winning_team = DRAW
 	_set_weapons_locked(true)
-	var player: PilotSlot = local_slot()
-	if player != null:
-		last_rewards = Profile.grant_match_rewards(winning_team == int(player.team), player.kills)
 	_set_phase(Phase.FINISHED)
 	match_ended.emit(winning_team)
 

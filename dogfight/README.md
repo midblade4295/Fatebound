@@ -4,8 +4,13 @@ Stylized 5v5 WWII dogfighting for landscape phones, built in Godot 4
 (GDScript, Mobile renderer). It looks like a cartoon and flies like an
 aeroplane: every plane is a rigid body in real gravity that can loop, roll,
 stall and spin, in air that thins with height, on wheels that bounce, swing
-and break. Nothing helps the pilot take off or land. Players collect real weapons and aircraft
-components, fit them to their plane, and see exactly what is fitted on it.
+and break. Nothing helps the pilot take off or land.
+
+It is played one life at a time. Every kill adds to a bounty, and none of it
+is yours until you have landed on your own runway and cashed out. Get killed
+and you leave with nothing, and without the aeroplane. Gold buys planes,
+real weapons and aircraft components; there is no experience and there are
+no levels.
 
 This folder is a **stand-alone Godot project**. It shares nothing with the Siege
 project in `../godot`; open `dogfight/project.godot` directly.
@@ -100,8 +105,8 @@ dogfight/
 ├─ scripts/
 │  ├─ core/      teams.gd, ballistics.gd, game_session.gd (autoload GameSession)
 │  ├─ data/      component_card.gd, plane_data.gd, plane_stats.gd,
-│  │             commander_progression.gd, game_catalog.gd
-│  ├─ meta/      player_profile.gd (autoload Profile), match_rewards.gd
+│  │             plane_mounts.gd, game_catalog.gd
+│  ├─ meta/      player_profile.gd (autoload Profile)
 │  ├─ actors/    plane_actor.gd, plane_input.gd, plane_visual.gd, plane_hitboxes.gd
 │  ├─ combat/    bullet_system.gd, midair_collisions.gd
 │  ├─ audio/     plane_audio.gd, battle_audio.gd, sound_tools.gd
@@ -126,8 +131,7 @@ MainMenu (Node3D)                         main_menu.gd
 ├─ Stage ─ Turntable                      PlaneVisual preview is built here
 ├─ Camera3D
 └─ UI (CanvasLayer) ─ Root (Control)
-   ├─ CommanderPanel                      level badge, Hangar XP bar
-   ├─ CoinPanel                           coins, dev "free crate" button
+   ├─ CoinPanel                           gold, the insurance switch
    ├─ PlanePanel                          name, stats, < SELECT >
    ├─ LoadoutPanel ─ Slots                9 mount tiles: 4 gun stations, propeller, engine,
    │                                      wingtips, armour, undercarriage
@@ -365,10 +369,38 @@ HUD (CanvasLayer)                         hud.gd
   shoved apart, and above 95 m/s a blow to the fuselage or engine destroys the
   plane outright. Team-mates can collide too. Bots steer away from anything
   they are about to hit.
-- **Match rules** (`MatchManager5v5`): ticket drain, every plane lost gives the
-  other team a point, first to 25 or the higher score after 5 minutes. After
-  5 s a downed pilot gets a new plane parked on their own airfield, which
-  cannot be hurt until it leaves the ground (or 25 s pass).
+- **The sortie** (`MatchManager5v5`). Five a side, one life each. A plane
+  that is lost is gone and its pilot with it: nobody comes back, and the
+  score bar counts the pilots each side has left. A plane cannot be hurt
+  until it has left the ground (or 25 s have passed).
+  - *The bounty.* Each kill the player makes is worth more than the one
+    before: 100, 120, 150, 200, then 300 gold (`KILL_VALUE`,
+    `KILL_MULTIPLIERS`), 870 for all five of the enemy. The HUD shows what
+    is being carried and what the next kill would add. It is not the
+    player's yet.
+  - *Getting it home.* Stopped on their own airfield, the pilot gets a
+    menu (`Hud._build_service_panel`): **REPAIR**, **REFUEL**, **BOTH**, or
+    **CASH OUT**. Repairs cost 45 gold for each part's worth of damage, each
+    collapsed leg, a smashed propeller and a plane on its belly; a full
+    tank costs 60, less if it is part full. The bill is taken from the
+    bounty first and the pilot's own gold after that, and work that cannot
+    be paid for is not done. The ground crew then do what was ordered and
+    no more, and the pilot can go up again. Cashing out banks the bounty
+    and ends the sortie. Killing every enemy does not end it: the bounty
+    still has to be landed.
+  - *Fuel.* The player's engine burns it: a full tank is seven minutes at
+    full throttle (`FUEL_ENDURANCE`), far longer throttled back, and a holed
+    tank loses it faster. Out of fuel is a dead-stick landing. That, not a
+    clock, is what limits a sortie.
+  - *Killed.* The bounty is lost. So is the plane, which has to be bought
+    again at full price, unless the sortie was insured. Whatever was fitted
+    to it is kept. The Hurricane costs nothing, so there is always one to
+    fly.
+  - *Insurance* is a switch in the hangar: 15% of the plane's price, paid
+    at the start of every sortie whether or not the plane comes back
+    (`Profile.pay_insurance`). A pilot who cannot pay it flies uninsured.
+  - A battle with no human in it ends when one side has nobody left, or
+    after ten minutes.
 - **Ground handling** (`PlaneActor`, `Airfield`). Each team has an island
   airfield with a 900 m runway pointing at the middle of the arena, 2.3 km
   from it. The battle area is 3.2 km in radius with a 9 km ceiling (no one gets
@@ -428,9 +460,10 @@ HUD (CanvasLayer)                         hud.gd
     outright.
   - *Stopping and repairs.* Throttle closed is the wheel brakes: about
     13 seconds and 220 m from 30 m/s. Stopped on its own airfield with the
-    engine at idle, a plane is refuelled and repaired, including new legs, a
-    new propeller and replacement parts; a wreck lying on its belly is
-    jacked back onto its wheels first. Stopped on the enemy's airfield, or
+    engine at idle, a plane can be refuelled and repaired, including new legs,
+    a new propeller and replacement parts; a wreck lying on its belly is
+    jacked back onto its wheels first. The player pays for this (see The
+    sortie); a fire is put out for nothing. Stopped on the enemy's airfield, or
     run off the island, it is lost.
   - *Bots* start up in turn from the front of the line and fly the same
     take-off a player has to: steer down their own lane with rudder, stick
@@ -466,8 +499,7 @@ it is bolted to a particular place on the aeroplane, and it shows there.
 
 - **Mounts.** Every plane has nine: four wing gun stations (left and right,
   inner and outer), propeller, engine, wingtips, armour and undercarriage
-  (`CommanderProgression.MOUNT_*`). The outer gun stations open at Commander
-  Level 3 and the armour mount at 2; the rest are always open.
+  (`PlaneMounts.MOUNT_*`). All of them are open on every plane.
 - **Items** (`ComponentCard`, `resources/cards/`):
 
   | Mount | Items |
@@ -503,28 +535,34 @@ it is bolted to a particular place on the aeroplane, and it shows there.
   Four cannon plus full armour is 23% heavier than a stock plane. Several
   components also carry their own drawback (the four-blade propeller costs
   top speed, clipped wings cost span).
-- **Collecting.** A drop is one unit of an item: one gun, one propeller. You
-  can fit as many guns of a type as you have units, up to four. Units beyond
-  what could ever be fitted are spares.
-- **Upgrading.** Spares and coins raise an item's Mark, Mk I to Mk V, as real
-  weapons and engines were developed. Each Mark improves what the item is
-  good at by 4% (16% at Mk V); its weight and drawbacks stay the same.
-  Upgrades award Hangar XP.
-- `CommanderProgression`: Commander Level is derived from lifetime Hangar XP.
-  Each level adds +7% toughness and +1% speed to every plane, unlocks planes
-  (Lv1 Hurricane, Lv3 Spitfire, Lv6 Mustang) and opens mounts.
-- `PlaneData.build_stats()` = base stats x Commander Level x what is fitted,
-  producing the `PlaneStats` a plane flies with (and the list of fittings
-  `PlaneVisual` shows). An item in the wrong kind of mount, or in a mount
-  that is still locked, is left off.
-- `Profile` (autoload) holds coins, XP, each item's units, spares and Mark,
-  and what is fitted to each mount, and saves them to
-  `user://squadron_profile.json`. A save from before this system keeps its
-  coins and XP and starts again from the stock fittings. Local only: there
-  is no store and no real money yet.
+- **Buying.** Everything is bought with gold in the hangar. An item is
+  bought one unit at a time: one gun, one propeller. You can fit as many
+  guns of a type as you have, up to four, and nobody can own more of an
+  item than could be fitted. Common items cost 150 gold, rare 450, epic
+  1,100 (`ComponentCard.PRICE_BY_RARITY`).
+- **Upgrading.** Gold raises an item's Mark, Mk I to Mk V, as real weapons
+  and engines were developed: 60, 250, 800 and 2,500 gold for a common item,
+  twice that for a rare one and three times for an epic. Each Mark improves
+  what the item is good at by 4% (16% at Mk V); its weight and drawbacks
+  stay the same.
+- **Planes.** The Hurricane is issued free. The Spitfire costs 1,500 gold
+  and the Mustang 4,000 (`PlaneData.price`), and a plane lost on an
+  uninsured sortie costs the same again.
+- **No experience, no levels.** A pilot has what they have paid for.
+- `PlaneData.build_stats()` = base stats x what is fitted, producing the
+  `PlaneStats` a plane flies with (and the list of fittings `PlaneVisual`
+  shows). An item in the wrong kind of mount is left off.
+- `Profile` (autoload) holds gold, the planes bought, each item's units and
+  Mark, what is fitted to each mount and whether sorties are insured, and
+  saves them to `user://squadron_profile.json`. An older save keeps its
+  coins as gold and any plane its experience had unlocked. Local only:
+  there is no store and no real money yet. A new pilot starts with 500
+  gold, a Hurricane, two .303s and the standard parts.
 - Bots keep above the islands, look along the curve of their turn for
-  obstacles, and are given two to four guns of one kind and, more often at higher
-  levels, better components.
+  obstacles, and are given two to four guns of one kind and, more often in the
+  better planes, better components. They fly the player's plane or the one
+  either side of it in the line-up. They burn no fuel and do not land, so
+  they neither run dry nor cash out.
 - **Gone:** the arcade gadgets (nitro, smoke screen, squad repair) and the
   stat-boost cards. Nothing a player owns is anything but a weapon or a part.
 
@@ -675,14 +713,15 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 | Test | What it checks |
 | --- | --- |
 | `TestHangar` | the hangar plane's propeller is stopped and stays stopped after a refit; touch gestures fed to the menu: one-finger drag orbits at the same distance and cannot go under the floor, spreading and pinching zoom between limits while the plane stays put on screen, two fingers slide it but not off the screen, a double tap resets; taking a gun off shows on the plane |
-| `TestProgression` | item tables (units, spares, Marks, costs), what each item does to the stats, weight and stalling speed, one gun fitted is one gun, mixed guns, locked mounts, the upgrade flow, loadout rules, **the model shows exactly what is fitted** (gun pieces counted, propeller, intake, armour, wingtips changing the hit boxes, bigger wheels), save/load including a save from before items were fittings, Commander Level thresholds, bullet drop and drag, less drag in thin air, lead solution checked against a simulated bullet at sea level and at 4,000 m |
+| `TestProgression` | there are no levels and every mount is open; prices of planes, items and upgrades; what each kill is worth; item tables (units, Marks), what each item does to the stats, weight and stalling speed, one gun fitted is one gun, mixed guns, buying items one at a time and no more than can be fitted, upgrading with gold, buying planes, insurance, losing a plane and buying it back with its fittings kept, loadout rules, **the model shows exactly what is fitted** (gun pieces counted, propeller, intake, armour, wingtips changing the hit boxes, bigger wheels), save/load including a save from before items were fittings (its coins become gold and the plane its experience had unlocked is kept), bullet drop and drag, less drag in thin air, lead solution checked against a simulated bullet at sea level and at 4,000 m |
 | `TestFlight` | ten Spitfires each flown through one situation by a scripted hand: top speed, stalling speed and climb come out as real figures; hands off, a trimmed plane holds height at 1 g; flat out it holds the top speed for its height, which is faster than at sea level while the airspeed indicator reads lower; the air's density and the speed of sound follow the standard atmosphere; the engine holds full power to its critical altitude and loses it above, so there is a fastest height; the stalling speed is the same indicated and faster true; stick back takes it right round a loop; stick over rolls it right round at a fighter's rate; with the throttle closed and the stick held right back the wing is taken to the buffet and held there without letting go, the plane runs out of speed and its nose comes down by itself, and power flies it away; stick back with full rudder held on stalls it and it spins, going round and coming down fast, and stick forward with opposite rudder stops it; slamming the throttle open at low speed rolls and swings it left until trimmed out; a 60-degree bank held level is 2 g and turns at g x tan(bank) / speed without skidding; engine stopped, it glides; pushed to zero g it falls at 9.8 m/s^2 |
 | `TestDamageModel` | every part has a hit box from the model; bullet paths through them; live bullets with drop, drag and pass-through; **each hit leaves its hole on the piece it struck** (one in a solid engine, in and out of thin skin, one on every piece a bullet passes through, none from a miss), the part is drawn as damaged as it is and a repair removes holes and damage; a round into the runway leaves a mark and one into the sea does not; every bullet draws a smoke trail that outlasts it and then clears; no health value exists; shot-off parts leave the model as debris and take their attachments; a lost wingtip rolls the plane toward it and can be held level with stick and rudder; a lost wing rolls it over and over whatever the pilot does; a lost tail leaves nothing holding the nose into the air; a plane flies and turns without its rudder; less wing pulls less g for the same speed and angle of attack; a damaged engine cannot hold top speed; with one flap gone, lowering the flaps rolls the plane; planes are only lost by hitting the surface, credited to whoever crippled them |
 | `TestAudio` | every plane has its own engine loop and every kind of gun its own samples; the player's engine plays from the cockpit and the other nine in 3D; firing plays one of the fitted gun's samples; a bullet passing 6 m away is heard once and one 60 m away is not; the engine note rises in a dive; a dead engine falls silent and the fire is heard. It checks wiring, not how anything sounds |
 | `TestGroundOps` | everyone starts parked on their own runway, standing on three wheels at rest; the guns and an open throttle do nothing with the engine off; the ENGINE and throttle keys work; left to itself the plane swings left under power; steered, with the tail lifted and the stick eased back at flying speed, it flies off after a believable length of runway and not before flying speed; nothing jumps as the wheels leave (pitch, climb rate, acceleration and height are measured tick by tick); wheels-down drag; throttling back slows it; landings flown by a pilot who flares: gentle, firm, wheels-up, and what they break; fourteen arrivals dropped onto the runway at set sink rates, nose angles and banks, judged by what the contact did (nothing, strained wings, one leg, both legs, propeller, wingtip scraped or torn off, destroyed); braking to a stop; repairs at home including new parts, legs and propeller, a wreck jacked back onto its wheels; a plane stopped on the enemy's airfield or run off the island is lost; bots left alone take off undamaged and raise their wheels |
 | `TestCollisions` | box-overlap maths; a wingtip clip damages only the wingtips; a head-on destroys both; a pass three metres apart does nothing; team-mates can collide |
-| `TestPlayerFlow` | 1 player + 9 bots through Input actions and touch events: both fitted guns fire, the stick rolls the plane and pulling turns it, the right pedal skids the nose and it straightens when let go, with one gun taken off one gun fires, a drag on open sky swings the view while the plane flies straight on and the view returns by itself, a finger on the stick does not turn the camera, crash gives a ticket, 5 s respawn |
-| `TestMatchSim` (3 seeds) | full bots-only five-minute match, everyone taking off first: 10 planes, score = losses, zero friendly-fire hits, respawn delay, no clumping, few uncaused losses, few collisions, bot accuracy stays in a human-like 2-25% band |
+| `TestPlayerFlow` | 1 player + 9 bots through Input actions and touch events: both fitted guns fire, the stick rolls the plane and pulling turns it, the right pedal skids the nose and it straightens when let go, with one gun taken off one gun fires, a drag on open sky swings the view while the plane flies straight on and the view returns by itself, a finger on the stick does not turn the camera, a crash kills: no new plane, BLUE a pilot short, the sortie ends lost and the screen says so |
+| `TestSortie` | three sorties by a scripted player with the bots stood down: five kills build a bounty of 100, 120, 150, 200 and 300; the sky is announced clear but the sortie goes on; shot up and short of fuel the plane is landed, the menu comes up with a price for repairs, for fuel and for both; REPAIR is paid from the bounty and only repairs are done, then fuel, neither twice; a bill that cannot be met is not run up, and the pilot's own gold pays when the bounty runs out; CASH OUT banks the bounty and ends the sortie. Then a Spitfire, uninsured: killed, the bounty and the Spitfire are lost and the fittings are not. Then insured: the premium is paid at take-off and the Spitfire survives its loss |
+| `TestMatchSim` (3 seeds) | a bots-only battle under one-life rules, everyone taking off first: 10 planes, nobody gets a second one, the pilots left match the losses, at least four losses in five minutes, zero friendly-fire hits, no clumping, few uncaused losses, few collisions, bot accuracy stays in a human-like 2-25% band |
 | hangar / lobby | scenes load and the lobby hands over to the arena without script errors |
 
 Development tools, not tests: `tools/flight_lab.gd` (the flight model on its

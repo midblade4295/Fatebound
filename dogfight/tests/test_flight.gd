@@ -95,7 +95,7 @@ func _set_up() -> void:
 	var data: PlaneData = GameCatalog.find_plane(&"spitfire")
 	for index: int in range(planes.size()):
 		var plane: PlaneActor = planes[index]
-		plane.stats = data.build_stock_stats(1)
+		plane.stats = data.build_stock_stats()
 		plane.arena_radius = 1.0e7
 		plane.arena_ceiling = 1.0e7
 		plane.weapons_locked = true

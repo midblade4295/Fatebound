@@ -160,6 +160,10 @@ const FLAP_SPEED: float = 2.2
 const FUEL_LEAK_RATE: float = 0.05
 ## A destroyed fuselage empties the tank in a few seconds.
 const FUEL_DUMP_RATE: float = 0.25
+## How long a full tank lasts at full throttle, seconds, for a plane that
+## burns fuel (`burns_fuel`), and the share of that rate an idling engine uses.
+const FUEL_ENDURANCE: float = 420.0
+const IDLE_FUEL_SHARE: float = 0.12
 
 # --- Throttle and engine start -------------------------------------------------
 ## Seconds from pressing the starter until the engine answers the throttle fully.
@@ -256,6 +260,18 @@ const SERVICE_DELAY: float = 1.5
 const SERVICE_RATE: float = 0.22
 const SERVICE_REFIT_TIME: float = 1.1
 const SERVICE_FUEL_RATE: float = 0.2
+## What the ground crew can be told to do. With `service_on_order` off they
+## do both, unasked and free; with it on they do only what has been ordered
+## (and paid for: see MatchManager5v5.buy_service).
+const SERVICE_REPAIR: int = 1
+const SERVICE_REFUEL: int = 2
+const SERVICE_ALL: int = 3
+## What they charge: gold for a full tank, and gold for each "job" of repair
+## (one whole part mended or replaced, a new leg, a new propeller, a wreck
+## jacked back onto its wheels).
+const REFUEL_PRICE: int = 60
+const REPAIR_PRICE_PER_JOB: int = 45
+const LEAST_SERVICE_PRICE: int = 5
 ## A plane that comes to rest anywhere but its own airfield is not coming home:
 ## after this long its pilot abandons it and it counts as lost.
 const STRANDED_TIME: float = 6.0
@@ -309,6 +325,15 @@ const FLAG_PROP_BROKEN: int = 8192
 ])
 ## Fuel left, 1 (full) to 0 (dry). Only a leaking fuselage uses it up.
 @export var fuel: float = 1.0
+## Whether flying uses fuel up. Off, a tank only empties through holes. The
+## match switches it on for human pilots; bots, who cannot yet land to fill
+## up, fly on a full tank.
+var burns_fuel: bool = false
+## On: the ground crew wait to be told what to do (service_orders). Off:
+## they repair and refuel any plane that stops at home.
+var service_on_order: bool = false
+## SERVICE_REPAIR and/or SERVICE_REFUEL: what has been ordered and is not yet done.
+var service_orders: int = 0
 ## What the control surfaces are doing, for the model to animate on every
 ## peer: x = aileron/rudder (-1 left .. +1 right), y = elevator (-1 down ..
 ## +1 up), z = how far the flaps are dropped (0..1).
@@ -546,12 +571,59 @@ func is_servicing() -> bool:
 
 ## True when there is something for ground crew to fix or fill.
 func needs_service() -> bool:
-	if fuel < 1.0 or _burn_time > 0.0 or _belly or _gear_broken != 0 or _prop_broken:
+	return needs_fuel() or needs_repair()
+
+
+func needs_fuel() -> bool:
+	return fuel < 1.0
+
+
+## Anything broken, bent, holed or burning.
+func needs_repair() -> bool:
+	if _burn_time > 0.0 or _belly or _gear_broken != 0 or _prop_broken:
 		return true
 	for damage: float in part_damage:
 		if damage > 0.0:
 			return true
 	return false
+
+
+## Stopped on its own airfield, where the ground crew can get at it.
+func is_parked_at_home() -> bool:
+	if not alive or not _on_ground or speed > SERVICE_MAX_SPEED:
+		return false
+	var field: Airfield = airfield_at(global_position)
+	return field != null and field.team == team
+
+
+## Gold to fill the tank from where it is now.
+func refuel_cost() -> int:
+	if not needs_fuel():
+		return 0
+	return maxi(ceili(float(REFUEL_PRICE) * (1.0 - fuel)), LEAST_SERVICE_PRICE)
+
+
+## Gold to put right everything that is wrong with the aeroplane.
+func repair_cost() -> int:
+	if not needs_repair():
+		return 0
+	return maxi(ceili(float(REPAIR_PRICE_PER_JOB) * _repair_load()), LEAST_SERVICE_PRICE)
+
+
+## Tells the ground crew what to do (SERVICE_REPAIR, SERVICE_REFUEL or
+## both). Only matters with `service_on_order` set.
+func order_service(orders: int) -> void:
+	service_orders |= orders & SERVICE_ALL
+
+
+## What the ground crew are doing, or would do, right now.
+func _service_wanted() -> int:
+	var wanted: int = service_orders if service_on_order else SERVICE_ALL
+	if not needs_fuel():
+		wanted &= ~SERVICE_REFUEL
+	if not needs_repair():
+		wanted &= ~SERVICE_REPAIR
+	return wanted
 
 
 ## How far through the current repair job the ground crew are, 0..1.
@@ -751,7 +823,7 @@ func true_speed_mph() -> float:
 
 ## True when at least one fitted gun is still attached to the plane.
 func has_guns() -> bool:
-	for station: int in range(CommanderProgression.GUN_STATION_COUNT):
+	for station: int in range(PlaneMounts.GUN_STATION_COUNT):
 		if stats.gun_at(station) != null and not is_part_gone(GUN_STATION_PARTS[station]):
 			return true
 	return false
@@ -910,6 +982,7 @@ func respawn(spawn_transform: Transform3D, parked: bool = false) -> void:
 	part_damage.fill(0.0)
 	_gone_mask = 0
 	fuel = 1.0
+	service_orders = 0
 	control_state = Vector3.ZERO
 	rudder_state = 0.0
 	_flap_deploy = 1.0 if _on_ground else 0.0
@@ -1161,6 +1234,9 @@ func _fly(steer: Vector2, delta: float) -> void:
 	# for landing and nothing else: these were not combat flaps, and their
 	# drag would take the speed out of every turn.
 	_flap_deploy = move_toward(_flap_deploy, gear_deploy, FLAP_SPEED * delta)
+	# The engine drinks: a full tank is seven minutes flat out, an hour idling.
+	if burns_fuel and fuel > 0.0 and is_engine_running():
+		fuel = maxf(fuel - delta * lerpf(IDLE_FUEL_SHARE, 1.0, throttle) / FUEL_ENDURANCE, 0.0)
 	flight.flaps = _flap_deploy
 
 	# Where it is: how thick the air, and what ground (if any) is under it.
@@ -1569,9 +1645,21 @@ func _impact_damage(part: Part, share: float) -> void:
 	damaged.emit(self, amount, null)
 
 
-## Everything ground crew still have to put right, as one number.
+## Everything ground crew have been given to put right, as one number.
 func _service_load() -> float:
-	var total: float = 1.0 - fuel
+	var wanted: int = _service_wanted()
+	var total: float = 0.0
+	if wanted & SERVICE_REFUEL != 0:
+		total += 1.0 - fuel
+	if wanted & SERVICE_REPAIR != 0:
+		total += _repair_load()
+	return total
+
+
+## How much mending there is to do: one for each whole part's worth of
+## damage, each collapsed leg, a smashed propeller and a plane on its belly.
+func _repair_load() -> float:
+	var total: float = 0.0
 	for damage: float in part_damage:
 		total += damage
 	if _gear_broken & GEAR_LEFT != 0:
@@ -1590,7 +1678,13 @@ func _service_load() -> float:
 ## are replaced one at a time (the wing before the flap that hangs on it, and
 ## before the undercarriage leg under it).
 func _tick_service(field: Airfield, delta: float) -> void:
-	if field.team != team or speed > SERVICE_MAX_SPEED or not needs_service():
+	var wanted: int = _service_wanted()
+	if field.team == team and speed <= SERVICE_MAX_SPEED and _burn_time > 0.0:
+		# The fire crew do not wait to be asked, or paid.
+		_burn_time = 0.0
+		_burn_dps = 0.0
+		_burn_source = null
+	if field.team != team or speed > SERVICE_MAX_SPEED or wanted == 0:
 		_service_time = 0.0
 		return
 	if _service_time <= 0.0:
@@ -1599,10 +1693,27 @@ func _tick_service(field: Airfield, delta: float) -> void:
 	_service_time += delta
 	if _service_time < SERVICE_DELAY:
 		return
+	if wanted & SERVICE_REFUEL != 0:
+		fuel = minf(fuel + SERVICE_FUEL_RATE * delta, 1.0)
+		if not needs_fuel():
+			service_orders &= ~SERVICE_REFUEL
+	if wanted & SERVICE_REPAIR != 0:
+		_mend(field, delta)
+		if not needs_repair():
+			service_orders &= ~SERVICE_REPAIR
+	if _service_wanted() == 0:
+		_doomed_by = null
+		_last_attacker = null
+		_last_attacker_age = INF
+		_service_start_load = 0.0
+		serviced.emit(self)
+
+
+## One tick of the ground crew's repairs: see _tick_service.
+func _mend(field: Airfield, delta: float) -> void:
 	_burn_time = 0.0
 	_burn_dps = 0.0
 	_burn_source = null
-	fuel = minf(fuel + SERVICE_FUEL_RATE * delta, 1.0)
 	_refit_timer -= delta
 	for index: int in range(PART_COUNT):
 		var part: Part = index as Part
@@ -1641,12 +1752,6 @@ func _tick_service(field: Airfield, delta: float) -> void:
 		if gear_deploy >= 0.98:
 			_belly = false
 			_stand_on_wheels(field)
-	if not needs_service():
-		_doomed_by = null
-		_last_attacker = null
-		_last_attacker_age = INF
-		_service_start_load = 0.0
-		serviced.emit(self)
 
 
 ## Soft arena limits: 0 inside the battle area, rising to 1 well past its edge
@@ -1690,7 +1795,7 @@ func _tick_weapons(delta: float) -> void:
 	_was_firing = firing
 	if not firing:
 		return
-	for station: int in range(CommanderProgression.GUN_STATION_COUNT):
+	for station: int in range(PlaneMounts.GUN_STATION_COUNT):
 		var gun: ComponentCard = stats.gun_at(station)
 		if gun == null or _gun_cooldowns[station] > 0.0 or is_part_gone(GUN_STATION_PARTS[station]):
 			continue
@@ -1703,7 +1808,7 @@ func _tick_weapons(delta: float) -> void:
 func _stagger_guns() -> void:
 	var count: int = maxi(stats.gun_count(), 1)
 	var order: int = 0
-	for station: int in range(CommanderProgression.GUN_STATION_COUNT):
+	for station: int in range(PlaneMounts.GUN_STATION_COUNT):
 		var gun: ComponentCard = stats.gun_at(station)
 		if gun == null:
 			continue
@@ -1737,14 +1842,14 @@ func _fire_gun(station: int, gun: ComponentCard) -> void:
 ## Stats for a plane that arrived with only its replicated fitting ids (a
 ## remote peer), or with nothing at all (then: as it left the factory).
 func _stats_from_fitting_ids() -> PlaneStats:
-	if fitting_ids.size() != CommanderProgression.MOUNT_COUNT:
-		return plane_data.build_stock_stats(1)
+	if fitting_ids.size() != PlaneMounts.MOUNT_COUNT:
+		return plane_data.build_stock_stats()
 	var fittings: Array[ComponentCard] = []
 	var marks: Array[int] = []
-	for mount: int in range(CommanderProgression.MOUNT_COUNT):
+	for mount: int in range(PlaneMounts.MOUNT_COUNT):
 		fittings.append(GameCatalog.find_card(StringName(fitting_ids[mount])))
 		marks.append(fitting_marks[mount] if mount < fitting_marks.size() else 1)
-	return plane_data.build_stats(1, fittings, marks)
+	return plane_data.build_stats(fittings, marks)
 
 
 ## An incendiary hit keeps eating the part it set alight.
@@ -1780,7 +1885,7 @@ func _refresh_status_flags() -> void:
 		flags |= FLAG_SHIELDED
 	if _on_ground:
 		flags |= FLAG_ON_GROUND
-		if _service_time >= SERVICE_DELAY and needs_service():
+		if _service_time >= SERVICE_DELAY and _service_wanted() != 0:
 			flags |= FLAG_SERVICING
 	elif engine_power() <= 0.0 or _wing_lift() < 0.75 or is_part_gone(Part.TAIL):
 		flags |= FLAG_GOING_DOWN

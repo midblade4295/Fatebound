@@ -11,7 +11,7 @@ var _height: float = 1000.0
 func _make(kind: String) -> FlightDynamics:
 	# The aeroplane as it leaves the factory, from the game's own data.
 	var data: PlaneData = load("res://resources/planes/%s.tres" % kind) as PlaneData
-	return data.build_stock_stats(1).make_flight()
+	return data.build_stock_stats().make_flight()
 
 
 func _pitch(f: FlightDynamics) -> float:

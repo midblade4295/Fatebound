@@ -28,7 +28,7 @@ const CARDS: Array[ComponentCard] = [
 	preload("res://resources/cards/gear_reinforced.tres"),
 ]
 ## What a factory-fresh plane is fitted with, by mount (see
-## CommanderProgression.MOUNT_*): two .303s in the inner stations and the
+## PlaneMounts.MOUNT_*): two .303s in the inner stations and the
 ## standard propeller, engine, wingtips and undercarriage. &"" = empty.
 const STOCK_FITTING_IDS: Array[StringName] = [
 	&"gun_browning_303", &"gun_browning_303", &"", &"",
@@ -55,7 +55,7 @@ static func stock_marks() -> Array[int]:
 
 ## The standard item for a slot a plane cannot fly without, or null.
 static func stock_card_for(slot: ComponentCard.Slot) -> ComponentCard:
-	var mount: int = CommanderProgression.mount_for_slot(slot)
+	var mount: int = PlaneMounts.mount_for_slot(slot)
 	if slot == ComponentCard.Slot.GUN or mount < 0:
 		return null
 	return find_card(STOCK_FITTING_IDS[mount])
@@ -83,10 +83,12 @@ static func cards_in_slot(slot: ComponentCard.Slot) -> Array[ComponentCard]:
 	return result
 
 
-## Best plane a pilot of [param commander_level] has unlocked (used for bots).
-static func best_plane_for_level(commander_level: int) -> PlaneData:
-	var best: PlaneData = PLANES[0]
-	for plane: PlaneData in PLANES:
-		if plane.is_unlocked(commander_level) and plane.unlock_commander_level >= best.unlock_commander_level:
-			best = plane
-	return best
+## Where a plane stands in the line-up, cheapest first (0 = the starter).
+static func plane_rank(plane: PlaneData) -> int:
+	return maxi(PLANES.find(plane), 0)
+
+
+## The plane [param steps] places better (or, negative, cheaper) than
+## [param plane], stopping at either end of the line-up.
+static func plane_near(plane: PlaneData, steps: int) -> PlaneData:
+	return PLANES[clampi(plane_rank(plane) + steps, 0, PLANES.size() - 1)]

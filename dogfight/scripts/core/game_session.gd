@@ -24,12 +24,10 @@ const ACTION_GEAR: StringName = &"toggle_gear"
 
 ## Planes per team. 5v5 by default.
 var team_size: int = 5
-## Takedowns that end the match early.
-var score_limit: int = 25
-## Match length in seconds.
-var match_duration: float = 300.0
-## Seconds a downed pilot waits before respawning.
-var respawn_delay: float = 5.0
+## The longest a battle with no human in it runs, seconds. A player's
+## sortie has no clock: it lasts until they cash out or are killed, and what
+## limits it is fuel.
+var match_duration: float = 600.0
 var local_team: Teams.Id = Teams.Id.TEAM_BLUE
 ## False runs ten bots with no human (attract mode and headless tests).
 var local_player_enabled: bool = true

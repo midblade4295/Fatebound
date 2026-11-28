@@ -1,16 +1,18 @@
 class_name PlaneData
 extends Resource
-## Definition of one base aircraft: when it unlocks, its base stats, and the
+## Definition of one base aircraft: what it costs, its base stats, and the
 ## handful of proportions PlaneVisual needs to build its chunky primitive model.
 ##
 ## Final in-match numbers come from build_stats():
-##   base stats  x  Commander Level bonus  x  everything fitted to the mounts.
+##   base stats  x  everything fitted to the mounts.
 
 @export var id: StringName = &""
 @export var display_name: String = ""
 @export_multiline var description: String = ""
-## Commander Level that unlocks this plane (Hurricane 1, Spitfire 3, Mustang 6).
-@export_range(1, 14) var unlock_commander_level: int = 1
+## Gold to buy this plane, and to replace it when it is lost on a sortie
+## without insurance. 0 = issued free (the Hurricane): there is always
+## another one.
+@export_range(0, 100000) var price: int = 0
 
 ## Share of a change in span that shows up as a change in wing area (the tips
 ## are the narrow end of the wing).
@@ -59,28 +61,29 @@ const WING_AREA_PER_SPAN: float = 0.6
 @export var bubble_canopy: bool = false
 
 
-func is_unlocked(commander_level: int) -> bool:
-	return commander_level >= unlock_commander_level
+## True for a plane that costs nothing: every pilot has one, always.
+func is_free() -> bool:
+	return price <= 0
 
 
-## The bare aeroplane with only the Commander Level bonus: nothing fitted, so
-## no guns. See build_stats() and build_stock_stats().
-func build_base_stats(commander_level: int) -> PlaneStats:
-	var stats: PlaneStats = _begin_stats(commander_level)
+## The bare aeroplane: nothing fitted, so no guns. See build_stats() and
+## build_stock_stats().
+func build_base_stats() -> PlaneStats:
+	var stats: PlaneStats = _begin_stats()
 	_finish_stats(stats)
 	return stats
 
 
-func _begin_stats(commander_level: int) -> PlaneStats:
+func _begin_stats() -> PlaneStats:
 	var stats: PlaneStats = PlaneStats.new()
-	stats.max_hp = base_max_hp * CommanderProgression.hp_multiplier(commander_level)
-	stats.speed_factor = CommanderProgression.speed_multiplier(commander_level)
+	stats.max_hp = base_max_hp
+	stats.speed_factor = 1.0
 	stats.max_lift = base_max_lift
 	stats.critical_altitude = base_critical_altitude
 	stats.altitude_power = base_altitude_power
 	stats.roll_power = base_roll
-	stats.fittings.resize(CommanderProgression.MOUNT_COUNT)
-	stats.fitting_marks.resize(CommanderProgression.MOUNT_COUNT)
+	stats.fittings.resize(PlaneMounts.MOUNT_COUNT)
+	stats.fitting_marks.resize(PlaneMounts.MOUNT_COUNT)
 	stats.fitting_marks.fill(1)
 	return stats
 
@@ -108,26 +111,23 @@ func _finish_stats(stats: PlaneStats) -> void:
 
 
 ## The plane as it leaves the factory: stock fittings, all Mk I.
-func build_stock_stats(commander_level: int) -> PlaneStats:
-	return build_stats(commander_level, GameCatalog.stock_fittings(), GameCatalog.stock_marks())
+func build_stock_stats() -> PlaneStats:
+	return build_stats(GameCatalog.stock_fittings(), GameCatalog.stock_marks())
 
 
 ## Full stat block for a match. [param fittings] and [param marks] are parallel
-## arrays in mount order (CommanderProgression.MOUNT_*); null entries are empty
-## mounts. An item in the wrong kind of mount, or in a mount this Commander
-## Level has not opened, is left off, so a stale loadout can never smuggle
-## anything on.
-func build_stats(commander_level: int, fittings: Array[ComponentCard], marks: Array[int]) -> PlaneStats:
-	var stats: PlaneStats = _begin_stats(commander_level)
-	var count: int = mini(mini(fittings.size(), marks.size()), CommanderProgression.MOUNT_COUNT)
+## arrays in mount order (PlaneMounts.MOUNT_*); null entries are empty
+## mounts. An item in the wrong kind of mount is left off, so a stale loadout
+## can never smuggle anything on.
+func build_stats(fittings: Array[ComponentCard], marks: Array[int]) -> PlaneStats:
+	var stats: PlaneStats = _begin_stats()
+	var count: int = mini(mini(fittings.size(), marks.size()), PlaneMounts.MOUNT_COUNT)
 	var shots_per_second: float = 0.0
 	var damage_per_second: float = 0.0
 	var speed_weighted: float = 0.0
 	for mount: int in range(count):
 		var card: ComponentCard = fittings[mount]
-		if card == null or not CommanderProgression.mount_accepts(mount, card):
-			continue
-		if not CommanderProgression.is_mount_unlocked(mount, commander_level):
+		if card == null or not PlaneMounts.mount_accepts(mount, card):
 			continue
 		var mark: int = clampi(marks[mount], 1, ComponentCard.MAX_MARK)
 		stats.fittings[mount] = card

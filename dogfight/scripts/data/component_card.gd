@@ -9,16 +9,15 @@ extends Resource
 ## Nothing here is a gadget or a magic bonus.
 ##
 ## This resource is the shared *definition*. What a player owns (how many
-## units, which Mark, how many spares) lives in PlayerProfile.
+## units and which Mark) lives in PlayerProfile.
 ##
-## Collecting and upgrading:
-##  - A drop is one unit of the item. Units are what you fit: a gun station
-##    needs one unit each, so four of a gun type lets you fit four. Other
-##    mounts need one.
-##  - Units beyond the most you could fit become spares.
-##  - Spares and coins raise the item's Mark (Mk I to Mk V, as real weapons
-##    and engines were developed). Each Mark improves what the item is good
-##    at by `growth_per_mark`; its weight and its drawbacks do not change.
+## Buying and upgrading:
+##  - Items are bought with gold, one unit at a time. Units are what you fit:
+##    a gun station needs one unit each, so four of a gun type lets you fit
+##    four. Other mounts need one. Nobody can own more than could be fitted.
+##  - Gold also raises an item's Mark (Mk I to Mk V, as real weapons and
+##    engines were developed). Each Mark improves what the item is good at
+##    by `growth_per_mark`; its weight and its drawbacks do not change.
 ##  - Most items cost something: weight above all. Weight lengthens the
 ##    take-off run, raises the stalling speed and dulls climb and turn, so a
 ##    plane hung with four cannon and armour is not simply "better".
@@ -40,12 +39,11 @@ const MARK_NAMES: Array[String] = ["Mk I", "Mk II", "Mk III", "Mk IV", "Mk V"]
 const RARITY_COLORS: Array[Color] = [
 	Color("4aa3ff"), Color("ff9a2e"), Color("b455ff"), Color("ffe14a"),
 ]
-## Spares consumed to go from a Mark to the next (index 0 = Mk I -> Mk II),
-## multiplied down for rarer items, which drop less often.
-const SPARES_BY_MARK: Array[int] = [2, 4, 8, 16]
-const SPARES_DIVISOR_BY_RARITY: Array[int] = [1, 2, 4, 8]
-const COIN_COST_BY_MARK: Array[int] = [60, 250, 800, 2500]
-const XP_REWARD_BY_MARK: Array[int] = [15, 40, 100, 250]
+## What one unit costs in gold, by Rarity.
+const PRICE_BY_RARITY: Array[int] = [150, 450, 1100, 2500]
+## Gold to go from a Mark to the next (index 0 = Mk I -> Mk II), times the
+## item's rarity rank (Common x1 .. Legendary x4).
+const UPGRADE_COST_BY_MARK: Array[int] = [60, 250, 800, 2500]
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -126,40 +124,20 @@ func is_max_mark(mark: int) -> bool:
 	return mark >= MAX_MARK
 
 
-## Spares needed to go from [param mark] to the next. 0 at the top Mark.
-func spares_required(mark: int) -> int:
+## Gold to buy one unit of this item: one gun, one propeller, one engine.
+func price() -> int:
+	return PRICE_BY_RARITY[rarity]
+
+
+## Gold to take this item from [param mark] to the next. 0 at the top Mark.
+func upgrade_cost(mark: int) -> int:
 	if is_max_mark(mark):
 		return 0
-	var base: int = SPARES_BY_MARK[clampi(mark - 1, 0, SPARES_BY_MARK.size() - 1)]
-	return maxi(ceili(float(base) / float(SPARES_DIVISOR_BY_RARITY[rarity])), 1)
+	return UPGRADE_COST_BY_MARK[clampi(mark - 1, 0, UPGRADE_COST_BY_MARK.size() - 1)] * (int(rarity) + 1)
 
 
-## Coins needed to go from [param mark] to the next. 0 at the top Mark.
-func coin_cost(mark: int) -> int:
-	if is_max_mark(mark):
-		return 0
-	return COIN_COST_BY_MARK[clampi(mark - 1, 0, COIN_COST_BY_MARK.size() - 1)] * (int(rarity) + 1)
-
-
-## Hangar XP granted for going from [param mark] to the next.
-func xp_reward(mark: int) -> int:
-	if is_max_mark(mark):
-		return 0
-	return XP_REWARD_BY_MARK[clampi(mark - 1, 0, XP_REWARD_BY_MARK.size() - 1)]
-
-
-func can_upgrade(mark: int, spares: int, coins: int) -> bool:
-	if is_max_mark(mark):
-		return false
-	return spares >= spares_required(mark) and coins >= coin_cost(mark)
-
-
-## Spares needed in total to take this item from Mk I to the top Mark.
-func total_spares_to_max() -> int:
-	var total: int = 0
-	for mark: int in range(1, MAX_MARK):
-		total += spares_required(mark)
-	return total
+func can_upgrade(mark: int, gold: int) -> bool:
+	return not is_max_mark(mark) and gold >= upgrade_cost(mark)
 
 
 # ---------------------------------------------------------------------------

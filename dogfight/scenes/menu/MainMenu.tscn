@@ -43,56 +43,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="CommanderPanel" type="PanelContainer" parent="UI/Root"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0
-anchor_top = 0
-anchor_right = 0
-anchor_bottom = 0
-offset_left = 28.0
-offset_top = 22.0
-offset_right = 600.0
-offset_bottom = 152.0
-
-[node name="Row" type="HBoxContainer" parent="UI/Root/CommanderPanel"]
-layout_mode = 2
-theme_override_constants/separation = 14
-
-[node name="LevelBadge" type="PanelContainer" parent="UI/Root/CommanderPanel/Row"]
-unique_name_in_owner = true
-layout_mode = 2
-custom_minimum_size = Vector2(96, 0)
-
-[node name="LevelLabel" type="Label" parent="UI/Root/CommanderPanel/Row/LevelBadge"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "1"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="Info" type="VBoxContainer" parent="UI/Root/CommanderPanel/Row"]
-layout_mode = 2
-size_flags_horizontal = 3
-alignment = 1
-theme_override_constants/separation = 4
-
-[node name="CommanderTitle" type="Label" parent="UI/Root/CommanderPanel/Row/Info"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "COMMANDER LEVEL"
-
-[node name="XpBar" type="ProgressBar" parent="UI/Root/CommanderPanel/Row/Info"]
-unique_name_in_owner = true
-layout_mode = 2
-value = 30.0
-
-[node name="XpLabel" type="Label" parent="UI/Root/CommanderPanel/Row/Info"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "HANGAR XP 0 / 20"
-
 [node name="CoinPanel" type="PanelContainer" parent="UI/Root"]
 unique_name_in_owner = true
 layout_mode = 1
@@ -115,13 +65,13 @@ theme_override_constants/separation = 14
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-text = "COINS 300"
+text = "GOLD 500"
 vertical_alignment = 1
 
 [node name="CrateButton" type="Button" parent="UI/Root/CoinPanel/Row"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "+ FREE CRATE (DEV)"
+text = "INSURE"
 
 [node name="PlanePanel" type="PanelContainer" parent="UI/Root"]
 unique_name_in_owner = true

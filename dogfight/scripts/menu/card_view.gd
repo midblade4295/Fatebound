@@ -2,8 +2,9 @@ class_name CardView
 extends Control
 ## One beveled card tile, drawn entirely in code: rarity frame (Common blue,
 ## Rare orange, Epic purple, Legendary animated rainbow), what kind of fitting
-## it is, glyph, Mark pill, how many the player has, and a spares bar that
-## turns green when the next Mark is affordable.
+## it is, glyph, Mark pill, how many the player has, and along the bottom
+## what it costs: to buy if they have none, otherwise the next Mark (green
+## when they can afford it).
 ## With `compact` set it is a smaller tile for one mount on the aeroplane,
 ## which can also show "empty" or "locked".
 
@@ -17,8 +18,8 @@ const TAP_SLOP: float = 18.0
 var card: ComponentCard
 ## The item's Mark (1 = Mk I).
 var level: int = 0
-## Spares in hand toward the next Mark.
-var copies: int = 0
+## Gold for one unit of it.
+var price: int = 0
 ## Units the player has to fit, and how many of them are fitted now.
 var units: int = 0
 var fitted: int = 0
@@ -53,11 +54,11 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
-func show_card(new_card: ComponentCard, card_mark: int, card_spares: int, is_owned: bool, is_equipped: bool, can_upgrade: bool,
+func show_card(new_card: ComponentCard, card_mark: int, is_owned: bool, is_equipped: bool, can_upgrade: bool,
 		card_units: int = 1, card_fitted: int = 0) -> void:
 	card = new_card
 	level = card_mark
-	copies = card_spares
+	price = new_card.price()
 	units = card_units
 	fitted = card_fitted
 	owned = is_owned
@@ -133,9 +134,9 @@ func _draw() -> void:
 
 	if owned:
 		_draw_level_pill(rect)
-		_draw_copies_bar(rect)
+		_draw_cost_bar(rect)
 	else:
-		UiStyle.draw_outlined_text(self, "NOT FOUND", rect.position + Vector2(0.0, rect.size.y - 14.0), 20, Color(0.7, 0.74, 0.82), rect.size.x, 5)
+		UiStyle.draw_outlined_text(self, "BUY  %d" % price, rect.position + Vector2(0.0, rect.size.y - 14.0), 22, UiStyle.GOLD, rect.size.x, 5)
 	if owned and card.max_units() > 1:
 		# Guns: how many the player has, and how many of those are on the plane.
 		var count_text: String = "x%d" % units if fitted <= 0 else "%d / %d FITTED" % [fitted, units]
@@ -161,17 +162,15 @@ func _draw_level_pill(rect: Rect2) -> void:
 			UiStyle.GOLD if maxed else UiStyle.WHITE, 72.0, 4)
 
 
-func _draw_copies_bar(rect: Rect2) -> void:
-	var needed: int = card.spares_required(level)
+func _draw_cost_bar(rect: Rect2) -> void:
 	var bar: Rect2 = Rect2(rect.position + Vector2(16.0, rect.size.y - 36.0), Vector2(rect.size.x - 32.0, 22.0))
 	draw_rect(bar.grow(3.0), UiStyle.OUTLINE)
-	if needed <= 0:
+	if card.is_max_mark(level):
 		draw_rect(bar, UiStyle.GOLD_DARK)
 		UiStyle.draw_outlined_text(self, "TOP MARK", bar.position + Vector2(0.0, 18.0), 17, UiStyle.WHITE, bar.size.x, 4)
 		return
-	var fill: float = clampf(float(copies) / float(needed), 0.0, 1.0)
-	draw_rect(Rect2(bar.position, Vector2(bar.size.x * fill, bar.size.y)), UiStyle.GREEN if upgrade_ready else UiStyle.XP_CYAN)
-	UiStyle.draw_outlined_text(self, "SPARES %d / %d" % [copies, needed], bar.position + Vector2(0.0, 18.0), 17, UiStyle.WHITE, bar.size.x, 4)
+	draw_rect(bar, UiStyle.GREEN.darkened(0.15) if upgrade_ready else Color(0.2, 0.26, 0.38))
+	UiStyle.draw_outlined_text(self, "%s  %d" % [ComponentCard.mark_name(level + 1), card.upgrade_cost(level)], bar.position + Vector2(0.0, 18.0), 17, UiStyle.WHITE, bar.size.x, 4)
 
 
 func _draw_empty(rect: Rect2) -> void:

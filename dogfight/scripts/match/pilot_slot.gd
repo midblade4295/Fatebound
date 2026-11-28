@@ -9,7 +9,10 @@ var team: Teams.Id = Teams.Id.TEAM_BLUE
 ## 0-4 within the team; also picks the spawn point.
 var seat: int = 0
 var display_name: String = ""
-var commander_level: int = 1
+## What they fly, and how well it is fitted out: 0 (stock) upward. The
+## local player's own plane and fittings come from Profile instead.
+var plane_data: PlaneData
+var grade: int = 0
 var is_human: bool = false
 ## True for the player on this device.
 var is_local: bool = false
@@ -21,6 +24,5 @@ var plane: PlaneActor
 ## input arrives through the plane's InputSync instead).
 var controller: Node
 var kills: int = 0
-var deaths: int = 0
-## Seconds until respawn; 0 while alive.
-var respawn_timer: float = 0.0
+## True once this pilot's plane has been lost: there is no second one.
+var out: bool = false

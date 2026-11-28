@@ -155,7 +155,7 @@ var _propeller: Node3D
 var _prop_disc: MeshInstance3D
 var _muzzle_flashes: Array[MeshInstance3D] = []
 var _muzzle_timers: Array[float] = []
-## What is fitted, in mount order (see CommanderProgression); may be empty.
+## What is fitted, in mount order (see PlaneMounts); may be empty.
 var _fittings: Array[ComponentCard] = []
 ## The gun piece at each station, or null where no gun is fitted.
 var _gun_nodes: Array[MeshInstance3D] = []

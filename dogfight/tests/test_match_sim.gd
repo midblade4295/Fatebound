@@ -207,7 +207,7 @@ func _report() -> void:
 	var total_deaths: int = 0
 	var total_kills: int = 0
 	for slot: PilotSlot in _manager.get_roster():
-		total_deaths += slot.deaths
+		total_deaths += 1 if slot.out else 0
 		total_kills += slot.kills
 	var clump_rate: float = float(_clump_hits) / float(maxi(_clump_samples, 1))
 	print("sim_time=%.1fs  score blue=%d red=%d  winner=%d" % [_sim_time, blue, red, _manager.winning_team])
@@ -229,8 +229,8 @@ func _report() -> void:
 		fastest_collision = maxf(fastest_collision, collision_speed)
 	print("collisions=%d (fastest %.0f m/s)  crippled planes flew on for %.1fs on average before going in" % [_collisions, fastest_collision, average_fall])
 	for slot: PilotSlot in _manager.get_roster():
-		print("  %-5s %-14s lvl%-2d skill %.2f  K %d  D %d  %s" % [Teams.name_of(slot.team), slot.display_name,
-				slot.commander_level, slot.bot_skill, slot.kills, slot.deaths, slot.plane.plane_data.display_name])
+		print("  %-5s %-14s grade %-2d skill %.2f  K %d  %s  %s" % [Teams.name_of(slot.team), slot.display_name,
+				slot.grade, slot.bot_skill, slot.kills, "lost" if slot.out else "alive", slot.plane.plane_data.display_name])
 
 	if OS.get_cmdline_user_args().has("verbose=1"):
 		print("bot half-seconds by state [patrol, engage, evade, recover, takeoff, upset]: %s" % str(_state_samples))
@@ -239,18 +239,20 @@ func _report() -> void:
 	_check(_manager.phase == MatchManager5v5.Phase.FINISHED, "match is not in the FINISHED phase")
 	_check(blue + red == total_deaths, "score %d does not equal total deaths %d" % [blue + red, total_deaths])
 	_check(total_kills == _shot_kills, "credited kills %d != credited deaths %d" % [total_kills, _shot_kills])
+	# One life each: a plane that is lost stays lost, so there can be no more
+	# losses than pilots, and the pilots left are the ones who were not lost.
+	_check(_manager.pilots_left(Teams.Id.TEAM_BLUE) == GameSession.team_size - red and _manager.pilots_left(Teams.Id.TEAM_RED) == GameSession.team_size - blue,
+			"pilots left (%d, %d) do not match the losses (%d, %d)" % [_manager.pilots_left(Teams.Id.TEAM_BLUE), _manager.pilots_left(Teams.Id.TEAM_RED), red, blue])
+	_check(_respawns == 0, "%d planes came back: nobody should get a second one" % _respawns)
 	# Everyone has to take off and fly to the fight first, and turning fights
-	# between real aeroplanes take a while: five losses in five minutes is a
-	# slow match, fewer means the bots are not fighting.
-	_check(blue + red >= 5, "too little combat: only %d takedowns" % (blue + red))
+	# between real aeroplanes take a while. Fewer than four losses in the time
+	# means the bots are not fighting.
+	_check(blue + red >= 4, "too little combat: only %d takedowns" % (blue + red))
 	_check(_friendly_hits == 0, "%d friendly-fire hits got through" % _friendly_hits)
 	# Every loss is now a crash; "uncredited" ones are those nobody caused.
 	_check(_crashes <= maxi(floori(float(blue + red) / 3.0), 2), "too many losses nobody caused: %d of %d" % [_crashes, blue + red])
 	_check(_collisions <= maxi(blue + red, 6), "bots collide too often: %d collisions" % _collisions)
-	_check(_respawns > 0, "nobody respawned")
-	var delay: float = GameSession.respawn_delay
-	_check(_min_respawn_gap >= delay - 0.05, "a respawn took %.2fs, less than the %.1fs delay" % [_min_respawn_gap, delay])
-	_check(blue <= _manager.score_limit() and red <= _manager.score_limit(), "score went past the limit")
+	_check(blue <= GameSession.team_size and red <= GameSession.team_size, "more losses than pilots")
 	_check(clump_rate < 0.05, "team-mates clump: %.1f%% of samples within 25 m" % (clump_rate * 100.0))
 	_check(_max_bullets < BulletSystem.MAX_BULLETS, "bullet pool saturated")
 	_check(accuracy > 0.02 and accuracy < 0.25, "bot accuracy %.1f%% is outside the human-like 2-25%% band" % (accuracy * 100.0))

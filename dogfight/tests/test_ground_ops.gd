@@ -408,7 +408,8 @@ func _judge_takeoff() -> void:
 	var run_time: float = _liftoff_time - _roll_start_time
 	_check(run_time > 8.0 and run_time < 26.0, "and takes a believable time (%.1f s)" % run_time)
 	_check((_player.audio.get_node("EngineCockpit") as AudioStreamPlayer).playing, "the engine is running in the cockpit")
-	_check(_player.gear_usable() and not _player.needs_service(), "nothing was bent on the way")
+	_check(_player.gear_usable() and not _player.needs_repair(), "nothing was bent on the way")
+	_check(_player.fuel < 1.0 and _player.fuel > 0.9, "and the engine has been drinking: %.1f%% of the tank gone" % ((1.0 - _player.fuel) * 100.0))
 
 
 ## Watches the player's plane for sudden changes while it takes off.
@@ -487,7 +488,7 @@ func _check_bots() -> void:
 	_check(wheels_up == _bots.size(), "and raised their wheels (%d)" % wheels_up)
 	var losses: int = 0
 	for bot: PlaneActor in _bots:
-		losses += _manager.slot_for_plane(bot).deaths
+		losses += 1 if _manager.slot_for_plane(bot).out else 0
 	_check(losses == 0, "without wrecking a single aeroplane on the way (%d lost)" % losses)
 
 
@@ -757,9 +758,9 @@ func _next_drop() -> void:
 func _run_drop(delta: float) -> void:
 	var plane: PlaneActor = _drop_plane
 	if _drop_judged:
-		# The last one was destroyed: wait for its replacement to be wheeled
-		# out before using the plane again.
-		if plane.alive:
+		# The last one was destroyed. Nobody gets a second plane in a
+		# sortie, so the test asks for one to go on with.
+		if _manager.replace_plane(_manager.slot_for_plane(plane)):
 			_drop_judged = false
 			_next_drop()
 		return

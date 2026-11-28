@@ -6,13 +6,14 @@ extends Node3D
 ## zoom in and out, drag with two fingers to slide the plane about the screen,
 ## double-tap to put the view back. (With a mouse: drag, wheel, right-drag.)
 ## The UI on top is the whole progression loop:
-##   - Commander Level badge + Hangar XP bar, coin counter
-##   - plane picker (planes unlock by Commander Level)
+##   - the gold counter, and whether sorties are insured
+##   - plane picker: planes are bought with gold, and bought again if one is
+##     lost on a sortie that was not insured
 ##   - the mounts on the plane: four gun stations, propeller, engine,
 ##     wingtips, armour, undercarriage. Tap one to see what is in it or
 ##     take it off.
-##   - the collection of weapons and components: tap one to inspect, UPGRADE
-##     its Mark (coins + spares -> XP) or FIT it to the plane
+##   - the weapons and components: tap one to inspect, BUY one, UPGRADE its
+##     Mark with gold, or FIT it to the plane
 ##   The plane on the turntable always shows exactly what is fitted: fit one
 ##   gun and it has one gun.
 ##   - BATTLE -> match lobby
@@ -72,12 +73,9 @@ var _slot_views: Array[CardView] = []
 
 @onready var _turntable: Node3D = $Stage/Turntable
 @onready var _camera: Camera3D = $Camera3D
-@onready var _level_label: Label = %LevelLabel
-@onready var _commander_title: Label = %CommanderTitle
-@onready var _xp_bar: ProgressBar = %XpBar
-@onready var _xp_label: Label = %XpLabel
 @onready var _coin_label: Label = %CoinLabel
-@onready var _crate_button: Button = %CrateButton
+## The switch for insuring sorties (the scene still calls it CrateButton).
+@onready var _insurance_button: Button = %CrateButton
 @onready var _plane_name: Label = %PlaneName
 @onready var _plane_info: Label = %PlaneInfo
 @onready var _prev_plane: Button = %PrevPlane
@@ -87,6 +85,8 @@ var _slot_views: Array[CardView] = []
 @onready var _grid: GridContainer = %Grid
 @onready var _detail_name: Label = %DetailName
 @onready var _detail_stats: Label = %DetailStats
+## Buys one more of the selected item. Added in code, beside UPGRADE.
+var _buy_button: Button
 @onready var _upgrade_button: Button = %UpgradeButton
 @onready var _equip_button: Button = %EquipButton
 @onready var _battle_button: Button = %BattleButton
@@ -103,9 +103,16 @@ func _ready() -> void:
 	_upgrade_button.pressed.connect(_on_upgrade_pressed)
 	_equip_button.pressed.connect(_on_equip_pressed)
 	_battle_button.pressed.connect(_on_battle_pressed)
-	_crate_button.pressed.connect(_on_crate_pressed)
+	_insurance_button.pressed.connect(_on_insurance_pressed)
+	_buy_button = Button.new()
+	_buy_button.name = "BuyButton"
+	_buy_button.custom_minimum_size = _upgrade_button.custom_minimum_size
+	_buy_button.size_flags_horizontal = _upgrade_button.size_flags_horizontal
+	UiStyle.style_button(_buy_button, UiStyle.GOLD, 26)
+	_upgrade_button.get_parent().add_child(_buy_button)
+	_upgrade_button.get_parent().move_child(_buy_button, _upgrade_button.get_index())
+	_buy_button.pressed.connect(_on_buy_pressed)
 	Profile.changed.connect(_refresh)
-	Profile.commander_leveled_up.connect(_on_commander_leveled_up)
 	_selected_card_id = Profile.loadout[0]
 	_refresh()
 	_show_plane()
@@ -267,12 +274,12 @@ func _build_card_views() -> void:
 	for row: HBoxContainer in [gun_row, part_row]:
 		row.add_theme_constant_override(&"separation", 8)
 		_slots.add_child(row)
-	for mount: int in range(CommanderProgression.MOUNT_COUNT):
+	for mount: int in range(PlaneMounts.MOUNT_COUNT):
 		var view: CardView = CardView.new()
 		view.compact = true
 		view.slot_index = mount
 		view.pressed.connect(_on_slot_pressed)
-		(gun_row if CommanderProgression.is_gun_station(mount) else part_row).add_child(view)
+		(gun_row if PlaneMounts.is_gun_station(mount) else part_row).add_child(view)
 		_slot_views.append(view)
 
 
@@ -295,32 +302,25 @@ func _show_plane() -> void:
 # ---------------------------------------------------------------------------
 
 func _refresh() -> void:
-	var level: int = Profile.commander_level()
-	_level_label.text = str(level)
-	_commander_title.text = "COMMANDER LEVEL"
-	_xp_bar.value = CommanderProgression.level_progress(Profile.commander_xp) * 100.0
-	var needed: int = CommanderProgression.xp_to_next(level)
-	_xp_label.text = "HANGAR XP  MAX" if needed <= 0 else "HANGAR XP  %d / %d" % [CommanderProgression.xp_into_level(Profile.commander_xp), needed]
-	_coin_label.text = "COINS  %d" % Profile.coins
+	_coin_label.text = "GOLD  %d" % Profile.gold
+	_refresh_insurance()
 
 	for index: int in range(_collection_views.size()):
 		var card: ComponentCard = GameCatalog.CARDS[index]
 		var view: CardView = _collection_views[index]
 		var fitted: int = Profile.fitted_count(card.id)
-		view.show_card(card, maxi(Profile.card_mark(card.id), 1), Profile.card_spares(card.id), Profile.owns_card(card.id),
+		view.show_card(card, maxi(Profile.card_mark(card.id), 1), Profile.owns_card(card.id),
 				fitted > 0, Profile.can_upgrade_card(card.id), Profile.card_units(card.id), fitted)
 		view.selected = card.id == _selected_card_id and _selected_mount == -1
 	for mount: int in range(_slot_views.size()):
 		var view: CardView = _slot_views[mount]
 		var fitted_id: StringName = Profile.loadout[mount]
 		var fitted_card: ComponentCard = GameCatalog.find_card(fitted_id)
-		if not CommanderProgression.is_mount_unlocked(mount, level):
-			view.show_empty(CommanderProgression.mount_label(mount), CommanderProgression.mount_unlock_level(mount))
-		elif fitted_card == null:
-			view.show_empty(CommanderProgression.mount_label(mount))
+		if fitted_card == null:
+			view.show_empty(PlaneMounts.mount_label(mount))
 		else:
-			view.empty_title = CommanderProgression.mount_label(mount)
-			view.show_card(fitted_card, maxi(Profile.card_mark(fitted_id), 1), Profile.card_spares(fitted_id), true, true,
+			view.empty_title = PlaneMounts.mount_label(mount)
+			view.show_card(fitted_card, maxi(Profile.card_mark(fitted_id), 1), true, true,
 					Profile.can_upgrade_card(fitted_id))
 		view.selected = mount == _selected_mount
 	_refresh_detail()
@@ -330,22 +330,33 @@ func _refresh() -> void:
 		_show_plane()
 
 
+## The switch for insuring sorties: what it costs for the selected plane, and
+## whether it is on.
+func _refresh_insurance() -> void:
+	var cost: int = Profile.insurance_cost(Profile.selected_plane())
+	if cost <= 0:
+		_insurance_button.text = "NO INSURANCE NEEDED"
+		_insurance_button.disabled = true
+	else:
+		_insurance_button.text = "INSURED  -%d A SORTIE" % cost if Profile.insure_sorties else "INSURE  %d A SORTIE" % cost
+		_insurance_button.disabled = false
+
+
 func _refresh_plane_panel() -> void:
 	var data: PlaneData = GameCatalog.PLANES[_plane_index]
-	var level: int = Profile.commander_level()
-	var unlocked: bool = data.is_unlocked(level)
+	var owned: bool = Profile.owns_plane(data.id)
 	_plane_name.text = data.display_name.to_upper()
 	# Show the numbers the plane would fly with what is fitted now.
-	var stats: PlaneStats = data.build_stats(level, Profile.equipped_cards(), Profile.equipped_card_marks())
+	var stats: PlaneStats = data.build_stats(Profile.equipped_cards(), Profile.equipped_card_marks())
 	# All of these are measured from the flight model, not stated: change what
 	# is fitted and they move as the real aeroplane's would.
 	_plane_info.text = "%s\n\nTop speed %d mph at %d m\nSea level %d mph    Stalls at %d mph\nClimb %d m/s    %d kg    %d hp\nToughness %d    Guns %d    %d damage/s" % [
 			data.description, roundi(stats.top_speed_high * PlaneActor.MPH), roundi(stats.critical_altitude), roundi(stats.top_speed * PlaneActor.MPH), roundi(stats.stall_speed * PlaneActor.MPH),
 			roundi(stats.climb_rate), roundi(stats.mass), roundi(stats.engine_power / 745.7),
 			roundi(stats.max_hp), stats.gun_count(), roundi(stats.fire_rate * stats.bullet_damage)]
-	if not unlocked:
-		_select_plane.text = "COMMANDER LV %d" % data.unlock_commander_level
-		_select_plane.disabled = true
+	if not owned:
+		_select_plane.text = "BUY  %d" % data.price
+		_select_plane.disabled = not Profile.can_buy_plane(data.id)
 	elif data.id == Profile.selected_plane().id:
 		_select_plane.text = "SELECTED"
 		_select_plane.disabled = true
@@ -362,6 +373,8 @@ func _refresh_detail() -> void:
 		_detail_stats.text = "Empty gun station: pick a gun from the collection and press FIT." if _selected_mount >= 0 else ""
 		_upgrade_button.disabled = true
 		_upgrade_button.text = "UPGRADE"
+		_buy_button.disabled = true
+		_buy_button.text = "BUY"
 		_equip_button.disabled = true
 		return
 	var owned: bool = Profile.owns_card(card.id)
@@ -373,12 +386,19 @@ func _refresh_detail() -> void:
 	var lines: PackedStringArray = PackedStringArray([card.description])
 	lines.append("%s:  %s" % [ComponentCard.mark_name(mark), ",  ".join(card.stat_lines(mark))])
 	if owned and not card.is_max_mark(mark):
-		lines.append("%s:  %s   (+%d XP)" % [ComponentCard.mark_name(mark + 1), ",  ".join(card.stat_lines(mark + 1)), card.xp_reward(mark)])
+		lines.append("%s:  %s" % [ComponentCard.mark_name(mark + 1), ",  ".join(card.stat_lines(mark + 1))])
 	if owned and card.is_gun():
 		lines.append("You have %d (each gun station takes one).  %d fitted." % [units, fitted])
 	_detail_stats.text = "\n".join(lines)
+	# Guns can be bought up to four; everything else, one.
+	if units >= card.max_units():
+		_buy_button.text = "HAVE ALL %d" % units if card.is_gun() else "OWNED"
+		_buy_button.disabled = true
+	else:
+		_buy_button.text = "BUY  %d" % card.price() if units == 0 else "BUY ANOTHER  %d" % card.price()
+		_buy_button.disabled = not Profile.can_buy_card(card.id)
 	if not owned:
-		_upgrade_button.text = "NOT FOUND YET"
+		_upgrade_button.text = "UPGRADE"
 		_upgrade_button.disabled = true
 		_equip_button.disabled = true
 		return
@@ -386,7 +406,7 @@ func _refresh_detail() -> void:
 		_upgrade_button.text = "TOP MARK"
 		_upgrade_button.disabled = true
 	else:
-		_upgrade_button.text = "UPGRADE  %d" % card.coin_cost(mark)
+		_upgrade_button.text = "UPGRADE  %d" % card.upgrade_cost(mark)
 		_upgrade_button.disabled = not Profile.can_upgrade_card(card.id)
 	if _selected_mount >= 0:
 		# A mount was tapped: the button takes its item off, if the plane can
@@ -412,8 +432,6 @@ func _on_collection_card_pressed(view: CardView) -> void:
 
 
 func _on_slot_pressed(view: CardView) -> void:
-	if view.locked_until_level > 0:
-		return
 	_selected_mount = view.slot_index
 	_selected_card_id = Profile.loadout[view.slot_index]
 	_refresh()
@@ -421,6 +439,10 @@ func _on_slot_pressed(view: CardView) -> void:
 
 func _on_upgrade_pressed() -> void:
 	Profile.try_upgrade_card(_selected_card_id)
+
+
+func _on_buy_pressed() -> void:
+	Profile.try_buy_card(_selected_card_id)
 
 
 func _on_equip_pressed() -> void:
@@ -440,23 +462,22 @@ func _on_cycle_plane(step: int) -> void:
 	_show_plane()
 
 
+## SELECT a plane that is owned, or BUY one that is not (which selects it).
 func _on_select_plane() -> void:
-	if Profile.select_plane(GameCatalog.PLANES[_plane_index].id):
-		_refresh_plane_panel()
+	var plane_id: StringName = GameCatalog.PLANES[_plane_index].id
+	if not Profile.owns_plane(plane_id):
+		Profile.try_buy_plane(plane_id)
+	else:
+		Profile.select_plane(plane_id)
+	_refresh_plane_panel()
 
 
 func _on_battle_pressed() -> void:
 	GameSession.goto_lobby()
 
 
-## Development shortcut: hands out a win's worth of coins and items so the
-## upgrade loop can be tried without playing ten matches first.
-func _on_crate_pressed() -> void:
-	Profile.grant_match_rewards(true, 5)
-
-
-func _on_commander_leveled_up(new_level: int) -> void:
-	_commander_title.text = "LEVEL UP!  NOW LEVEL %d" % new_level
+func _on_insurance_pressed() -> void:
+	Profile.set_insure_sorties(not Profile.insure_sorties)
 
 
 # ---------------------------------------------------------------------------
@@ -464,14 +485,9 @@ func _on_commander_leveled_up(new_level: int) -> void:
 # ---------------------------------------------------------------------------
 
 func _apply_style() -> void:
-	for panel_name: String in ["CommanderPanel", "CoinPanel", "PlanePanel", "LoadoutPanel", "CollectionPanel", "DetailPanel"]:
+	for panel_name: String in ["CoinPanel", "PlanePanel", "LoadoutPanel", "CollectionPanel", "DetailPanel"]:
 		var panel: PanelContainer = get_node("%" + panel_name) as PanelContainer
 		panel.add_theme_stylebox_override(&"panel", UiStyle.panel(Color(UiStyle.NAVY, 0.9), 22))
-	(%LevelBadge as PanelContainer).add_theme_stylebox_override(&"panel", UiStyle.panel(Teams.COLOR_BLUE, 20, UiStyle.WHITE, 4, 6))
-	UiStyle.style_label(_level_label, 54)
-	UiStyle.style_label(_commander_title, 26)
-	UiStyle.style_label(_xp_label, 20, Color(0.8, 0.93, 1.0), 5)
-	UiStyle.style_bar(_xp_bar, UiStyle.XP_CYAN, 22.0)
 	UiStyle.style_label(_coin_label, 34, UiStyle.GOLD)
 	UiStyle.style_label(_plane_name, 40, UiStyle.GOLD)
 	UiStyle.style_label(_plane_info, 20, Color(0.88, 0.94, 1.0), 5)
@@ -484,5 +500,5 @@ func _apply_style() -> void:
 	UiStyle.style_button(_select_plane, UiStyle.GREEN, 26)
 	UiStyle.style_button(_upgrade_button, UiStyle.GREEN, 26)
 	UiStyle.style_button(_equip_button, Teams.COLOR_BLUE, 26)
-	UiStyle.style_button(_crate_button, Color("8a5cf0"), 22)
+	UiStyle.style_button(_insurance_button, Color("8a5cf0"), 22)
 	UiStyle.style_button(_battle_button, UiStyle.GOLD, 56)

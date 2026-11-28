@@ -56,7 +56,7 @@ var fuel_leak: float = 1.0
 var gear_strength: float = 1.0
 
 # --- Fittings ---
-## What is fitted to each mount (CommanderProgression.MOUNT_*), null where a
+## What is fitted to each mount (PlaneMounts.MOUNT_*), null where a
 ## mount is empty, and the Mark of each.
 var fittings: Array[ComponentCard] = []
 var fitting_marks: Array[int] = []
@@ -75,7 +75,7 @@ var gun_range: float = 0.0
 ## The gun in a gun station (0 = left inner, 1 = right inner, 2 = left outer,
 ## 3 = right outer), or null if nothing is fitted there.
 func gun_at(station: int) -> ComponentCard:
-	if station < 0 or station >= CommanderProgression.GUN_STATION_COUNT or station >= fittings.size():
+	if station < 0 or station >= PlaneMounts.GUN_STATION_COUNT or station >= fittings.size():
 		return null
 	return fittings[station]
 
@@ -86,7 +86,7 @@ func gun_mark(station: int) -> int:
 
 func gun_count() -> int:
 	var count: int = 0
-	for station: int in range(CommanderProgression.GUN_STATION_COUNT):
+	for station: int in range(PlaneMounts.GUN_STATION_COUNT):
 		if gun_at(station) != null:
 			count += 1
 	return count
@@ -94,7 +94,7 @@ func gun_count() -> int:
 
 ## The item fitted in the (single) mount for [param slot], or null.
 func fitting_in(slot: ComponentCard.Slot) -> ComponentCard:
-	var mount: int = CommanderProgression.mount_for_slot(slot)
+	var mount: int = PlaneMounts.mount_for_slot(slot)
 	return fittings[mount] if mount >= 0 and mount < fittings.size() else null
 
 
