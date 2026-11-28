@@ -34,7 +34,15 @@ Reference captures (software-rendered at 1280x720): `docs/arena_hud.png`,
 It is a real stick. Sideways does not turn the plane, it rolls it: to turn,
 roll into a bank and pull. Hold the stick over and it keeps rolling, right
 round. Hold it back and it goes over the top in a loop. Let go and the plane
-stays in whatever attitude it is in, trimmed for 1 g. Left alone, the pedals
+stays in whatever attitude it is in, trimmed for 1 g.
+
+Full back stick is a pull **to the buffet**: all the lift the wing has at
+that speed, and no further. A pilot holds a hard turn there by the feel of
+the stick; a thumb on glass has no feel, so the pilot's hand stops there for
+it (`FlightPilot.pull_to_the_buffet`). You cannot stall the wing by just
+hauling back, at any speed. What you still can do is run out of speed (hold
+it back in a climb and the nose comes down by itself), and ask for a stall
+on purpose: stick back *and* a rudder pedal held is a flick into a spin. Left alone, the pedals
 are worked for you (the pilot's feet keep turns tidy); touch one and it is
 yours, for side-slips, for holding the nose straight on take-off, and for
 getting out of a spin. The stick has a curve on it so that small movements
@@ -52,7 +60,8 @@ chase camera swings round the plane (right round to look back over the tail,
 and up to look down on it) without steering. Let go and after a moment the
 view eases back behind the tail. The camera goes with the plane through
 loops and rolls (`ChaseCamera.roll_follow`), and shakes as the wing nears the
-stall: that buffet is the warning.
+stall: that buffet is the warning. The lens widens and the camera
+drops back steadily as the speed builds, from a slow climb-out to flat out.
 
 **Taking off.** Throttle open and keep it straight: the engine swings the nose
 left and the stick (or right pedal) has to hold it. From a fast walk push the
@@ -224,8 +233,10 @@ HUD (CanvasLayer)                         hud.gd
   There is no "stall rule", no "spin mode", no turn rate and no speed cap:
   - *Lift* goes with the square of airspeed and with angle of attack, up to
     the stalling angle. Past it the air lets go: lift collapses, drag soars.
-    That is a matter of angle, not speed: pull hard enough and it happens
-    fast (an accelerated stall). Easing the stick forward is what cures it.
+    That is a matter of angle, not speed. The wing gives the most at about
+    15 degrees and lets go near 20; the player's stick (like the bots')
+    takes it to the first and stops, unless a rudder pedal is held as well.
+    Easing the stick forward is what cures a stall.
   - *Spins.* A wing that stalls before the other drops, and with yaw the
     plane autorotates. Held in with stick and rudder it stays in; closing the
     throttle, stick forward and rudder against the turn brings it out.
@@ -315,6 +326,10 @@ HUD (CanvasLayer)                         hud.gd
   troposphere only, no wind or turbulence, and an airfield that is perfectly
   flat. `tools/flight_lab.gd` flies the model on its own, in the air and on
   the ground, and prints what it does.
+  The Spitfire's best sustained turn at sea level comes out at a circle in
+  about 20 seconds (3.5 g at 237 mph), the Hurricane's 22 and the Mustang's
+  19; the real ones took roughly 19, 20 and 22. The flaps are landing flaps
+  and move only with the undercarriage: they do not drop in turns.
 - **A plane is only lost when it hits something:** the sea, an island,
   or another aircraft hard enough. (A bot whose plane can no longer fly does
   not ride it down: after 4 to 9 seconds, sooner if it is burning, the pilot
@@ -611,7 +626,7 @@ GODOT=/path/to/godot tools/run_tests.sh            # add --strict to make typing
 | --- | --- |
 | `TestHangar` | the hangar plane's propeller is stopped and stays stopped after a refit; touch gestures fed to the menu: one-finger drag orbits at the same distance and cannot go under the floor, spreading and pinching zoom between limits while the plane stays put on screen, two fingers slide it but not off the screen, a double tap resets; taking a gun off shows on the plane |
 | `TestProgression` | item tables (units, spares, Marks, costs), what each item does to the stats, weight and stalling speed, one gun fitted is one gun, mixed guns, locked mounts, the upgrade flow, loadout rules, **the model shows exactly what is fitted** (gun pieces counted, propeller, intake, armour, wingtips changing the hit boxes, bigger wheels), save/load including a save from before items were fittings, Commander Level thresholds, bullet drop and drag, less drag in thin air, lead solution checked against a simulated bullet at sea level and at 4,000 m |
-| `TestFlight` | ten Spitfires each flown through one situation by a scripted hand: top speed, stalling speed and climb come out as real figures; hands off, a trimmed plane holds height at 1 g; flat out it holds the top speed for its height, which is faster than at sea level while the airspeed indicator reads lower; the air's density and the speed of sound follow the standard atmosphere; the engine holds full power to its critical altitude and loses it above, so there is a fastest height; the stalling speed is the same indicated and faster true; stick back takes it right round a loop; stick over rolls it right round at a fighter's rate; held nose-up with the throttle closed the wing stalls near its stalling speed and stick-forward recovers it; with full rudder held on it spins, going round and coming down fast, and stick forward with opposite rudder stops it; slamming the throttle open at low speed rolls and swings it left until trimmed out; a 60-degree bank held level is 2 g and turns at g x tan(bank) / speed without skidding; engine stopped, it glides; pushed to zero g it falls at 9.8 m/s^2 |
+| `TestFlight` | ten Spitfires each flown through one situation by a scripted hand: top speed, stalling speed and climb come out as real figures; hands off, a trimmed plane holds height at 1 g; flat out it holds the top speed for its height, which is faster than at sea level while the airspeed indicator reads lower; the air's density and the speed of sound follow the standard atmosphere; the engine holds full power to its critical altitude and loses it above, so there is a fastest height; the stalling speed is the same indicated and faster true; stick back takes it right round a loop; stick over rolls it right round at a fighter's rate; with the throttle closed and the stick held right back the wing is taken to the buffet and held there without letting go, the plane runs out of speed and its nose comes down by itself, and power flies it away; stick back with full rudder held on stalls it and it spins, going round and coming down fast, and stick forward with opposite rudder stops it; slamming the throttle open at low speed rolls and swings it left until trimmed out; a 60-degree bank held level is 2 g and turns at g x tan(bank) / speed without skidding; engine stopped, it glides; pushed to zero g it falls at 9.8 m/s^2 |
 | `TestDamageModel` | every part has a hit box from the model; bullet paths through them; live bullets with drop, drag and pass-through; no health value exists; shot-off parts leave the model as debris and take their attachments; a lost wingtip rolls the plane toward it and can be held level with stick and rudder; a lost wing rolls it over and over whatever the pilot does; a lost tail leaves nothing holding the nose into the air; a plane flies and turns without its rudder; less wing pulls less g for the same speed and angle of attack; a damaged engine cannot hold top speed; with one flap gone, lowering the flaps rolls the plane; planes are only lost by hitting the surface, credited to whoever crippled them |
 | `TestAudio` | every plane has its own engine loop and every kind of gun its own samples; the player's engine plays from the cockpit and the other nine in 3D; firing plays one of the fitted gun's samples; a bullet passing 6 m away is heard once and one 60 m away is not; the engine note rises in a dive; a dead engine falls silent and the fire is heard. It checks wiring, not how anything sounds |
 | `TestGroundOps` | everyone starts parked on their own runway, standing on three wheels at rest; the guns and an open throttle do nothing with the engine off; the ENGINE and throttle keys work; left to itself the plane swings left under power; steered, with the tail lifted and the stick eased back at flying speed, it flies off after a believable length of runway and not before flying speed; nothing jumps as the wheels leave (pitch, climb rate, acceleration and height are measured tick by tick); wheels-down drag; throttling back slows it; landings flown by a pilot who flares: gentle, firm, wheels-up, and what they break; fourteen arrivals dropped onto the runway at set sink rates, nose angles and banks, judged by what the contact did (nothing, strained wings, one leg, both legs, propeller, wingtip scraped or torn off, destroyed); braking to a stop; repairs at home including new parts, legs and propeller, a wreck jacked back onto its wheels; a plane stopped on the enemy's airfield or run off the island is lost; bots left alone take off undamaged and raise their wheels |

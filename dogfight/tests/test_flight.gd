@@ -127,24 +127,25 @@ func _set_up() -> void:
 			case.plane.input.steer = Vector2(_level_wings(case.plane), 0.0))
 
 	_start("stall", planes[4], 4, stall * 1.5, 0.0, func(case: FlightCase, time: float) -> void:
-		# Throttle closed, hold the nose up until the wing lets go. Then stick
-		# forward, power on, and ease out of the dive.
+		# Throttle closed, the stick eased right back and held there, ailerons
+		# left alone. Then power on and fly away.
 		var plane: PlaneActor = case.plane
-		if not case.notes.has("recovering"):
+		if time < 14.0:
 			plane.input.throttle = 0.0
 			plane.input.steer = Vector2(0.0, minf(0.15 + time * 0.12, 1.0))
-			if case.stalled_time > 0.6:
-				case.notes["recovering"] = _clock
-				case.notes["stall_speed"] = plane.speed
-				case.notes["stall_height"] = plane.global_position.y
+			case.notes["slowest"] = minf(_note(case, "slowest", 999.0), plane.indicated_speed())
+			case.notes["most_attack"] = maxf(_note(case, "most_attack", 0.0), plane.flight.alpha)
+			if time > 7.2:
+				# By now the stick is right back and staying there.
+				case.notes["lowest_nose"] = minf(_note(case, "lowest_nose", 9.0), plane.pitch)
+				case.notes["most_bank"] = maxf(_note(case, "most_bank", 0.0), absf(plane.bank))
+			case.notes["recovering"] = _clock
+			case.notes["stall_height"] = plane.global_position.y
 			return
 		plane.input.throttle = 1.0
-		if plane.is_stalling() or plane.speed < plane.stats.stall_speed * 1.25:
-			plane.input.steer = Vector2(0.0, -0.4)
-		else:
-			if not case.notes.has("flying_again"):
-				case.notes["flying_again"] = _clock
-			plane.input.steer = Vector2(_level_wings(plane), _hold_pitch(plane, 0.0, 0.5)))
+		if plane.indicated_speed() >= plane.stats.stall_speed * 1.25 and not case.notes.has("flying_again"):
+			case.notes["flying_again"] = _clock
+		plane.input.steer = Vector2(_level_wings(plane), _hold_pitch(plane, 0.0, 0.5)))
 
 	_start("spin", planes[5], 5, stall * 1.4, 0.1, func(case: FlightCase, time: float) -> void:
 		# Slow, then stick right back with full left rudder, and hold it in.
@@ -344,17 +345,25 @@ func _judge() -> void:
 
 	# --- Stall ----------------------------------------------------------------------
 	var stalled: FlightCase = _cases["stall"]
-	_check(stalled.stalled_seen, "throttle closed and the nose held up, the wing stalls")
-	_check(absf(_note(stalled, "stall_speed", 0.0) - stall) < stall * 0.25, "close to its stalling speed (%.0f against %.0f m/s)" % [_note(stalled, "stall_speed", 0.0), stall])
+	# Full back stick is a pull to the buffet, not through it: the pilot's hand
+	# stops where the wing is giving all it has.
+	var edge: float = stalled.plane.flight.best_alpha()
+	_check(not stalled.stalled_seen and _note(stalled, "most_attack", 9.0) < stalled.plane.flight.stall_alpha(),
+			"throttle closed and the stick held right back, the wing is held at the buffet and does not let go (%.1f degrees; most lift at %.1f, lets go at %.1f)" % [
+			rad_to_deg(_note(stalled, "most_attack", 9.0)), rad_to_deg(edge), rad_to_deg(stalled.plane.flight.stall_alpha())])
+	_check(_note(stalled, "most_attack", 0.0) > edge * 0.85, "but it is taken all the way there")
+	_check(_note(stalled, "slowest", 999.0) < stall, "it runs out of speed (down to %.0f m/s; it needs %.0f to hold itself up)" % [_note(stalled, "slowest", 999.0), stall])
+	_check(_note(stalled, "lowest_nose", 9.0) < deg_to_rad(-2.0), "and with the stick still back the nose comes down by itself (%.0f degrees)" % rad_to_deg(_note(stalled, "lowest_nose", 9.0)))
+	_check(_note(stalled, "most_bank", 9.0) < deg_to_rad(25.0), "without dropping a wing (%.0f degrees of bank at most)" % rad_to_deg(_note(stalled, "most_bank", 9.0)))
 	_check(stalled.plane.alive and _note(stalled, "flying_again", 99.0) - _note(stalled, "recovering", 0.0) < 8.0,
-			"stick forward and power on, it is flying again in %.1f s" % (_note(stalled, "flying_again", 99.0) - _note(stalled, "recovering", 0.0)))
-	var height_lost: float = _note(stalled, "stall_height", stalled.start_height) - stalled.lowest
-	_check(height_lost > 15.0 and height_lost < 450.0, "having lost %.0f m" % height_lost)
+			"power on, it is flying again in %.1f s" % (_note(stalled, "flying_again", 99.0) - _note(stalled, "recovering", 0.0)))
+	var height_lost: float = stalled.start_height - stalled.lowest
+	_check(height_lost < 450.0, "having lost %.0f m" % height_lost)
 	_check(not stalled.plane.is_stalling() and stalled.plane.speed > stall * 1.2, "and it flies on (%.0f m/s)" % stalled.plane.speed)
 
 	# --- Spin -----------------------------------------------------------------------
 	var spin: FlightCase = _cases["spin"]
-	_check(spin.spin_seen, "stalled with full rudder held on, it spins")
+	_check(spin.spin_seen, "stick back with full rudder held on is how a stall is asked for: it stalls and spins")
 	_check(_note(spin, "turns_in_spin", 0.0) > 1.0, "going round %.1f times" % _note(spin, "turns_in_spin", 0.0))
 	_check(spin.start_height - _note(spin, "spin_bottom", spin.start_height) > 250.0, "and coming down fast (%.0f m)" % (spin.start_height - _note(spin, "spin_bottom", spin.start_height)))
 	_check(spin.turned.y > 0.0, "to the left, the way the rudder was put")

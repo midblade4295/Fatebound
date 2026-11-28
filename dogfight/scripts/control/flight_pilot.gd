@@ -29,6 +29,12 @@ const LIFT_IN_HAND: float = 0.82
 ## (elevator per radian beyond it).
 const ATTACK_LIMIT: float = 0.8
 const ATTACK_STICK: float = 8.0
+## Pulling to the buffet: the share of the wing's most lift that is held
+## there, how far ahead the hand feels the angle of attack coming (s), and
+## stick per radian of angle of attack still in hand.
+const BUFFET_LIFT: float = 0.95
+const BUFFET_FORESIGHT: float = 0.18
+const BUFFET_STICK: float = 7.0
 ## Lift across the nose smaller than this (g) says nothing about which way
 ## up to be.
 const ROLL_MEANING: float = 0.35
@@ -45,6 +51,25 @@ const RUDDER_AIM: float = 5.0
 const RUDDER_SHARE: float = 0.75
 ## The least g the pilot will push to while he is still rolling the lift round.
 const LEAST_LOAD: float = -0.3
+
+
+## A pilot pulling hard pulls to the buffet and holds it there by feel: the
+## wing is making all the lift it can, and more stick would only stall it.
+## This is that feel, for a hand on a touch screen that has none. Given how
+## far back the stick is being held ([param stick], 0..1), it returns how far
+## back it actually goes: no further than holds the wing at
+## [param edge] (an angle of attack, radians). [param attack_rate] is how fast
+## the angle of attack is rising (rad/s), so a snatched pull is checked
+## before it overshoots. It never pushes: with the wing already past the
+## edge the stick only comes back to where it was trimmed, and the nose
+## comes down by itself.
+static func pull_to_the_buffet(flight: FlightDynamics, stick: float, edge: float, attack_rate: float) -> float:
+	if stick <= 0.0:
+		return stick
+	var speed: float = maxf(flight.airspeed, 15.0)
+	var holding: float = flight.elevator_for_load(flight.available_load(speed) * BUFFET_LIFT)
+	var coming: float = flight.alpha + attack_rate * BUFFET_FORESIGHT
+	return clampf(holding + (edge - coming) * BUFFET_STICK, 0.0, stick)
 
 
 ## Stick positions that bend the plane's flight path toward [param direction]

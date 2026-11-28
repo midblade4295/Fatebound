@@ -738,6 +738,25 @@ func stall_alpha() -> float:
 	return cl_max / WING_LIFT_SLOPE + STALL_OFFSET * STALL_SHARPNESS - WING_INCIDENCE
 
 
+## Angle of attack (radians, of the fuselage) at which the clean wing makes
+## the most lift it ever will: the edge of the buffet. A little more angle
+## gets less lift and a great deal more drag.
+func best_alpha() -> float:
+	var best_angle: float = 0.0
+	var best_lift: float = 0.0
+	var break_angle: float = cl_max / WING_LIFT_SLOPE + STALL_OFFSET * STALL_SHARPNESS
+	var attack: float = 0.1
+	while attack < 0.7:
+		var attached: float = minf(WING_LIFT_SLOPE * attack, cl_max)
+		var plate: float = 0.5 * FLAT_PLATE_NORMAL * sin(2.0 * attack)
+		var lift: float = lerpf(attached, plate, 1.0 / (1.0 + exp(-(attack - break_angle) / STALL_SHARPNESS)))
+		if lift > best_lift:
+			best_lift = lift
+			best_angle = attack
+		attack += 0.002
+	return best_angle - WING_INCIDENCE
+
+
 ## Thrust (N) at full throttle and [param forward_speed], engine healthy.
 func full_thrust(forward_speed: float) -> float:
 	return _thrust_at(forward_speed, 1.0, 1.0)

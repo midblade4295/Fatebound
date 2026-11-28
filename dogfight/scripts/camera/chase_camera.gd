@@ -24,6 +24,11 @@ extends Node3D
 ## Runs in _process and reads the plane's *interpolated* transform, so it is
 ## smooth at any refresh rate even though the plane moves at the physics rate.
 
+## The speed effects begin at this share of the plane's sea-level top speed
+## and are complete at this one.
+const SPEED_FEEL_FROM: float = 0.3
+const SPEED_FEEL_TO: float = 1.1
+
 @export_group("Follow")
 ## Metres from the pivot back to the camera at cruise speed.
 @export var follow_distance: float = 13.5
@@ -49,7 +54,7 @@ extends Node3D
 @export_group("Field Of View")
 @export_range(40.0, 100.0) var base_fov: float = 66.0
 ## Degrees added as speed goes from cruise to maximum dive speed.
-@export var speed_fov_boost: float = 12.0
+@export var speed_fov_boost: float = 17.0
 @export var fov_stiffness: float = 3.5
 
 @export_group("Look Around")
@@ -206,9 +211,11 @@ func _process(delta: float) -> void:
 	if lag.length() > max_position_lag:
 		_smoothed_position = anchor + lag.normalized() * max_position_lag
 
-	# Speed feel: longer arm and wider lens the faster we go.
+	# Speed feel: longer arm and wider lens the faster we go, all the way up
+	# from a slow climb-out to flat out (and on into a dive), so that picking
+	# up speed can be seen as well as read off the dial.
 	var top_speed: float = maxf(target.stats.top_speed, 1.0)
-	var speed_factor: float = clampf((target.speed - top_speed * 0.85) / (top_speed * 0.6), 0.0, 1.0)
+	var speed_factor: float = smoothstep(top_speed * SPEED_FEEL_FROM, top_speed * SPEED_FEEL_TO, target.speed)
 	var arm_target: float = follow_distance * (1.0 + speed_pullback * speed_factor)
 	_arm.spring_length = lerpf(_arm.spring_length, arm_target, 1.0 - exp(-fov_stiffness * delta))
 	_update_fov(delta, speed_factor)

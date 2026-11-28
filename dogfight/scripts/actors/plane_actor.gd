@@ -8,7 +8,7 @@ extends CharacterBody3D
 ##
 ## Damage is physical. The airframe is fifteen parts (see Part). Each takes
 ## damage on its own and each does a job: wings lift, ailerons roll, elevators
-## pitch, the fin and rudder steer and steady the nose, flaps tighten turns,
+## pitch, the fin and rudder steer and steady the nose, flaps slow the landing,
 ## the engine pulls, the fuselage holds the fuel and the control runs. A hurt
 ## part does its job worse; a destroyed one comes off (taking whatever is
 ## attached to it) and stops doing it at all. Nothing ever "kills" a plane
@@ -113,6 +113,9 @@ const COLLISION_LAYER_PLANES: int = 2
 const CONTROL_SLEW: float = 6.0
 ## The pilot cannot hold the stick right back against a heavy load: full pull
 ## is there up to G_EASE_START, and none of it by G_EASE_END. Likewise pushing.
+## With the rudder held hard over the pilot is asking for a stall or a spin,
+## and the stick will take the wing to this multiple of its stalling angle.
+const CROSSED_CONTROLS_ATTACK: float = 2.0
 const G_EASE_START: float = 5.5
 const G_EASE_END: float = 8.5
 const NEGATIVE_G_EASE_START: float = -1.5
@@ -148,11 +151,8 @@ const STUB_DRAG: float = 0.006
 const HOLE_DRAG: float = 0.004
 ## A shot-up fuselage means stretched cables: sloppier controls.
 const FUSELAGE_FEEL_LOSS: float = 0.35
-## The combat flaps come down when the stick is pulled back this far, and
-## blow back up above this share of top speed.
-const FLAP_DEPLOY_STICK: float = 0.6
+## How fast the flaps can travel (share of their travel per second).
 const FLAP_SPEED: float = 2.2
-const FLAP_LIMIT_SPEED_RATIO: float = 0.62
 
 # --- Engine and fuel -------------------------------------------------------------
 ## A holed fuselage leaks fuel: fraction of the tank lost per second at full
@@ -359,6 +359,8 @@ var bank: float = 0.0
 
 ## Sideslip last tick, for the pilot's feet.
 var _last_slip: float = 0.0
+## Angle of attack last tick, to feel how fast it is rising.
+var _last_attack: float = 0.0
 ## How much the stick's sideways travel is working the rudder bar: 1 on the
 ## ground, fading to 0 just after leaving it.
 var _stick_steers: float = 0.0
@@ -724,7 +726,7 @@ func condition() -> float:
 	return minf(_wing_lift(), minf(engine_power(), elevators))
 
 
-## How far the combat flaps are dropped right now, 0..1.
+## How far the landing flaps are down right now, 0..1.
 func flap_deploy() -> float:
 	return _flap_deploy
 
@@ -1142,18 +1144,12 @@ func _fly(steer: Vector2, delta: float) -> void:
 		leak *= stats.fuel_leak  # Self-sealing tanks.
 		fuel = maxf(fuel - leak * delta, 0.0)
 
-	# Combat flaps: pulling hard drops them for more lift at the cost of drag,
-	# until the airflow is too fast for them.
-	var indicated: float = flight.indicated_airspeed
-	var flap_demand: float = clampf((steer.y - FLAP_DEPLOY_STICK) / (1.0 - FLAP_DEPLOY_STICK), 0.0, 1.0)
-	flap_demand *= 1.0 - smoothstep(0.9, 1.1, indicated / maxf(stats.top_speed * FLAP_LIMIT_SPEED_RATIO, 1.0))
 	# The landing flaps are on the same lever as the wheels: they come down
 	# with them and go up with them, over the same two seconds. Raising them
-	# takes lift away, so cleaning up too slow lets the plane sink.
-	flap_demand = maxf(flap_demand, gear_deploy)
-	if _on_ground:
-		flap_demand = gear_deploy
-	_flap_deploy = move_toward(_flap_deploy, flap_demand, FLAP_SPEED * delta)
+	# takes lift away, so cleaning up too slow lets the plane sink. They are
+	# for landing and nothing else: these were not combat flaps, and their
+	# drag would take the speed out of every turn.
+	_flap_deploy = move_toward(_flap_deploy, gear_deploy, FLAP_SPEED * delta)
 	flight.flaps = _flap_deploy
 
 	# Where it is: how thick the air, and what ground (if any) is under it.
@@ -1237,8 +1233,16 @@ func _pilot_controls(steer: Vector2, delta: float) -> Vector3:
 		roll_stick = lerpf(roll_stick, help.x, urgency)
 		pitch_stick = lerpf(pitch_stick, help.y, urgency)
 	# Nobody can hold the stick against eight times their own weight.
+	var attack_rate: float = (flight.alpha - _last_attack) / maxf(delta, 0.001)
+	_last_attack = flight.alpha
 	if pitch_stick > 0.0:
 		pitch_stick *= 1.0 - smoothstep(G_EASE_START, G_EASE_END, flight.load_factor)
+		# And a pilot pulls to the buffet, not through it. Crossing the
+		# controls (stick back, a boot of rudder) is how he asks for more: a
+		# stall, a flick, a spin.
+		if on_wheels < 1.0:
+			var edge: float = lerpf(flight.best_alpha(), flight.stall_alpha() * CROSSED_CONTROLS_ATTACK, smoothstep(0.3, 0.9, absf(input.rudder)))
+			pitch_stick = FlightPilot.pull_to_the_buffet(flight, pitch_stick, edge, attack_rate)
 	elif pitch_stick < 0.0:
 		pitch_stick *= 1.0 - smoothstep(-NEGATIVE_G_EASE_START, -NEGATIVE_G_EASE_END, -flight.load_factor)
 	# Feet, in the air: push the ball back to the middle, and check its swing.

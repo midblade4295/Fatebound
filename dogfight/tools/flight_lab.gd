@@ -9,15 +9,9 @@ var _height: float = 1000.0
 
 
 func _make(kind: String) -> FlightDynamics:
-	var f: FlightDynamics = FlightDynamics.new()
-	match kind:
-		"hurricane":
-			f.configure(3300.0, 23.9, 12.19, 954000.0, 0.025, 1.45)
-		"spitfire":
-			f.configure(3000.0, 22.48, 11.23, 1096000.0, 0.021, 1.5)
-		_:
-			f.configure(4175.0, 21.83, 11.28, 1280000.0, 0.0176, 1.4)
-	return f
+	# The aeroplane as it leaves the factory, from the game's own data.
+	var data: PlaneData = load("res://resources/planes/%s.tres" % kind) as PlaneData
+	return data.build_stock_stats(1).make_flight()
 
 
 func _pitch(f: FlightDynamics) -> float:
@@ -84,6 +78,16 @@ func _init() -> void:
 		_turn_test()
 	if which == "all" or which == "glide":
 		_glide_test()
+	if which == "all" or which == "pull":
+		for speed: float in [50.0, 65.0, 80.0, 100.0, 125.0]:
+			_pull_test(speed, 1.0)
+		_pull_test(80.0, 0.6)
+	if which == "all" or which == "mush":
+		_mush_test()
+	if which == "all" or which == "accel":
+		_accel_test()
+	if which == "all" or which == "sustain":
+		_sustain_test()
 	if which == "all" or which == "air":
 		_air_test()
 	if which == "all" or which == "ground":
@@ -203,6 +207,110 @@ func _turn_test() -> void:
 		_tick(f)
 		if i % 180 == 0:
 			print(_line(float(i) * DT, f))
+
+
+## The stick the way PlaneActor passes it on: nobody can hold it against 8 g.
+func _hand(stick: float, f: FlightDynamics) -> float:
+	var attack_rate: float = (f.alpha - _last_attack) / DT
+	_last_attack = f.alpha
+	var held: float = stick * (1.0 - smoothstep(PlaneActor.G_EASE_START, PlaneActor.G_EASE_END, f.load_factor))
+	return FlightPilot.pull_to_the_buffet(f, held, f.best_alpha(), attack_rate)
+
+
+var _last_attack: float = 0.0
+
+
+func _pull_test(speed: float, stick: float) -> void:
+	var f: FlightDynamics = _start("spitfire", speed)
+	f.throttle = 1.0
+	f.settle_trim()
+	var available: float = f.available_load(speed)
+	var peak_load: float = 0.0
+	var peak_alpha: float = 0.0
+	var stalled_at: float = -1.0
+	var report: String = ""
+	for i: int in range(60 * 8):
+		f.elevator = _hand(stick, f)
+		f.aileron = _level(f) if absf(_pitch(f)) < 60.0 else 0.0
+		_tick(f)
+		peak_load = maxf(peak_load, f.load_factor)
+		peak_alpha = maxf(peak_alpha, f.alpha)
+		if stalled_at < 0.0 and f.stall > 0.5:
+			stalled_at = float(i) * DT
+		if i == 60 or i == 180 or i == 360:
+			report += "  %ds: %.0f m/s %.1f g a=%.0f stall=%.2f pitch=%.0f" % [i / 60, f.airspeed, f.load_factor, rad_to_deg(f.alpha), f.stall, _pitch(f)]
+	print("PULL stick %.1f from %3.0f m/s (%.0f mph): wing can give %.1f g; peak %.1f g, peak alpha %.0f of %.0f deg, %s |%s" % [stick, speed, speed * 2.237, available, peak_load, rad_to_deg(peak_alpha), rad_to_deg(f.stall_alpha()),
+			("STALLED at %.1f s" % stalled_at) if stalled_at >= 0.0 else "no stall", report])
+
+
+func _mush_test() -> void:
+	print("--- HELD BACK: throttle closed, stick eased right back and held there")
+	var f: FlightDynamics = _start("spitfire", 56.0)
+	f.throttle = 0.0
+	f.settle_trim()
+	for i: int in range(60 * 30):
+		var time: float = float(i) * DT
+		f.elevator = _hand(minf(0.15 + time * 0.12, 1.0), f)
+		f.aileron = _level(f)
+		_tick(f)
+		if i % 120 == 0:
+			print(_line(time, f), " elev=%.2f" % f.elevator)
+
+
+func _accel_test() -> void:
+	print("--- ACCELERATION: level at sea level, full throttle, from 1.2 x the stall")
+	for kind: String in ["hurricane", "spitfire", "mustang"]:
+		var f: FlightDynamics = _start(kind, 0.0, 0.0)
+		f.altitude = 0.0
+		var from: float = f.stall_speed() * 1.2
+		f.reset(Basis.IDENTITY, Vector3(0.0, 0.0, -from))
+		f.throttle = 1.0
+		f.settle_trim()
+		var marks: Array[float] = [60.0, 80.0, 100.0, 120.0, 140.0, 160.0]
+		var line: String = "  %s from %.0f mph:" % [kind, from * 2.237]
+		var clock: float = 0.0
+		while clock < 180.0 and not marks.is_empty():
+			f.elevator = clampf(-f.velocity.y * 0.05 - _pitch(f) * 0.0, -1.0, 1.0)
+			f.aileron = _level(f)
+			_tick(f)
+			clock += DT
+			if f.airspeed >= marks[0]:
+				line += "  %.0f mph at %.0f s" % [marks[0] * 2.237, clock]
+				marks.remove_at(0)
+		print(line, "   (after %.0f s: %.0f mph of %.0f)" % [clock, f.airspeed * 2.237, f.level_top_speed() * 2.237])
+
+
+func _sustain_test() -> void:
+	print("--- SUSTAINED TURNS: full throttle at sea level, bank held, height held; the speed it settles at")
+	for kind: String in ["hurricane", "spitfire", "mustang"]:
+		var best: float = 0.0
+		var best_line: String = ""
+		for bank: float in [60.0, 66.0, 70.0, 73.0, 75.0, 77.0, 79.0]:
+			var f: FlightDynamics = _start(kind, 95.0, 0.0)
+			f.altitude = 0.0
+			f.throttle = 1.0
+			f.settle_trim()
+			var turned: float = 0.0
+			var last_heading: float = 0.0
+			var stalled: bool = false
+			var start_height: float = _height
+			for i: int in range(60 * 70):
+				f.aileron = clampf((bank - _bank(f)) * 0.04 + f.angular_velocity.z * 0.4, -1.0, 1.0)
+				var wanted: float = 1.0 / cos(deg_to_rad(bank)) - f.velocity.y * 0.1 - (_height - start_height) * 0.02
+				f.elevator = clampf(f.elevator_for_load(wanted) + (wanted - f.load_factor) * 0.25, -1.0, 1.0)
+				_tick(f)
+				if i >= 60 * 60:
+					turned += absf(wrapf(_heading(f) - last_heading, -180.0, 180.0))
+				last_heading = _heading(f)
+				if f.stall > 0.5:
+					stalled = true
+			var rate: float = turned / 10.0
+			var line: String = "%2.0f deg bank: %.0f mph, %.1f g, alpha %.0f deg, %.1f deg/s (a circle in %.0f s), height %+.0f m%s" % [bank, f.airspeed * 2.237, f.load_factor,
+					rad_to_deg(f.alpha), rate, 360.0 / maxf(rate, 0.1), _height - start_height, "  STALLED" if stalled else ""]
+			if not stalled and absf(_height - start_height) < 60.0 and rate > best:
+				best = rate
+				best_line = line
+		print("  %s best sustained: %s" % [kind, best_line])
 
 
 func _glide_test() -> void:
